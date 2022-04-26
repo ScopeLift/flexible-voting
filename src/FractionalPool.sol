@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-interface IVotingToken { }
+interface IVotingToken {
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
+}
 
 contract FractionalPool {
 
@@ -12,6 +14,10 @@ contract FractionalPool {
     }
 
     // TODO: deposit method (update fractional voting power)
+
+    function deposit(uint256 _amount) public {
+        token.transferFrom(msg.sender, address(this), _amount);
+    }
 
     // TODO: withdrawal method (update fractional voting power)
 

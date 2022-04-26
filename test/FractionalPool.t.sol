@@ -25,6 +25,13 @@ contract FractionalPoolTest is DSTestPlus {
         governor = new FractionalGovernor("Governor", IVotes(token));
         vm.label(address(governor), "governor");
     }
+
+    function mintGovAndApprovePool(address _holder, uint256 _amount) public {
+        vm.assume(_holder != address(0));
+        token.mint(_holder, _amount);
+        vm.prank(_holder);
+        token.approve(address(pool), type(uint256).max);
+    }
 }
 
 contract Deployment is FractionalPoolTest {
@@ -37,5 +44,20 @@ contract Deployment is FractionalPoolTest {
 
         assertEq(governor.name(), "Governor");
         assertEq(address(governor.token()), address(token));
+    }
+}
+
+contract Deposit is FractionalPoolTest {
+
+    function test_UserCanDepositGovTokens(address _holder, uint256 _amount) public {
+        _amount = bound(_amount, 0, type(uint224).max);
+        uint256 initialBalance = token.balanceOf(_holder);
+        mintGovAndApprovePool(_holder, _amount);
+
+        vm.prank(_holder);
+        pool.deposit(_amount);
+
+        assertEq(token.balanceOf(address(pool)), _amount);
+        assertEq(token.balanceOf(_holder), initialBalance);
     }
 }
