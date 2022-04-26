@@ -41,6 +41,7 @@ contract Deployment is FractionalPoolTest {
         assertEq(token.symbol(), "GOV");
 
         assertEq(address(pool.token()), address(token));
+        assertEq(token.delegates(address(pool)), address(pool));
 
         assertEq(governor.name(), "Governor");
         assertEq(address(governor.token()), address(token));
@@ -59,5 +60,6 @@ contract Deposit is FractionalPoolTest {
 
         assertEq(token.balanceOf(address(pool)), _amount);
         assertEq(token.balanceOf(_holder), initialBalance);
+        assertEq(token.getVotes(address(pool)), _amount);
     }
 }

@@ -3,14 +3,16 @@ pragma solidity ^0.8.13;
 
 interface IVotingToken {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+    function delegate(address delegatee) external;
 }
 
 contract FractionalPool {
 
-    IVotingToken public token;
+    IVotingToken immutable public token;
 
     constructor(IVotingToken _token) {
         token = _token;
+        _token.delegate(address(this));
     }
 
     // TODO: deposit method (update fractional voting power)
