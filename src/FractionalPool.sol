@@ -65,9 +65,9 @@ contract FractionalPool {
      */
      function expressVote(uint256 proposalId, uint8 support) external {
        // TODO:
-       // has msg.sender actually deposited?
        // pull the proposal info based on the ID
        // confirm there was weight for msg.sender at the proposal snapshot
+       // make sure multiple votes for the same sender overwrite each other
        // we need to track weight deposited *here*
        // safecast weight
         uint256 weight = deposits[msg.sender];

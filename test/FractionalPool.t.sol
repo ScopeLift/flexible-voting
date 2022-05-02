@@ -48,11 +48,37 @@ contract FractionalPoolTest is DSTestPlus {
         vm.label(address(receiver), "receiver");
     }
 
-    function mintGovAndApprovePool(address _holder, uint256 _amount) public {
+    function _mintGovAndApprovePool(address _holder, uint256 _amount) public {
         vm.assume(_holder != address(0));
         token.mint(_holder, _amount);
         vm.prank(_holder);
         token.approve(address(pool), type(uint256).max);
+    }
+
+    function _mintGovAndDepositIntoPool(address _address, uint256 _amount) internal {
+      _mintGovAndApprovePool(_address, _amount);
+      vm.prank(_address);
+      pool.deposit(_amount);
+    }
+
+    function _createAndSubmitProposal() internal returns(uint256 proposalId) {
+      // create a proposal
+      bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
+      address[] memory targets = new address[](1);
+      uint256[] memory values = new uint256[](1);
+      bytes[] memory calldatas = new bytes[](1);
+      targets[0] = address(receiver);
+      values[0] = 0; // no ETH will be sent
+      calldatas[0] = receiverCallData;
+
+      // submit the proposal
+      if (block.number == 0) vm.roll(42); // proposal will underflow if we're on the zero block
+      proposalId = governor.propose(targets, values, calldatas, "A great proposal");
+      assertEq(uint(governor.state(proposalId)), uint(ProposalState.Pending));
+
+      // advance proposal to active state
+      vm.roll(governor.proposalSnapshot(proposalId) + 1);
+      assertEq(uint(governor.state(proposalId)), uint(ProposalState.Active));
     }
 }
 
@@ -75,7 +101,7 @@ contract Deposit is FractionalPoolTest {
     function test_UserCanDepositGovTokens(address _holder, uint256 _amount) public {
         _amount = bound(_amount, 0, type(uint224).max);
         uint256 initialBalance = token.balanceOf(_holder);
-        mintGovAndApprovePool(_holder, _amount);
+        _mintGovAndApprovePool(_holder, _amount);
 
         vm.prank(_holder);
         pool.deposit(_amount);
@@ -88,73 +114,98 @@ contract Deposit is FractionalPoolTest {
 
 contract Vote is FractionalPoolTest {
 
-    function testFuzz_userCanCastVotes(address _hodler, uint256 _voteWeight) public {
-        // TODO pull this stuff into helpers
-
-        // deposit some funds
-        // This max is a limitation of the fractional governance protocol storage
+    function testFuzz_UserCanCastVotes(address _hodler, uint256 _voteWeight) public {
+        // This max is a limitation of the fractional governance protocol storage.
         _voteWeight = bound(_voteWeight, 1, type(uint128).max);
+
+        // Deposit some funds.
         vm.assume(_hodler != address(pool));
-        uint256 initialBalance = token.balanceOf(_hodler);
-        mintGovAndApprovePool(_hodler, _voteWeight);
+        _mintGovAndApprovePool(_hodler, _voteWeight);
         vm.prank(_hodler);
         pool.deposit(_voteWeight);
 
-        // TODO make sure governor.proposalThreshold() is crossed??
-
-        // create a proposal
-        bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
-        address[] memory targets = new address[](1);
-        uint256[] memory values = new uint256[](1);
-        bytes[] memory calldatas = new bytes[](1);
-        targets[0] = address(receiver);
-        values[0] = 0; // no ETH will be sent
-        calldatas[0] = receiverCallData;
-
-        // submit the proposal
-        if (block.number == 0) vm.roll(42); // proposal will underflow if we're on the zero block
-        uint256 proposalId = governor.propose(
-          targets,
-          values,
-          calldatas,
-          "A great proposal"
-        );
-        assertEq(uint(governor.state(proposalId)), uint(ProposalState.Pending));
-
-        // advance proposal to active state
-        vm.roll(governor.proposalSnapshot(proposalId) + 1);
-        assertEq(uint(governor.state(proposalId)), uint(ProposalState.Active));
+        // create the proposal
+        uint256 _proposalId = _createAndSubmitProposal();
 
         // _holder should now be able to express his/her vote on the proposal
         vm.prank(_hodler);
-        pool.expressVote(proposalId, uint8(VoteType.For));
+        pool.expressVote(_proposalId, uint8(VoteType.For));
         (
           uint256 _againstVotesExpressed,
           uint256 _forVotesExpressed,
           uint256 _abstainVotesExpressed
-        ) = pool.proposalVotes(proposalId);
+        ) = pool.proposalVotes(_proposalId);
         assertEq(_forVotesExpressed, _voteWeight);
         assertEq(_againstVotesExpressed, 0);
         assertEq(_abstainVotesExpressed, 0);
 
         // submit votes on behalf of the pool
-        // governor should now record votes for the pool
-        (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(proposalId);
+        (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(_proposalId);
         assertEq(_forVotes, 0);
         assertEq(_againstVotes, 0);
         assertEq(_abstainVotes, 0);
 
-        pool.castVote(proposalId);
+        pool.castVote(_proposalId);
 
-        (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(proposalId);
+        // governor should now record votes for the pool
+        (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
         assertEq(_forVotes, _voteWeight);
         assertEq(_againstVotes, 0);
         assertEq(_abstainVotes, 0);
 
         // advance past proposal deadline
-        vm.roll(governor.proposalDeadline(proposalId) + 1);
+        vm.roll(governor.proposalDeadline(_proposalId) + 1);
     }
 
+    function testFuzz_MultipleUsersCanCastVotes(
+      address _hodlerA,
+      address _hodlerB,
+      uint256 _voteWeightA,
+      uint256 _voteWeightB
+    ) public {
+        // This max is a limitation of the fractional governance protocol storage.
+        _voteWeightA = bound(_voteWeightA, 1, type(uint120).max);
+        _voteWeightB = bound(_voteWeightB, 1, type(uint120).max);
 
+        vm.assume(_hodlerA != address(pool));
+        vm.assume(_hodlerB != address(pool));
+        vm.assume(_hodlerA != _hodlerB);
 
+        // Deposit some funds.
+        _mintGovAndDepositIntoPool(_hodlerA, _voteWeightA);
+        _mintGovAndDepositIntoPool(_hodlerB, _voteWeightB);
+
+        // create the proposal
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Hodlers should now be able to express their votes on the proposal
+        vm.prank(_hodlerA);
+        pool.expressVote(_proposalId, uint8(VoteType.Against));
+        vm.prank(_hodlerB);
+        pool.expressVote(_proposalId, uint8(VoteType.Abstain));
+
+        (
+          uint256 _againstVotesExpressed,
+          uint256 _forVotesExpressed,
+          uint256 _abstainVotesExpressed
+        ) = pool.proposalVotes(_proposalId);
+        assertEq(_forVotesExpressed, 0);
+        assertEq(_againstVotesExpressed, _voteWeightA);
+        assertEq(_abstainVotesExpressed, _voteWeightB);
+
+        // the governor should have not recieved any votes yet
+        (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(_proposalId);
+        assertEq(_forVotes, 0);
+        assertEq(_againstVotes, 0);
+        assertEq(_abstainVotes, 0);
+
+        // submit votes on behalf of the pool
+        pool.castVote(_proposalId);
+
+        // governor should now record votes for the pool
+        (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+        assertEq(_forVotes, 0);
+        assertEq(_againstVotes, _voteWeightA);
+        assertEq(_abstainVotes, _voteWeightB);
+    }
 }
