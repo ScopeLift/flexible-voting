@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+interface IFractionalGovernor {
+  function proposalSnapshot(uint256 proposalId) external returns (uint256);
+  function castVoteWithReasonAndParams(
+    uint256 proposalId,
+    uint8 support,
+    string calldata reason,
+    bytes memory params
+  ) external returns (uint256);
+}
+
 interface IVotingToken {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function delegate(address delegatee) external;
