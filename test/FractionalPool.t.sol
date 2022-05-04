@@ -264,7 +264,7 @@ contract Vote is FractionalPoolTest {
         assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
     }
 
-    function testFuzz_PoolWeightIsSnapshotDependent(
+    function testFuzz_UsersCannotExpressVotesPriorToDepositing(
       address _hodler,
       uint256 _voteWeight,
       uint8 _supportType
@@ -278,9 +278,52 @@ contract Vote is FractionalPoolTest {
         _mintGovAndDepositIntoPool(_hodler, _voteWeight);
 
         // Now try to express a voting preference on the proposal.
+        assertEq(pool.deposits(_hodler), _voteWeight);
         vm.expectRevert(bytes("no weight"));
         vm.prank(_hodler);
         pool.expressVote(_proposalId, _supportType);
+    }
+
+    function testFuzz_VotingWeightIsSnapshotDependent(
+      address _hodler,
+      uint256 _voteWeightA,
+      uint256 _voteWeightB,
+      uint8 _supportType
+    ) public {
+        _voteWeightA = _commonFuzzerAssumptions(_hodler, _voteWeightA, _supportType);
+        _voteWeightB = _commonFuzzerAssumptions(_hodler, _voteWeightB, _supportType);
+
+        // Deposit some funds.
+        _mintGovAndDepositIntoPool(_hodler, _voteWeightA);
+
+        // Create the proposal.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Sometime later the user deposits some more.
+        vm.roll(governor.proposalDeadline(_proposalId) - 1);
+        _mintGovAndDepositIntoPool(_hodler, _voteWeightB);
+
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
+
+        // The internal proposal vote weight should not reflect the new deposit weight.
+        (
+          uint256 _againstVotesExpressed,
+          uint256 _forVotesExpressed,
+          uint256 _abstainVotesExpressed
+        ) = pool.proposalVotes(_proposalId);
+        assertEq(_forVotesExpressed,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
+        assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
+        assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
+
+        // Submit votes on behalf of the pool.
+        pool.castVote(_proposalId);
+
+        // Votes cast should likewise reflect only the earlier balance.
+        (uint _againstVotes, uint _forVotes, uint _abstainVotes) = governor.proposalVotes(_proposalId);
+        assertEq(_forVotes,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
+        assertEq(_againstVotes, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
+        assertEq(_abstainVotes, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
     }
 
     function testFuzz_MultipleUsersCanCastVotes(

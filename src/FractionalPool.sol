@@ -70,21 +70,21 @@ contract FractionalPool {
      *   - Test: eventually someone calls method to express this on governor contract
      */
      function expressVote(uint256 proposalId, uint8 support) external {
-        uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
-        if (weight == 0) revert("no weight");
+         uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+         if (weight == 0) revert("no weight");
 
-        if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
-        _proposalVotersHasVoted[proposalId][msg.sender] = true;
+         if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
+         _proposalVotersHasVoted[proposalId][msg.sender] = true;
 
-        if (support == uint8(VoteType.Against)) {
-            proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
-        } else if (support == uint8(VoteType.For)) {
-            proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
-        } else if (support == uint8(VoteType.Abstain)) {
-            proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
-        } else {
-            revert("invalid support value, must be included in VoteType enum");
-        }
+         if (support == uint8(VoteType.Against)) {
+             proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
+         } else if (support == uint8(VoteType.For)) {
+             proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
+         } else if (support == uint8(VoteType.Abstain)) {
+             proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
+         } else {
+             revert("invalid support value, must be included in VoteType enum");
+         }
      }
 
      // TODO: Execute the total vote against the governor contract
