@@ -122,9 +122,6 @@ contract Deposit is FractionalPoolTest {
         _amountB = bound(_amountB, 1, type(uint128).max);
         vm.assume(_holderA != _holderB);
 
-        uint256 initialBalanceA = token.balanceOf(_holderA);
-        uint256 initialBalanceB = token.balanceOf(_holderB);
-
         _mintGovAndDepositIntoPool(_holderA, _amountA);
         assertEq(token.balanceOf(_holderA), 0); // they've all been deposited
         assert(token.balanceOf(address(pool)) > token.balanceOf(_holderA));
@@ -265,6 +262,25 @@ contract Vote is FractionalPoolTest {
         assertEq(_forVotesExpressed, _forVotesExpressedInit);
         assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
         assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
+    }
+
+    function testFuzz_PoolWeightIsSnapshotDependent(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+
+        // Create the proposal before the user deposits anything.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Deposit some funds.
+        _mintGovAndDepositIntoPool(_hodler, _voteWeight);
+
+        // Now try to express a voting preference on the proposal.
+        vm.expectRevert(bytes("no weight"));
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
     }
 
     function testFuzz_MultipleUsersCanCastVotes(
