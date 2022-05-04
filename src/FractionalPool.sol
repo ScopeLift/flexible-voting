@@ -29,7 +29,9 @@ contract FractionalPool {
     IFractionalGovernor governor;
 
     // Map depositor to deposit amount
-    mapping (address => uint256) deposits;
+    mapping (address => uint256) public deposits;
+    // proposalId => (address => whether they have voted)
+    mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
     uint256 totalNetDeposits;
 
     struct ProposalVote {
@@ -65,12 +67,15 @@ contract FractionalPool {
      */
      function expressVote(uint256 proposalId, uint8 support) external {
        // TODO:
-       // pull the proposal info based on the ID
-       // confirm there was weight for msg.sender at the proposal snapshot
-       // make sure multiple votes for the same sender overwrite each other
-       // we need to track weight deposited *here*
        // safecast weight
-        uint256 weight = deposits[msg.sender];
+        uint256 depositedWeight = deposits[msg.sender];
+        if (depositedWeight == 0) revert("no weight");
+        // uint256 weightAtProposalSnapshot = token.getPastVotes(msg.sender, governor.proposalSnapshot(proposalId));
+        uint256 weight = depositedWeight;
+        // if (depositedWeight >= weightAtProposalSnapshot) weight = weightAtProposalSnapshot;
+
+        if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
+        _proposalVotersHasVoted[proposalId][msg.sender] = true;
 
         if (support == uint8(VoteType.Against)) {
             proposalVotes[proposalId].againstVotes += uint128(weight);

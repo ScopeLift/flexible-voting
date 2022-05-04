@@ -62,6 +62,9 @@ contract FractionalPoolTest is DSTestPlus {
     }
 
     function _createAndSubmitProposal() internal returns(uint256 proposalId) {
+      // proposal will underflow if we're on the zero block
+      if (block.number == 0) vm.roll(42);
+
       // create a proposal
       bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
       address[] memory targets = new address[](1);
@@ -72,7 +75,6 @@ contract FractionalPoolTest is DSTestPlus {
       calldatas[0] = receiverCallData;
 
       // submit the proposal
-      if (block.number == 0) vm.roll(42); // proposal will underflow if we're on the zero block
       proposalId = governor.propose(targets, values, calldatas, "A great proposal");
       assertEq(uint(governor.state(proposalId)), uint(ProposalState.Pending));
 
@@ -113,13 +115,94 @@ contract Deposit is FractionalPoolTest {
 }
 
 contract Vote is FractionalPoolTest {
+    function _commonFuzzerAssumptions(address _address, uint256 _voteWeight) public returns(uint256) {
+      return _commonFuzzerAssumptions(_address, _voteWeight, uint8(VoteType.Against));
+    }
 
-    function testFuzz_UserCanCastVotes(address _hodler, uint256 _voteWeight) public {
+    function _commonFuzzerAssumptions(address _address, uint256 _voteWeight, uint8 _supportType) public returns(uint256) {
+        vm.assume(_address != address(pool));
+        vm.assume(_supportType <= uint8(VoteType.Abstain)); // couldn't get fuzzer to work w/ the enum
         // This max is a limitation of the fractional governance protocol storage.
-        _voteWeight = bound(_voteWeight, 1, type(uint128).max);
+        return bound(_voteWeight, 1, type(uint128).max);
+    }
+
+    function testFuzz_UserCanCastVotes(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
 
         // Deposit some funds.
-        vm.assume(_hodler != address(pool));
+        _mintGovAndDepositIntoPool(_hodler, _voteWeight);
+        emit Debug("block time of deposit:");
+        emit Debug(block.timestamp);
+
+        // create the proposal
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // _holder should now be able to express his/her vote on the proposal
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
+        (
+          uint256 _againstVotesExpressed,
+          uint256 _forVotesExpressed,
+          uint256 _abstainVotesExpressed
+        ) = pool.proposalVotes(_proposalId);
+        assertEq(_forVotesExpressed, _supportType == uint8(VoteType.For) ? _voteWeight : 0);
+        assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
+        assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
+
+        // no votes have been cast yet
+        (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(_proposalId);
+        assertEq(_forVotes, 0);
+        assertEq(_againstVotes, 0);
+        assertEq(_abstainVotes, 0);
+
+        // submit votes on behalf of the pool
+        pool.castVote(_proposalId);
+
+        // governor should now record votes from the pool
+        (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+        assertEq(_forVotes, _forVotesExpressed);
+        assertEq(_againstVotes, _againstVotesExpressed);
+        assertEq(_abstainVotes, _abstainVotesExpressed);
+    }
+
+    // user has weight in pool but had no tokens at the time of the snapshot (e.g. funds
+    //   were sent to pool before the proposal was created)
+    // user can deposit only part of their holdings
+    // user cannot vote if he had no token weight at the time of proposal (even if he hadn't deposited at that time)
+    // castVote can only be called within a narrow window prior to deadline
+    function testFuzz_UserCannotCastWithoutWeightInPool(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+
+        // Mint gov but do not deposit
+        _mintGovAndApprovePool(_hodler, _voteWeight);
+        assertEq(token.balanceOf(_hodler), _voteWeight);
+        assertEq(pool.deposits(_hodler), 0);
+
+        // create the proposal
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // _holder should NOT be able to express his/her vote on the proposal
+        vm.expectRevert(bytes("no weight"));
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, uint8(_supportType));
+    }
+
+    function testFuzz_NoDoubleVoting(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+
+        // Deposit some funds.
         _mintGovAndApprovePool(_hodler, _voteWeight);
         vm.prank(_hodler);
         pool.deposit(_voteWeight);
@@ -129,32 +212,31 @@ contract Vote is FractionalPoolTest {
 
         // _holder should now be able to express his/her vote on the proposal
         vm.prank(_hodler);
-        pool.expressVote(_proposalId, uint8(VoteType.For));
+        pool.expressVote(_proposalId, _supportType);
+
+        (
+          uint256 _againstVotesExpressedInit,
+          uint256 _forVotesExpressedInit,
+          uint256 _abstainVotesExpressedInit
+        ) = pool.proposalVotes(_proposalId);
+        assertEq(_forVotesExpressedInit, _supportType == uint8(VoteType.For) ? _voteWeight : 0);
+        assertEq(_againstVotesExpressedInit, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
+        assertEq(_abstainVotesExpressedInit, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
+
+        // vote early and often, people
+        vm.expectRevert(bytes("already voted"));
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
+
+        // no votes changed
         (
           uint256 _againstVotesExpressed,
           uint256 _forVotesExpressed,
           uint256 _abstainVotesExpressed
         ) = pool.proposalVotes(_proposalId);
-        assertEq(_forVotesExpressed, _voteWeight);
-        assertEq(_againstVotesExpressed, 0);
-        assertEq(_abstainVotesExpressed, 0);
-
-        // submit votes on behalf of the pool
-        (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(_proposalId);
-        assertEq(_forVotes, 0);
-        assertEq(_againstVotes, 0);
-        assertEq(_abstainVotes, 0);
-
-        pool.castVote(_proposalId);
-
-        // governor should now record votes for the pool
-        (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
-        assertEq(_forVotes, _voteWeight);
-        assertEq(_againstVotes, 0);
-        assertEq(_abstainVotes, 0);
-
-        // advance past proposal deadline
-        vm.roll(governor.proposalDeadline(_proposalId) + 1);
+        assertEq(_forVotesExpressed, _forVotesExpressedInit);
+        assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
+        assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
     }
 
     function testFuzz_MultipleUsersCanCastVotes(
