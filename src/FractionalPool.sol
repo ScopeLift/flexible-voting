@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/contracts/utils/math/Math.sol";
+
 interface IFractionalGovernor {
   function proposalSnapshot(uint256 proposalId) external returns (uint256);
   function castVoteWithReasonAndParams(
@@ -14,7 +17,6 @@ interface IFractionalGovernor {
 interface IVotingToken {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function delegate(address delegatee) external;
-    function getPastVotes(address account, uint256 blockNumber) external returns (uint256);
 }
 
 contract FractionalPool {
@@ -32,7 +34,6 @@ contract FractionalPool {
     mapping (address => uint256) public deposits;
     // proposalId => (address => whether they have voted)
     mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
-    uint256 totalNetDeposits;
 
     struct ProposalVote {
         uint128 againstVotes;
@@ -51,7 +52,10 @@ contract FractionalPool {
     // TODO: deposit method (update fractional voting power)
     function deposit(uint256 _amount) public {
         deposits[msg.sender] += _amount;
-        totalNetDeposits += _amount;
+
+        _writeCheckpoint(_checkpoints[msg.sender], _additionFn, _amount);
+        _writeCheckpoint(_totalDepositCheckpoints, _additionFn, _amount);
+
         token.transferFrom(msg.sender, address(this), _amount);
     }
 
@@ -70,7 +74,7 @@ contract FractionalPool {
        // safecast weight
         uint256 depositedWeight = deposits[msg.sender];
         if (depositedWeight == 0) revert("no weight");
-        // uint256 weightAtProposalSnapshot = token.getPastVotes(msg.sender, governor.proposalSnapshot(proposalId));
+        // uint256 weightAtProposalSnapshot = token.getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
         uint256 weight = depositedWeight;
         // if (depositedWeight >= weightAtProposalSnapshot) weight = weightAtProposalSnapshot;
 
@@ -105,4 +109,73 @@ contract FractionalPool {
 
     // TODO: "borrow", i.e. removes funds from the pool, but is not a withdrawal, i.e. not returning
     // funds to a user that deposited them. Ex: someone borrowing from a compound pool.
+
+
+
+    //===========================================================================
+    // BEGIN: Checkpointing code.
+    //===========================================================================
+    // This has been copied from ERC20Votes's checkpointing system with minor revisions:
+    //   * Replace "Vote" with "Deposit", as deposits are what we need to track
+    //   * Make some variable names longer for readibility
+    struct Checkpoint {
+        uint32 fromBlock;
+        uint224 deposits;
+    }
+    mapping(address => Checkpoint[]) private _checkpoints;
+    Checkpoint[] private _totalDepositCheckpoints;
+    function checkpoints(address account, uint32 pos) public view virtual returns (Checkpoint memory) {
+        return _checkpoints[account][pos];
+    }
+    function getDeposits(address account) public view virtual returns (uint256) {
+        uint256 pos = _checkpoints[account].length;
+        return pos == 0 ? 0 : _checkpoints[account][pos - 1].deposits;
+    }
+    function getPastDeposits(address account, uint256 blockNumber) public view virtual returns (uint256) {
+        require(blockNumber < block.number, "block not yet mined");
+        return _checkpointsLookup(_checkpoints[account], blockNumber);
+    }
+    function getPastTotalSupply(uint256 blockNumber) public view virtual returns (uint256) {
+        require(blockNumber < block.number, "block not yet mined");
+        return _checkpointsLookup(_totalDepositCheckpoints, blockNumber);
+    }
+    function _checkpointsLookup(Checkpoint[] storage ckpts, uint256 blockNumber) private view returns (uint256) {
+        // We run a binary search to look for the earliest checkpoint taken after `blockNumber`.
+        uint256 high = ckpts.length;
+        uint256 low = 0;
+        while (low < high) {
+            uint256 mid = Math.average(low, high);
+            if (ckpts[mid].fromBlock > blockNumber) {
+                high = mid;
+            } else {
+                low = mid + 1;
+            }
+        }
+        return high == 0 ? 0 : ckpts[high - 1].deposits;
+    }
+    function _writeCheckpoint(
+        Checkpoint[] storage ckpts,
+        function(uint256, uint256) view returns (uint256) operation,
+        uint256 delta
+    ) private returns (uint256 oldWeight, uint256 newWeight) {
+        uint256 position = ckpts.length;
+        oldWeight = position == 0 ? 0 : ckpts[position - 1].deposits;
+        newWeight = operation(oldWeight, delta);
+
+        if (position > 0 && ckpts[position - 1].fromBlock == block.number) {
+            ckpts[position - 1].deposits = SafeCast.toUint224(newWeight);
+        } else {
+            ckpts.push(Checkpoint({fromBlock: SafeCast.toUint32(block.number), deposits: SafeCast.toUint224(newWeight)}));
+        }
+    }
+    function _additionFn(uint256 a, uint256 b) private pure returns (uint256) {
+        return a + b;
+    }
+
+    function _subtractionFn(uint256 a, uint256 b) private pure returns (uint256) {
+        return a - b;
+    }
+    //===========================================================================
+    // END: Checkpointing code.
+    //===========================================================================
 }

@@ -103,15 +103,47 @@ contract Deposit is FractionalPoolTest {
     function test_UserCanDepositGovTokens(address _holder, uint256 _amount) public {
         _amount = bound(_amount, 0, type(uint224).max);
         uint256 initialBalance = token.balanceOf(_holder);
-        _mintGovAndApprovePool(_holder, _amount);
 
-        vm.prank(_holder);
-        pool.deposit(_amount);
+        _mintGovAndDepositIntoPool(_holder, _amount);
 
         assertEq(token.balanceOf(address(pool)), _amount);
         assertEq(token.balanceOf(_holder), initialBalance);
         assertEq(token.getVotes(address(pool)), _amount);
     }
+
+    function testFuzz_DepositsAreCheckpointed(
+      address _holderA,
+      address _holderB,
+      uint256 _amountA,
+      uint256 _amountB,
+      uint24 _depositDelay
+    ) public {
+        _amountA = bound(_amountA, 1, type(uint128).max);
+        _amountB = bound(_amountB, 1, type(uint128).max);
+        vm.assume(_holderA != _holderB);
+
+        uint256 initialBalanceA = token.balanceOf(_holderA);
+        uint256 initialBalanceB = token.balanceOf(_holderB);
+
+        _mintGovAndDepositIntoPool(_holderA, _amountA);
+        assertEq(token.balanceOf(_holderA), 0); // they've all been deposited
+        assert(token.balanceOf(address(pool)) > token.balanceOf(_holderA));
+
+        vm.roll(block.number + 42); // advance so that we can look at checkpoints
+
+        // We can still retrieve the user's balance at the given time.
+        assertEq(pool.getPastDeposits(_holderA, block.number - 1), _amountA);
+
+        uint256 newBlockNum = block.number + _depositDelay;
+        vm.roll(newBlockNum);
+
+        // Deposit some more.
+        _mintGovAndDepositIntoPool(_holderA, _amountB);
+
+        vm.roll(block.number + 42); // advance so that we can look at checkpoints
+        assertEq(pool.getPastDeposits(_holderA, block.number - 1), _amountA + _amountB);
+    }
+
 }
 
 contract Vote is FractionalPoolTest {
@@ -135,8 +167,6 @@ contract Vote is FractionalPoolTest {
 
         // Deposit some funds.
         _mintGovAndDepositIntoPool(_hodler, _voteWeight);
-        emit Debug("block time of deposit:");
-        emit Debug(block.timestamp);
 
         // create the proposal
         uint256 _proposalId = _createAndSubmitProposal();
@@ -203,9 +233,7 @@ contract Vote is FractionalPoolTest {
         _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
 
         // Deposit some funds.
-        _mintGovAndApprovePool(_hodler, _voteWeight);
-        vm.prank(_hodler);
-        pool.deposit(_voteWeight);
+        _mintGovAndDepositIntoPool(_hodler, _voteWeight);
 
         // create the proposal
         uint256 _proposalId = _createAndSubmitProposal();
