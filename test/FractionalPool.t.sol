@@ -102,6 +102,7 @@ contract Deposit is FractionalPoolTest {
 
     function test_UserCanDepositGovTokens(address _holder, uint256 _amount) public {
         _amount = bound(_amount, 0, type(uint224).max);
+        vm.assume(_holder != address(pool));
         uint256 initialBalance = token.balanceOf(_holder);
 
         _mintGovAndDepositIntoPool(_holder, _amount);
