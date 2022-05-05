@@ -187,6 +187,9 @@ contract Vote is FractionalPoolTest {
         assertEq(_againstVotes, 0);
         assertEq(_abstainVotes, 0);
 
+        // wait until after the voting period
+        vm.roll(pool.internalVotingPeriodEnd(_proposalId) + 1);
+
         // submit votes on behalf of the pool
         pool.castVote(_proposalId);
 
@@ -369,6 +372,9 @@ contract Vote is FractionalPoolTest {
         assertEq(_againstVotes, 0);
         assertEq(_abstainVotes, 0);
 
+        // wait until after the voting period
+        vm.roll(pool.internalVotingPeriodEnd(_proposalId) + 1);
+
         // submit votes on behalf of the pool
         pool.castVote(_proposalId);
 
@@ -378,4 +384,32 @@ contract Vote is FractionalPoolTest {
         assertEq(_againstVotes, _voteWeightA);
         assertEq(_abstainVotes, _voteWeightB);
     }
+
+    function testFuzz_UserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+
+        // Deposit some funds.
+        _mintGovAndDepositIntoPool(_hodler, _voteWeight);
+
+        // Create the proposal.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Express vote.
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
+
+        // The pool's internal voting period has not passed
+        assert(pool.internalVotingPeriodEnd(_proposalId) > block.number);
+
+        // Try to submit votes on behalf of the pool.
+        vm.expectRevert(bytes("cannot castVote yet"));
+        pool.castVote(_proposalId);
+    }
+
+  // you should not be able to cast a vote twice
+
 }

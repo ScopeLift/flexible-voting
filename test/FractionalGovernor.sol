@@ -16,7 +16,7 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
     }
 
     function votingPeriod() public pure override returns (uint256) {
-        return 16;
+        return 100;
     }
 
     function cancel(

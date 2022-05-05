@@ -6,6 +6,7 @@ import "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 interface IFractionalGovernor {
   function proposalSnapshot(uint256 proposalId) external returns (uint256);
+  function proposalDeadline(uint256 proposalId) external returns (uint256);
   function castVoteWithReasonAndParams(
     uint256 proposalId,
     uint8 support,
@@ -87,10 +88,15 @@ contract FractionalPool {
          }
      }
 
-     // TODO: Execute the total vote against the governor contract
+     // Must call castVote within 20 blocks of the proposal deadline. This is done so as
+     // to prevent someone from calling expressVote and then castVote immediately after,
+     // effectively blocking anyone else in the pool from voting.
+     uint32 constant public CAST_VOTE_WINDOW = 20; // blocks
+
      function castVote(uint256 proposalId) external {
        // TODO: create some public variable to indicate window during which votes will be submitted
        // TODO is the proposal within the submission window?
+       if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
        uint8 unusedSupportParam = uint8(VoteType.Abstain);
        ProposalVote memory _proposalVote = proposalVotes[proposalId];
        bytes memory fractionalizedVotes = abi.encodePacked(_proposalVote.forVotes, _proposalVote.againstVotes);
@@ -100,6 +106,10 @@ contract FractionalPool {
          'crowd-sourced vote',
          fractionalizedVotes
        );
+     }
+
+     function internalVotingPeriodEnd(uint256 proposalId) public returns(uint256 _lastVotingBlock) {
+       _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
      }
 
     // TODO: "borrow", i.e. removes funds from the pool, but is not a withdrawal, i.e. not returning
