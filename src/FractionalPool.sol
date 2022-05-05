@@ -104,6 +104,15 @@ contract FractionalPool {
 
     // TODO: "borrow", i.e. removes funds from the pool, but is not a withdrawal, i.e. not returning
     // funds to a user that deposited them. Ex: someone borrowing from a compound pool.
+    // function borrow(uint256 _amount) public {
+    //     deposits[msg.sender] -= _amount;
+    //
+    //     _writeCheckpoint(_checkpoints[msg.sender], _subtractionFn, _amount);
+    //     _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, _amount);
+    //
+    //     // funds are not actually withdrawn
+    //     // token.transfer(address(this), msg.sender, _amount);
+    // }
 
 
 
