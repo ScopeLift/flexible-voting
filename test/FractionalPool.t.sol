@@ -405,7 +405,33 @@ contract Vote is FractionalPoolTest {
         pool.castVote(_proposalId);
     }
 
-  // you should not be able to cast a vote twice
+    function testFuzz_CannotCastVotesTwice(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+
+        // Deposit some funds.
+        _mintGovAndDepositIntoPool(_hodler, _voteWeight);
+
+        // Create the proposal.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // _holder should now be able to express his/her vote on the proposal
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
+
+        // Wait until after the voting period.
+        vm.roll(pool.internalVotingPeriodEnd(_proposalId) + 1);
+
+        // Submit votes on behalf of the pool.
+        pool.castVote(_proposalId);
+
+        // Try to submit them again.
+        vm.expectRevert(bytes("GovernorCountingFractional: vote already cast"));
+        pool.castVote(_proposalId);
+    }
 
     // TODO
     // percentage-based vote casting
