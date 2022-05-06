@@ -445,25 +445,33 @@ contract Vote is FractionalPoolTest {
 }
 
 contract Borrow is FractionalPoolTest {
-  // does not reduce deposits for the user
-  // does transfer tokens
   // does checkpoint the total deposit amount
-  // borrowed amount is tracked
-  function testFuzz_BorrowDoesNotReduceUserDeposits(
+  function testFuzz_UsersCanBorrowTokens(
+      address _lender,
+      uint256 _lendAmount,
       address _borrower,
       uint256 _borrowAmount
   ) public {
       vm.assume(_borrower != address(0));
+      _lendAmount = _commonFuzzerAssumptions(_lender, _lendAmount);
       _borrowAmount = _commonFuzzerAssumptions(_borrower, _borrowAmount);
-      // Give the pool some funds.
-      token.THIS_IS_JUST_A_TEST_HOOK_mint(address(pool), _borrowAmount * 3);
+      vm.assume(_lendAmount > _borrowAmount);
 
-      uint256 _initBalance = token.balanceOf(_borrower);
+      // Deposit some funds.
+      _mintGovAndDepositIntoPool(_lender, _lendAmount);
 
       // Borrow some funds.
+      uint256 _initBalance = token.balanceOf(_borrower);
       vm.prank(_borrower);
       pool.borrow(_borrowAmount);
 
+      // Tokens should have been transferred.
       assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
+
+      // Withdrawal total has been tracked
+      assertEq(pool.borrowTotal(_borrower), _borrowAmount);
+
+      // The deposit balance of the lender should not have changed.
+      assertEq(pool.deposits(_lender), _lendAmount);
   }
 }
