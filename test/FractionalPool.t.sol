@@ -82,6 +82,17 @@ contract FractionalPoolTest is DSTestPlus {
       vm.roll(governor.proposalSnapshot(proposalId) + 1);
       assertEq(uint(governor.state(proposalId)), uint(ProposalState.Active));
     }
+
+    function _commonFuzzerAssumptions(address _address, uint256 _voteWeight) public returns(uint256) {
+      return _commonFuzzerAssumptions(_address, _voteWeight, uint8(VoteType.Against));
+    }
+
+    function _commonFuzzerAssumptions(address _address, uint256 _voteWeight, uint8 _supportType) public returns(uint256) {
+        vm.assume(_address != address(pool));
+        vm.assume(_supportType <= uint8(VoteType.Abstain)); // couldn't get fuzzer to work w/ the enum
+        // This max is a limitation of the fractional governance protocol storage.
+        return bound(_voteWeight, 1, type(uint128).max);
+    }
 }
 
 contract Deployment is FractionalPoolTest {
@@ -145,17 +156,6 @@ contract Deposit is FractionalPoolTest {
 }
 
 contract Vote is FractionalPoolTest {
-    function _commonFuzzerAssumptions(address _address, uint256 _voteWeight) public returns(uint256) {
-      return _commonFuzzerAssumptions(_address, _voteWeight, uint8(VoteType.Against));
-    }
-
-    function _commonFuzzerAssumptions(address _address, uint256 _voteWeight, uint8 _supportType) public returns(uint256) {
-        vm.assume(_address != address(pool));
-        vm.assume(_supportType <= uint8(VoteType.Abstain)); // couldn't get fuzzer to work w/ the enum
-        // This max is a limitation of the fractional governance protocol storage.
-        return bound(_voteWeight, 1, type(uint128).max);
-    }
-
     function testFuzz_UserCanCastVotes(
       address _hodler,
       uint256 _voteWeight,
