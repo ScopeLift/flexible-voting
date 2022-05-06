@@ -9,7 +9,7 @@ contract GovToken is ERC20Votes {
 
     constructor() ERC20("Governance Token", "GOV") ERC20Permit("GOV") { }
 
-    function mint(address to, uint256 amount) public {
+    function THIS_IS_JUST_A_TEST_HOOK_mint(address to, uint256 amount) public {
         _mint(to, amount);
     }
 }

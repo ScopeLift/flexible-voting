@@ -50,7 +50,7 @@ contract FractionalPoolTest is DSTestPlus {
 
     function _mintGovAndApprovePool(address _holder, uint256 _amount) public {
         vm.assume(_holder != address(0));
-        token.mint(_holder, _amount);
+        token.THIS_IS_JUST_A_TEST_HOOK_mint(_holder, _amount);
         vm.prank(_holder);
         token.approve(address(pool), type(uint256).max);
     }
