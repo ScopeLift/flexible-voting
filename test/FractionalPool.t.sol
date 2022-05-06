@@ -443,3 +443,27 @@ contract Vote is FractionalPoolTest {
         // userD borrows more
         // vote should be cast as a percentage of their expressed types, since the weight is different
 }
+
+contract Borrow is FractionalPoolTest {
+  // does not reduce deposits for the user
+  // does transfer tokens
+  // does checkpoint the total deposit amount
+  // borrowed amount is tracked
+  function testFuzz_BorrowDoesNotReduceUserDeposits(
+      address _borrower,
+      uint256 _borrowAmount
+  ) public {
+      vm.assume(_borrower != address(0));
+      _borrowAmount = _commonFuzzerAssumptions(_borrower, _borrowAmount);
+      // Give the pool some funds.
+      token.THIS_IS_JUST_A_TEST_HOOK_mint(address(pool), _borrowAmount * 3);
+
+      uint256 _initBalance = token.balanceOf(_borrower);
+
+      // Borrow some funds.
+      vm.prank(_borrower);
+      pool.borrow(_borrowAmount);
+
+      assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
+  }
+}
