@@ -200,11 +200,6 @@ contract Vote is FractionalPoolTest {
         assertEq(_abstainVotes, _abstainVotesExpressed);
     }
 
-    // user has weight in pool but had no tokens at the time of the snapshot (e.g. funds
-    //   were sent to pool before the proposal was created)
-    // user can deposit only part of their holdings
-    // user cannot vote if he had no token weight at the time of proposal (even if he hadn't deposited at that time)
-    // castVote can only be called within a narrow window prior to deadline
     function testFuzz_UserCannotCastWithoutWeightInPool(
       address _hodler,
       uint256 _voteWeight,
@@ -252,7 +247,7 @@ contract Vote is FractionalPoolTest {
         assertEq(_againstVotesExpressedInit, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
         assertEq(_abstainVotesExpressedInit, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
 
-        // vote early and often, people
+        // vote early and often
         vm.expectRevert(bytes("already voted"));
         vm.prank(_hodler);
         pool.expressVote(_proposalId, _supportType);
@@ -275,7 +270,7 @@ contract Vote is FractionalPoolTest {
     ) public {
         _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
 
-        // Create the proposal before the user deposits anything.
+        // Create the proposal *before* the user deposits anything.
         uint256 _proposalId = _createAndSubmitProposal();
 
         // Deposit some funds.
@@ -412,4 +407,13 @@ contract Vote is FractionalPoolTest {
 
   // you should not be able to cast a vote twice
 
+    // TODO
+    // percentage-based vote casting
+        // userA deposits some funds
+        // userB deposits some more
+        // userC borrows some fraction of them
+        // proposal is created
+        // A+B express votes w/ different voteTypes
+        // userD borrows more
+        // vote should be cast as a percentage of their expressed types, since the weight is different
 }

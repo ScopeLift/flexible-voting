@@ -129,7 +129,7 @@ contract FractionalPool {
     //===========================================================================
     // BEGIN: Checkpointing code.
     //===========================================================================
-    // This has been copied from ERC20Votes's checkpointing system with minor revisions:
+    // This has been copied from OZ's ERC20Votes checkpointing system with minor revisions:
     //   * Replace "Vote" with "Deposit", as deposits are what we need to track
     //   * Make some variable names longer for readibility
     struct Checkpoint {
