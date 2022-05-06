@@ -69,12 +69,6 @@ contract FractionalPool {
       // totalNetDeposits -= _amount;
 
     // TODO: express depositor voting preference method
-    /* NEXT:
-     *   - Test setup: Create proposal, propose it, advance to active state
-     *   - Pool: Mechanism for tracking a depositors current weight (just a mapping?)
-     *   - Test case: Depositor calls this new method, and is stored internally
-     *   - Test: eventually someone calls method to express this on governor contract
-     */
      function expressVote(uint256 proposalId, uint8 support) external {
          uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
          if (weight == 0) revert("no weight");
