@@ -19,6 +19,7 @@ interface IVotingToken {
     function transfer(address to, uint256 amount) external returns (bool);
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
     function delegate(address delegatee) external;
+    function getPastVotes(address account, uint256 blockNumber) external returns (uint256);
 }
 
 contract FractionalPool {
@@ -93,12 +94,24 @@ contract FractionalPool {
      uint32 constant public CAST_VOTE_WINDOW = 20; // blocks
 
      function castVote(uint256 proposalId) external {
-       // TODO: create some public variable to indicate window during which votes will be submitted
-       // TODO is the proposal within the submission window?
        if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
        uint8 unusedSupportParam = uint8(VoteType.Abstain);
        ProposalVote memory _proposalVote = proposalVotes[proposalId];
-       bytes memory fractionalizedVotes = abi.encodePacked(_proposalVote.forVotes, _proposalVote.againstVotes);
+
+       uint128 _totalExpressedVotes = _proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes;
+       // we want 256 bits because of the multiplication we're about to do
+       uint256 _votingWeightAtSnapshot = token.getPastVotes(address(this), governor.proposalSnapshot(proposalId));
+       uint128 _forVotesToCast = SafeCast.toUint128(
+         (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalExpressedVotes
+       );
+       uint128 _againstVotesToCast = SafeCast.toUint128(
+         (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalExpressedVotes
+       );
+
+       bytes memory fractionalizedVotes = abi.encodePacked(
+         _forVotesToCast,
+         _againstVotesToCast
+       );
        governor.castVoteWithReasonAndParams(
          proposalId,
          unusedSupportParam,

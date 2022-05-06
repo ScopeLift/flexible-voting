@@ -93,6 +93,12 @@ contract FractionalPoolTest is DSTestPlus {
         // This max is a limitation of the fractional governance protocol storage.
         return bound(_voteWeight, 1, type(uint128).max);
     }
+
+    function _assertWithinRange(uint256 amount, uint256 target, uint256 range) public {
+      if (amount > target) assert(amount - target <= range);
+      if (amount < target) assert(target - amount <= range);
+      if (amount == target) assertEq(amount, target);
+    }
 }
 
 contract Deployment is FractionalPoolTest {
@@ -508,12 +514,12 @@ contract Vote is FractionalPoolTest {
           uint256 _expectedVotingWeightA = (_voteWeightA * _expectedVotingWeight) / _initDepositWeight;
           uint256 _expectedVotingWeightB = (_voteWeightB * _expectedVotingWeight) / _initDepositWeight;
 
-          if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _expectedVotingWeightA);
-          if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _expectedVotingWeightB);
-          if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _expectedVotingWeightA);
-          if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _expectedVotingWeightB);
-          if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _expectedVotingWeightA);
-          if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _expectedVotingWeightB);
+          if (_supportTypeA == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
+          if (_supportTypeB == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightB, 1);
+          if (_supportTypeA == uint8(VoteType.Against)) _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
+          if (_supportTypeB == uint8(VoteType.Against)) _assertWithinRange(_againstVotes, _expectedVotingWeightB, 1);
+          if (_supportTypeA == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
+          if (_supportTypeB == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightB, 1);
         }
     }
 
