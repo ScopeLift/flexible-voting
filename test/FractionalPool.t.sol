@@ -514,6 +514,7 @@ contract Vote is FractionalPoolTest {
           uint256 _expectedVotingWeightA = (_voteWeightA * _expectedVotingWeight) / _initDepositWeight;
           uint256 _expectedVotingWeightB = (_voteWeightB * _expectedVotingWeight) / _initDepositWeight;
 
+          // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
           if (_supportTypeA == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
           if (_supportTypeB == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightB, 1);
           if (_supportTypeA == uint8(VoteType.Against)) _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
@@ -521,6 +522,78 @@ contract Vote is FractionalPoolTest {
           if (_supportTypeA == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
           if (_supportTypeB == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightB, 1);
         }
+    }
+
+    function testFuzz_VotingWeightIsAbandonedIfSomeoneDoesntExpress(
+      uint256 _voteWeightA,
+      uint256 _voteWeightB,
+      uint8 _supportTypeA,
+      uint256 _borrowAmount
+    ) public {
+        // We need to do this to prevent:
+        // "CompilerError: Stack too deep, try removing local variables."
+        address[3] memory _userArray = [
+          address(0xbeef), // userA
+          address(0xbabe), // userB
+          address(0xf005ba11) // userC
+        ];
+        _voteWeightA = _commonFuzzerAssumptions(_userArray[0], _voteWeightA, _supportTypeA);
+        _voteWeightB = _commonFuzzerAssumptions(_userArray[1], _voteWeightB);
+        _borrowAmount = _commonFuzzerAssumptions(_userArray[2], _borrowAmount);
+        vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
+        vm.assume(_voteWeightA + _voteWeightB > _borrowAmount);
+
+        // Mint and deposit.
+        _mintGovAndDepositIntoPool(_userArray[0], _voteWeightA);
+        _mintGovAndDepositIntoPool(_userArray[1], _voteWeightB);
+        uint256 _initDepositWeight = token.balanceOf(address(pool));
+
+        // Borrow from the pool, decreasing its token balance.
+        vm.prank(_userArray[2]);
+        pool.borrow(_borrowAmount);
+
+        // Create the proposal.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Jump ahead to the proposal snapshot to lock in the pool's balance.
+        vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+
+        uint256 _fullVotingWeight = token.balanceOf(address(pool));
+        assert(_fullVotingWeight < _initDepositWeight);
+        assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB - _borrowAmount);
+
+        // Only user A expresses a vote.
+        vm.prank(_userArray[0]);
+        pool.expressVote(_proposalId, _supportTypeA);
+
+        // Wait until after the pool's voting period closes.
+        vm.roll(pool.internalVotingPeriodEnd(_proposalId) + 1);
+
+        // Submit votes on behalf of the pool.
+        pool.castVote(_proposalId);
+
+        // Vote should be cast as a percentage of the depositer's expressed types, since
+        // the actual weight is different from the deposit weight.
+        (
+          uint256 _againstVotes,
+          uint256 _forVotes,
+          uint256 _abstainVotes
+        ) = governor.proposalVotes(_proposalId);
+
+        uint256 _expectedVotingWeightA = (_voteWeightA * _fullVotingWeight) / _initDepositWeight;
+        uint256 _expectedVotingWeightB = (_voteWeightB * _fullVotingWeight) / _initDepositWeight;
+
+        // The weight for userB should be missing, since he/she didn't express a voting preference
+        _assertWithinRange(
+          _againstVotes + _forVotes + _abstainVotes,
+          _fullVotingWeight - _expectedVotingWeightB,
+          1
+        );
+
+        // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+        if (_supportTypeA == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
+        if (_supportTypeA == uint8(VoteType.Against)) _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
+        if (_supportTypeA == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
     }
 
     //TODO what if someone tries to express a vote after the voting window?
@@ -551,7 +624,7 @@ contract Borrow is FractionalPoolTest {
       // Tokens should have been transferred.
       assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
 
-      // Withdrawal total has been tracked
+      // Borrow total has been tracked.
       assertEq(pool.borrowTotal(_borrower), _borrowAmount);
 
       // The deposit balance of the lender should not have changed.
