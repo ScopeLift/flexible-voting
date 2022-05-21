@@ -205,7 +205,7 @@ contract Vote is FractionalPoolTest {
         assertEq(_abstainVotes, _abstainVotesExpressed);
     }
 
-    function testFuzz_UserCannotCastWithoutWeightInPool(
+    function testFuzz_UserCannotExpressVotesWithoutWeightInPool(
       address _hodler,
       uint256 _voteWeight,
       uint8 _supportType
@@ -224,6 +224,31 @@ contract Vote is FractionalPoolTest {
         vm.expectRevert(bytes("no weight"));
         vm.prank(_hodler);
         pool.expressVote(_proposalId, uint8(_supportType));
+    }
+
+    function testFuzz_UserCannotCastAfterVotingPeriod(
+      address _hodler,
+      uint256 _voteWeight,
+      uint8 _supportType
+    ) public {
+        _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+
+        // Deposit some funds.
+        _mintGovAndDepositIntoPool(_hodler, _voteWeight);
+
+        // Create the proposal.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Express vote preference.
+        vm.prank(_hodler);
+        pool.expressVote(_proposalId, _supportType);
+
+        // Jump ahead so that we're outside of the proposal's voting period.
+        vm.roll(governor.proposalDeadline(_proposalId) + 1);
+
+        // We should not be able to castVote at this point.
+        vm.expectRevert(bytes("Governor: vote not currently active"));
+        pool.castVote(_proposalId);
     }
 
     function testFuzz_NoDoubleVoting(
