@@ -683,7 +683,6 @@ contract Vote is FractionalPoolTest {
 }
 
 contract Borrow is FractionalPoolTest {
-  // does checkpoint the total deposit amount
   function testFuzz_UsersCanBorrowTokens(
       address _lender,
       uint256 _lendAmount,
@@ -705,11 +704,17 @@ contract Borrow is FractionalPoolTest {
 
       // Tokens should have been transferred.
       assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
+      assertEq(token.balanceOf(address(pool)), _lendAmount - _borrowAmount);
 
       // Borrow total has been tracked.
       assertEq(pool.borrowTotal(_borrower), _borrowAmount);
 
       // The deposit balance of the lender should not have changed.
       assertEq(pool.deposits(_lender), _lendAmount);
+
+      // The total deposit snapshot should not have changed.
+      uint256 _blockAtTimeOfBorrow = block.number;
+      vm.roll(_blockAtTimeOfBorrow + 42); // Advance so the block is mined.
+      assertEq(pool.getPastTotalDeposits(_blockAtTimeOfBorrow), _lendAmount);
   }
 }
