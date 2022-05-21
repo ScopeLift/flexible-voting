@@ -8,7 +8,6 @@ import "./GovToken.sol";
 import "./FractionalGovernor.sol";
 import "./ProposalReceiverMock.sol";
 
-
 contract FractionalPoolTest is DSTestPlus {
     enum ProposalState {
         Pending,
@@ -540,6 +539,7 @@ contract Vote is FractionalPoolTest {
         _voteWeightA = _commonFuzzerAssumptions(_userArray[0], _voteWeightA, _supportTypeA);
         _voteWeightB = _commonFuzzerAssumptions(_userArray[1], _voteWeightB);
         _borrowAmount = _commonFuzzerAssumptions(_userArray[2], _borrowAmount);
+
         vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
         vm.assume(_voteWeightA + _voteWeightB > _borrowAmount);
 
@@ -595,6 +595,62 @@ contract Vote is FractionalPoolTest {
             1
           );
         }
+    }
+
+    function testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(
+      uint256 _voteWeightA,
+      uint256 _voteWeightB,
+      uint8 _supportTypeA
+    ) public {
+        // We need to do this to prevent:
+        // "CompilerError: Stack too deep, try removing local variables."
+        address[3] memory _userArray = [
+          address(0xbeef), // userA
+          address(0xbabe), // userB
+          address(0xf005ba11) // userC
+        ];
+        _voteWeightA = _commonFuzzerAssumptions(_userArray[0], _voteWeightA, _supportTypeA);
+        _voteWeightB = _commonFuzzerAssumptions(_userArray[1], _voteWeightB);
+
+        vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
+
+        // Mint and deposit for just userA.
+        _mintGovAndDepositIntoPool(_userArray[0], _voteWeightA);
+        uint256 _initDepositWeight = token.balanceOf(address(pool));
+
+        // Create the proposal.
+        uint256 _proposalId = _createAndSubmitProposal();
+
+        // Jump ahead to the proposal snapshot to lock in the pool's balance.
+        vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+
+        // Now mint and deposit for userB.
+        _mintGovAndDepositIntoPool(_userArray[1], _voteWeightB);
+
+        uint256 _fullVotingWeight = token.balanceOf(address(pool));
+        assert(_fullVotingWeight > _initDepositWeight);
+        assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB);
+
+        // Only user A expresses a vote.
+        vm.prank(_userArray[0]);
+        pool.expressVote(_proposalId, _supportTypeA);
+
+        // Wait until after the pool's voting period closes.
+        vm.roll(pool.internalVotingPeriodEnd(_proposalId) + 1);
+
+        // Submit votes on behalf of the pool.
+        pool.castVote(_proposalId);
+
+        (
+          uint256 _againstVotes,
+          uint256 _forVotes,
+          uint256 _abstainVotes
+        ) = governor.proposalVotes(_proposalId);
+
+        // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+        if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _voteWeightA);
+        if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeightA);
+        if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
     }
 
     //TODO what if someone tries to express a vote after the voting window?
