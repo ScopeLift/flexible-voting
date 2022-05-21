@@ -98,14 +98,26 @@ contract FractionalPool {
        uint8 unusedSupportParam = uint8(VoteType.Abstain);
        ProposalVote memory _proposalVote = proposalVotes[proposalId];
 
-       uint128 _totalExpressedVotes = _proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes;
-       // we want 256 bits because of the multiplication we're about to do
-       uint256 _votingWeightAtSnapshot = token.getPastVotes(address(this), governor.proposalSnapshot(proposalId));
+       uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
+
+       // Use the snapshot of total deposits to determine total voting weight. We cannot
+       // use the proposalVote numbers alone, since some people with deposits at the
+       // snapshot might not have expressed votes.
+       uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
+
+       // We need 256 bits because of the multiplication we're about to do.
+       uint256 _votingWeightAtSnapshot = token.getPastVotes(address(this), _proposalSnapshotBlockNumber);
+
+       //      forVotesRaw          forVotesScaled
+       // --------------------- = ---------------------
+       //     totalDeposits        deposits (@snapshot)
+       //
+       // forVotesScaled = forVotesRaw * deposits@snapshot / totalDeposits
        uint128 _forVotesToCast = SafeCast.toUint128(
-         (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalExpressedVotes
+         (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalDepositWeightAtSnapshot
        );
        uint128 _againstVotesToCast = SafeCast.toUint128(
-         (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalExpressedVotes
+         (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
        );
 
        bytes memory fractionalizedVotes = abi.encodePacked(
@@ -157,7 +169,7 @@ contract FractionalPool {
         require(blockNumber < block.number, "block not yet mined");
         return _checkpointsLookup(_checkpoints[account], blockNumber);
     }
-    function getPastTotalSupply(uint256 blockNumber) public view virtual returns (uint256) {
+    function getPastTotalDeposits(uint256 blockNumber) public view virtual returns (uint256) {
         require(blockNumber < block.number, "block not yet mined");
         return _checkpointsLookup(_totalDepositCheckpoints, blockNumber);
     }

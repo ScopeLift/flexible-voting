@@ -583,17 +583,18 @@ contract Vote is FractionalPoolTest {
         uint256 _expectedVotingWeightA = (_voteWeightA * _fullVotingWeight) / _initDepositWeight;
         uint256 _expectedVotingWeightB = (_voteWeightB * _fullVotingWeight) / _initDepositWeight;
 
-        // The weight for userB should be missing, since he/she didn't express a voting preference
-        _assertWithinRange(
-          _againstVotes + _forVotes + _abstainVotes,
-          _fullVotingWeight - _expectedVotingWeightB,
-          1
-        );
-
         // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
         if (_supportTypeA == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
         if (_supportTypeA == uint8(VoteType.Against)) _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
-        if (_supportTypeA == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
+        if (_supportTypeA == uint8(VoteType.Abstain)) {
+          // Because userB didn't express a voting preference, his votes will be counted
+          // as abstain votes.
+          _assertWithinRange(
+            _abstainVotes,
+            _expectedVotingWeightA + _expectedVotingWeightB,
+            1
+          );
+        }
     }
 
     //TODO what if someone tries to express a vote after the voting window?
