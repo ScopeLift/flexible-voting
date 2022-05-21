@@ -56,7 +56,6 @@ contract FractionalPool {
         _token.delegate(address(this));
     }
 
-    // TODO: deposit method (update fractional voting power)
     function deposit(uint256 _amount) public {
         deposits[msg.sender] += _amount;
 
@@ -69,7 +68,6 @@ contract FractionalPool {
     // TODO: withdrawal method (update fractional voting power)
       // totalNetDeposits -= _amount;
 
-    // TODO: express depositor voting preference method
      function expressVote(uint256 proposalId, uint8 support) external {
          uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
          if (weight == 0) revert("no weight");
@@ -136,12 +134,10 @@ contract FractionalPool {
        _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
      }
 
-    // TODO: "borrow", i.e. removes funds from the pool, but is not a withdrawal, i.e. not returning
+    // Remove funds from the pool, but is not a withdrawal, i.e. not returning
     // funds to a user that deposited them. Ex: someone borrowing from a compound pool.
     function borrow(uint256 _amount) public {
         borrowTotal[msg.sender] += _amount;
-        // _writeCheckpoint(_checkpoints[msg.sender], _subtractionFn, _amount);
-        // _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, _amount);
         token.transfer(msg.sender, _amount);
     }
 
