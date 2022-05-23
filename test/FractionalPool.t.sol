@@ -528,7 +528,12 @@ contract Vote is FractionalPoolTest {
           uint256 _abstainVotes
         ) = governor.proposalVotes(_proposalId);
 
-        assertEq(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight);
+        // These can differ because votes are rounded.
+        _assertWithinRange(
+          _againstVotes + _forVotes + _abstainVotes,
+          _expectedVotingWeight,
+          1
+        );
 
         if (_supportTypeA == _supportTypeB) {
           assertEq(_forVotes,     _supportTypeA == uint8(VoteType.For)     ? _expectedVotingWeight : 0);
@@ -582,6 +587,7 @@ contract Vote is FractionalPoolTest {
 
         // Jump ahead to the proposal snapshot to lock in the pool's balance.
         vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+        uint256 _totalPossibleVotingWeight = token.balanceOf(address(pool));
 
         uint256 _fullVotingWeight = token.balanceOf(address(pool));
         assert(_fullVotingWeight < _initDepositWeight);
@@ -608,18 +614,25 @@ contract Vote is FractionalPoolTest {
         uint256 _expectedVotingWeightA = (_voteWeightA * _fullVotingWeight) / _initDepositWeight;
         uint256 _expectedVotingWeightB = (_voteWeightB * _fullVotingWeight) / _initDepositWeight;
 
+        // The pool *could* have voted with this much weight.
+        _assertWithinRange(
+          _totalPossibleVotingWeight,
+          _expectedVotingWeightA + _expectedVotingWeightB,
+          1
+        );
+
+        // Actually, though, the pool did not vote with all of the weight it could have.
+        // VoterB's votes were never cast because he/she did not express his/her preference.
+        _assertWithinRange(
+          _againstVotes + _forVotes + _abstainVotes, // The total actual weight.
+          _expectedVotingWeightA, // VoterB's weight has been abandoned, only A's is counted.
+          1
+        );
+
         // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
         if (_supportTypeA == uint8(VoteType.For)) _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
         if (_supportTypeA == uint8(VoteType.Against)) _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
-        if (_supportTypeA == uint8(VoteType.Abstain)) {
-          // Because userB didn't express a voting preference, his votes will be counted
-          // as abstain votes.
-          _assertWithinRange(
-            _abstainVotes,
-            _expectedVotingWeightA + _expectedVotingWeightB,
-            1
-          );
-        }
+        if (_supportTypeA == uint8(VoteType.Abstain)) _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
     }
 
     function testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(

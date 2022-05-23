@@ -117,10 +117,14 @@ contract FractionalPool {
        uint128 _againstVotesToCast = SafeCast.toUint128(
          (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
        );
+       uint128 _abstainVotesToCast = SafeCast.toUint128(
+         (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
+       );
 
        bytes memory fractionalizedVotes = abi.encodePacked(
          _forVotesToCast,
-         _againstVotesToCast
+         _againstVotesToCast,
+         _abstainVotesToCast
        );
        governor.castVoteWithReasonAndParams(
          proposalId,
