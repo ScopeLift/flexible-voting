@@ -3,9 +3,9 @@
 
 pragma solidity ^0.8.0;
 
-import "../Governor.sol";
-import "../compatibility/GovernorCompatibilityBravo.sol";
-import "../../utils/math/SafeCast.sol";
+import "openzeppelin-contracts/contracts/governance/Governor.sol";
+import "openzeppelin-contracts/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
+import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 /**
  * @dev Extension of {Governor} for 3 option fractional vote counting.

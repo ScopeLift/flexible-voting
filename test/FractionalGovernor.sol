@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import "openzeppelin-contracts/contracts/governance/extensions/GovernorCountingFractional.sol";
+import "../src/GovernorCountingFractional.sol";
 import "openzeppelin-contracts/contracts/governance/extensions/GovernorVotes.sol";
 
 contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
