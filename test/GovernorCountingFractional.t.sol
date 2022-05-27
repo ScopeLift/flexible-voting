@@ -291,6 +291,9 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint256 _proposalId = _createAndSubmitProposal();
       _castVotes(voters, _proposalId);
 
+      // Jump ahead so that we're outside of the proposal's voting period.
+      vm.roll(governor.proposalDeadline(_proposalId) + 1);
+
       (
         uint256 againstVotesCast,
         uint256 forVotesCast,
@@ -300,6 +303,23 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       assertEq(againstVotes, againstVotesCast);
       assertEq(forVotes, forVotesCast);
       assertEq(abstainVotes, abstainVotesCast);
+
+      ProposalState status = ProposalState(uint32(governor.state(_proposalId)));
+      if (forVotes > againstVotes && forVotes >= governor.quorum(block.number)) {
+        assertEq(uint8(status), uint8(ProposalState.Succeeded));
+        _executeProposal();
+      } else {
+        assertEq(uint8(status), uint8(ProposalState.Defeated));
+
+        Proposal memory _rawProposalInfo = _getSimpleProposal();
+        vm.expectRevert(bytes('Governor: proposal not successful'));
+        governor.execute(
+          _rawProposalInfo.targets,
+          _rawProposalInfo.values,
+          _rawProposalInfo.calldatas,
+          keccak256(bytes(_rawProposalInfo.description))
+        );
+      }
     }
 
 }
