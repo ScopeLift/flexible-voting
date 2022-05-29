@@ -159,27 +159,53 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       );
     }
 
-    function _setupVoters(
+    function _setupNominalVoters(
       uint120[4] memory weights,
-      uint8[4] memory supportTypes,
-      bool assignFractionalVoteSplits
+      uint8[4] memory supportTypes
     ) internal returns(Voter[4] memory voters) {
       Voter memory voter;
-
-      uint percentFor; uint percentAgainst; uint percentAbstain;
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
         voter.addr = address(uint160(uint(keccak256(abi.encodePacked(weights[_i], _i))))); // Generate random address;
         voter.weight = uint128(bound(weights[_i], 1, type(uint120).max)); // uint120 prevents overflow of uint128 vote slots;
         voter.support = uint8(bound(supportTypes[_i], 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
-
-        if (assignFractionalVoteSplits) {
-          percentFor = bound(1e19, 0, 1e18); // 1e19 is just used to ensure we get a random value
-          percentAgainst = bound(1e19, 0, (1e18 - percentFor) / 2);
-          percentAbstain = 1e18 - percentFor - percentAgainst;
-          voter.voteSplit = FractionalVoteSplit(percentFor, percentAgainst, percentAbstain);
-        }
       }
+    }
+
+    function _setupFractionalVoters(
+      uint120[4] memory weights,
+      uint8[4] memory supportTypes,
+      FractionalVoteSplit[4] memory voteSplits
+    ) internal returns(Voter[4] memory voters) {
+      voters = _setupNominalVoters(weights, supportTypes);
+      Voter memory voter;
+      for (uint8 _i; _i < voters.length; _i++) {
+        voter = voters[_i];
+        FractionalVoteSplit memory split = voteSplits[_i];
+        require(split.percentFor + split.percentAgainst + split.percentAbstain == 1e18, "split must add to 100%");
+        voter.voteSplit = split;
+      }
+    }
+
+    function _setupFractionalVoters(
+      uint120[4] memory weights,
+      uint8[4] memory supportTypes
+    ) internal returns(Voter[4] memory voters) {
+
+      FractionalVoteSplit[4] memory voteSplits;
+
+      uint percentFor;
+      uint percentAgainst;
+      uint percentAbstain;
+
+      // Randomize the vote splits.
+      for (uint8 _i; _i < voteSplits.length; _i++) {
+        voteSplits[_i].percentFor = bound(1e19, 0, 1e18); // 1e19 is just used to ensure we get a random value
+        voteSplits[_i].percentAgainst = bound(1e19, 0, (1e18 - voteSplits[_i].percentFor) / 2);
+        voteSplits[_i].percentAbstain = 1e18 - voteSplits[_i].percentFor - voteSplits[_i].percentAgainst;
+      }
+
+      voters = _setupFractionalVoters(weights, supportTypes, voteSplits);
     }
 
     function _mintAndDelegateToVoters(Voter[4] memory voters) internal returns(
@@ -248,7 +274,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint256 _initReceiverBalance = address(receiver).balance;
 
       bool useFractionalWeights = false;
-      Voter[4] memory voters = _setupVoters(weights, supportTypes, useFractionalWeights);
+      Voter[4] memory voters = _setupNominalVoters(weights, supportTypes);
       (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _mintAndDelegateToVoters(voters);
       uint256 _proposalId = _createAndSubmitProposal();
       _castVotes(voters, _proposalId);
@@ -286,7 +312,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     ) public {
 
       bool useFractionalWeights = true;
-      Voter[4] memory voters = _setupVoters(weights, supportTypes, useFractionalWeights);
+      Voter[4] memory voters = _setupFractionalVoters(weights, supportTypes);
       (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _mintAndDelegateToVoters(voters);
       uint256 _proposalId = _createAndSubmitProposal();
       _castVotes(voters, _proposalId);
