@@ -63,6 +63,14 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       FractionalVoteSplit voteSplit;
     }
 
+    struct Proposal {
+      uint256 id;
+      address[] targets;
+      uint256[] values;
+      bytes[] calldatas;
+      string description;
+    }
+
     FractionalPool pool;
     GovToken token;
     FractionalGovernor governor;
@@ -82,22 +90,9 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         vm.label(address(receiver), "receiver");
     }
 
-    function testFuzz_Deployment(uint256 _blockNumber) public {
-      assertEq(governor.name(), "Governor");
-      assertEq(address(governor.token()), address(token));
-      assertEq(governor.votingDelay(), 4);
-      assertEq(governor.votingPeriod(), 100);
-      assertEq(governor.quorum(_blockNumber), 10e18);
-      assertEq(governor.COUNTING_MODE(), 'support=bravo&quorum=bravo&params=fractional');
-    }
-
-    struct Proposal {
-      uint256 id;
-      address[] targets;
-      uint256[] values;
-      bytes[] calldatas;
-      string description;
-    }
+    /// ----------------------
+    /// BEGIN HELPER FUNCTIONS
+    /// ----------------------
 
     function _getSimpleProposal() internal view returns(Proposal memory) {
       address[] memory targets = new address[](1);
@@ -262,16 +257,6 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       }
     }
 
-    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights, uint8[4] memory supportTypes) public {
-      Voter[4] memory voters = _setupNominalVoters(weights, supportTypes);
-      _fractionalGovernorHappyPathTest(voters);
-    }
-
-    function testFuzz_VotingWithFractionalizedParams(uint120[4] memory weights, uint8[4] memory supportTypes) public {
-      Voter[4] memory voters = _setupFractionalVoters(weights, supportTypes);
-      _fractionalGovernorHappyPathTest(voters);
-    }
-
     function _fractionalGovernorHappyPathTest(Voter[4] memory voters) public {
       uint256 _initGovBalance = address(governor).balance;
       uint256 _initReceiverBalance = address(receiver).balance;
@@ -313,6 +298,29 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       // No ETH should have moved.
       assertEq(address(governor).balance, _initGovBalance);
       assertEq(address(receiver).balance, _initReceiverBalance);
+    }
+
+    /// --------------------
+    /// END HELPER FUNCTIONS
+    /// --------------------
+
+    function testFuzz_Deployment(uint256 _blockNumber) public {
+      assertEq(governor.name(), "Governor");
+      assertEq(address(governor.token()), address(token));
+      assertEq(governor.votingDelay(), 4);
+      assertEq(governor.votingPeriod(), 100);
+      assertEq(governor.quorum(_blockNumber), 10e18);
+      assertEq(governor.COUNTING_MODE(), 'support=bravo&quorum=bravo&params=fractional');
+    }
+
+    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights, uint8[4] memory supportTypes) public {
+      Voter[4] memory voters = _setupNominalVoters(weights, supportTypes);
+      _fractionalGovernorHappyPathTest(voters);
+    }
+
+    function testFuzz_VotingWithFractionalizedParams(uint120[4] memory weights, uint8[4] memory supportTypes) public {
+      Voter[4] memory voters = _setupFractionalVoters(weights, supportTypes);
+      _fractionalGovernorHappyPathTest(voters);
     }
 
 }
