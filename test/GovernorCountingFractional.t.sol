@@ -173,9 +173,9 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     }
 
     function _randomVoteSplit() public returns (FractionalVoteSplit memory _voteSplit) {
-        _voteSplit.percentFor = bound(1e19, 0, 0.5e18); // 1e19 is just used to ensure we get a random value
-        _voteSplit.percentAgainst = bound(1e19, 0, 0.5e18); // 0.5e18 ensures the next line won't overflow
-        _voteSplit.percentAbstain = 1e18 - _voteSplit.percentFor - _voteSplit.percentAgainst;
+      _voteSplit.percentFor = bound(1e19, 0, 1e18); // 1e19 is just used to ensure we get a random value
+      _voteSplit.percentAgainst = bound(1e19, 0, 1e18 - _voteSplit.percentFor);
+      _voteSplit.percentAbstain = 1e18 - _voteSplit.percentFor - _voteSplit.percentAgainst;
     }
 
     // Setups up a 4-Voter array with specified weights, random supportTypes, and random voteSplits.
@@ -345,9 +345,9 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     ) public {
       FractionalVoteSplit[4] memory voteSplits;
       for(uint _i; _i < userIsFractional.length; _i++) {
-        if (userIsFractional[_i]) voteSplits[_i] = _randomVoteSplit();
         // If the user is not a fractional user, we don't define a vote split. This will
         // cause them to cast their vote nominally.
+        if (userIsFractional[_i]) voteSplits[_i] = _randomVoteSplit();
       }
       Voter[4] memory voters = _setupFractionalVoters(weights, voteSplits);
       _fractionalGovernorHappyPathTest(voters);
