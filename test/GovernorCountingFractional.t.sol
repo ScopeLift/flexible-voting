@@ -174,6 +174,23 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     function _setupFractionalVoters(
       uint120[4] memory weights,
+      uint8[4] memory supportTypes
+    ) internal returns(Voter[4] memory voters) {
+
+      FractionalVoteSplit[4] memory voteSplits;
+
+      // Randomize the vote splits.
+      for (uint8 _i; _i < voteSplits.length; _i++) {
+        voteSplits[_i].percentFor = bound(1e19, 0, 1e18); // 1e19 is just used to ensure we get a random value
+        voteSplits[_i].percentAgainst = bound(1e19, 0, (1e18 - voteSplits[_i].percentFor) / 2);
+        voteSplits[_i].percentAbstain = 1e18 - voteSplits[_i].percentFor - voteSplits[_i].percentAgainst;
+      }
+
+      voters = _setupFractionalVoters(weights, supportTypes, voteSplits);
+    }
+
+    function _setupFractionalVoters(
+      uint120[4] memory weights,
       uint8[4] memory supportTypes,
       FractionalVoteSplit[4] memory voteSplits
     ) internal returns(Voter[4] memory voters) {
@@ -185,27 +202,6 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         require(split.percentFor + split.percentAgainst + split.percentAbstain == 1e18, "split must add to 100%");
         voter.voteSplit = split;
       }
-    }
-
-    function _setupFractionalVoters(
-      uint120[4] memory weights,
-      uint8[4] memory supportTypes
-    ) internal returns(Voter[4] memory voters) {
-
-      FractionalVoteSplit[4] memory voteSplits;
-
-      uint percentFor;
-      uint percentAgainst;
-      uint percentAbstain;
-
-      // Randomize the vote splits.
-      for (uint8 _i; _i < voteSplits.length; _i++) {
-        voteSplits[_i].percentFor = bound(1e19, 0, 1e18); // 1e19 is just used to ensure we get a random value
-        voteSplits[_i].percentAgainst = bound(1e19, 0, (1e18 - voteSplits[_i].percentFor) / 2);
-        voteSplits[_i].percentAbstain = 1e18 - voteSplits[_i].percentFor - voteSplits[_i].percentAgainst;
-      }
-
-      voters = _setupFractionalVoters(weights, supportTypes, voteSplits);
     }
 
     function _mintAndDelegateToVoters(Voter[4] memory voters) internal returns(
@@ -266,53 +262,20 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       }
     }
 
-    function testFuzz_NominalBehaviorIsUnaffected(
-      uint120[4] memory weights,
-      uint8[4] memory supportTypes
-    ) public {
+    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights, uint8[4] memory supportTypes) public {
+      Voter[4] memory voters = _setupNominalVoters(weights, supportTypes);
+      _fractionalGovernorHappyPathTest(voters);
+    }
+
+    function testFuzz_VotingWithFractionalizedParams(uint120[4] memory weights, uint8[4] memory supportTypes) public {
+      Voter[4] memory voters = _setupFractionalVoters(weights, supportTypes);
+      _fractionalGovernorHappyPathTest(voters);
+    }
+
+    function _fractionalGovernorHappyPathTest(Voter[4] memory voters) public {
       uint256 _initGovBalance = address(governor).balance;
       uint256 _initReceiverBalance = address(receiver).balance;
 
-      bool useFractionalWeights = false;
-      Voter[4] memory voters = _setupNominalVoters(weights, supportTypes);
-      (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _mintAndDelegateToVoters(voters);
-      uint256 _proposalId = _createAndSubmitProposal();
-      _castVotes(voters, _proposalId);
-
-      // Jump ahead so that we're outside of the proposal's voting period.
-      vm.roll(governor.proposalDeadline(_proposalId) + 1);
-
-      ProposalState status = ProposalState(uint32(governor.state(_proposalId)));
-      if (forVotes > againstVotes && forVotes >= governor.quorum(block.number)) {
-        assertEq(uint8(status), uint8(ProposalState.Succeeded));
-        _executeProposal();
-      } else {
-        assertEq(uint8(status), uint8(ProposalState.Defeated));
-      }
-
-      // Ensure votes were tallied correctly.
-      (
-        uint256 againstVotesCast,
-        uint256 forVotesCast,
-        uint256 abstainVotesCast
-      ) = governor.proposalVotes(_proposalId);
-
-      assertEq(againstVotes, againstVotesCast);
-      assertEq(forVotes, forVotesCast);
-      assertEq(abstainVotes, abstainVotesCast);
-
-      // No ETH should have moved.
-      assertEq(address(governor).balance, _initGovBalance);
-      assertEq(address(receiver).balance, _initReceiverBalance);
-    }
-
-    function testFuzz_VotingWithFractionalizedParams(
-      uint120[4] memory weights,
-      uint8[4] memory supportTypes
-    ) public {
-
-      bool useFractionalWeights = true;
-      Voter[4] memory voters = _setupFractionalVoters(weights, supportTypes);
       (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _mintAndDelegateToVoters(voters);
       uint256 _proposalId = _createAndSubmitProposal();
       _castVotes(voters, _proposalId);
@@ -346,6 +309,10 @@ contract GovernorCountingFractionalTest is DSTestPlus {
           keccak256(bytes(_rawProposalInfo.description))
         );
       }
+
+      // No ETH should have moved.
+      assertEq(address(governor).balance, _initGovBalance);
+      assertEq(address(receiver).balance, _initReceiverBalance);
     }
 
 }
