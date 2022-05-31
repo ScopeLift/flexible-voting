@@ -154,17 +154,21 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       );
     }
 
-    function _setupNominalVoters(
-      uint120[4] memory weights,
-      uint8[4] memory supportTypes
-    ) internal returns(Voter[4] memory voters) {
+    function _setupNominalVoters(uint120[4] memory weights) internal returns(Voter[4] memory voters) {
       Voter memory voter;
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
-        voter.addr = address(uint160(uint(keccak256(abi.encodePacked(weights[_i], _i))))); // Generate random address;
+        voter.addr = _randomAddress(weights[_i], _i);
         voter.weight = uint128(bound(weights[_i], 1, type(uint120).max)); // uint120 prevents overflow of uint128 vote slots;
-        voter.support = uint8(bound(supportTypes[_i], 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
+        voter.support = _randomSupportType();
       }
+    }
+
+    function _randomAddress(uint salt1) public returns(address) {
+      return address(uint160(uint(keccak256(abi.encodePacked(salt1, block.number)))));
+    }
+    function _randomAddress(uint salt1, uint salt2) public returns(address) {
+      return address(uint160(uint(keccak256(abi.encodePacked(salt1, salt2)))));
     }
 
     function _randomSupportType() public returns (uint8) {
@@ -190,10 +194,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint120[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits
     ) internal returns(Voter[4] memory voters) {
-      // SupportTypes don't actually matter for fractional voters, so we randomize them.
-      uint8[4] memory supportTypes = [_randomSupportType(), _randomSupportType(), _randomSupportType(), _randomSupportType()];
-
-      voters = _setupNominalVoters(weights, supportTypes);
+      voters = _setupNominalVoters(weights);
 
       Voter memory voter;
       for (uint8 _i; _i < voters.length; _i++) {
@@ -225,7 +226,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         vm.prank(voter.addr);
         token.delegate(voter.addr);
 
-        if (voter.voteSplit.percentFor > 0) {
+        if (_isVoteSplitInitialized(voter.voteSplit)) {
           forVotes     += uint128(voter.weight.mulWadDown(voter.voteSplit.percentFor));
           againstVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAgainst));
           abstainVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAbstain));
@@ -329,8 +330,8 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       assertEq(governor.COUNTING_MODE(), 'support=bravo&quorum=bravo&params=fractional');
     }
 
-    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights, uint8[4] memory supportTypes) public {
-      Voter[4] memory voters = _setupNominalVoters(weights, supportTypes);
+    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights) public {
+      Voter[4] memory voters = _setupNominalVoters(weights);
       _fractionalGovernorHappyPathTest(voters);
     }
 
