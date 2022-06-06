@@ -165,10 +165,10 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       }
     }
 
-    function _randomAddress(uint salt1) public returns(address) {
+    function _randomAddress(uint salt1) public view returns(address) {
       return address(uint160(uint(keccak256(abi.encodePacked(salt1, block.number)))));
     }
-    function _randomAddress(uint salt1, uint salt2) public returns(address) {
+    function _randomAddress(uint salt1, uint salt2) public pure returns(address) {
       return address(uint160(uint(keccak256(abi.encodePacked(salt1, salt2)))));
     }
 
