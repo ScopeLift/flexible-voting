@@ -159,8 +159,9 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
         voter.addr = _randomAddress(weights[_i], _i);
-        voter.weight = uint128(bound(weights[_i], 1, type(uint120).max)); // uint120 prevents overflow of uint128 vote slots;
-        voter.support = _randomSupportType();
+        // Since we use at most 4 voters, we set the max to uint128/4.
+        voter.weight = uint128(bound(weights[_i], 1, type(uint128).max / 4));
+        voter.support = _randomSupportType(weights[_i]);
       }
     }
 
@@ -171,25 +172,18 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       return address(uint160(uint(keccak256(abi.encodePacked(salt1, salt2)))));
     }
 
-    function _randomSupportType() public returns (uint8) {
-      // 42 is out of range, forcing bound to return a random value.
-      return uint8(bound(42, 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
+    function _randomSupportType(uint salt) public returns (uint8) {
+      return uint8(bound(salt, 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
     }
 
-    function _randomVoteSplit() public returns (FractionalVoteSplit memory _voteSplit) {
-      _voteSplit.percentFor = bound(1e19, 0, 1e18); // 1e19 is just used to ensure we get a random value
-      _voteSplit.percentAgainst = bound(1e19, 0, 1e18 - _voteSplit.percentFor);
-      _voteSplit.percentAbstain = 1e18 - _voteSplit.percentFor - _voteSplit.percentAgainst;
+    function _randomVoteSplit(FractionalVoteSplit memory _voteSplit) public returns(FractionalVoteSplit memory) {
+      _voteSplit.percentFor = bound(_voteSplit.percentFor, 0, 1e18);
+      _voteSplit.percentAgainst = bound(_voteSplit.percentAgainst, 0, (1e18 - _voteSplit.percentFor));
+      _voteSplit.percentAbstain = 1e18 - (_voteSplit.percentFor + _voteSplit.percentAgainst);
+      return _voteSplit;
     }
 
-    // Setups up a 4-Voter array with specified weights, random supportTypes, and random voteSplits.
-    function _setupFractionalVoters(uint120[4] memory weights) internal returns(Voter[4] memory) {
-      return _setupFractionalVoters(
-        weights,
-        [_randomVoteSplit(), _randomVoteSplit(), _randomVoteSplit(), _randomVoteSplit()]
-      );
-    }
-
+    // Sets up up a 4-Voter array with specified weights and voteSplits, and random supportTypes.
     function _setupFractionalVoters(
       uint120[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits
@@ -200,11 +194,10 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
         FractionalVoteSplit memory split = voteSplits[_i];
-        // If the voteSplit has not been initialized, we don't change it. This allows us
-        // to have a *mixed* array of voters, where some vote fractionally and some don't.
+        // If the voteSplit has been initialized, we use it.
         if (_isVoteSplitInitialized(split)) {
-          require(split.percentFor + split.percentAgainst + split.percentAbstain == 1e18, "split must add to 100%");
-          voter.voteSplit = split;
+          // If the values are valid, _randomVoteSplit won't change them.
+          voter.voteSplit = _randomVoteSplit(split);
         }
       }
     }
@@ -335,20 +328,49 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       _fractionalGovernorHappyPathTest(voters);
     }
 
-    function testFuzz_VotingWithFractionalizedParams(uint120[4] memory weights) public {
-      Voter[4] memory voters = _setupFractionalVoters(weights);
+    function testFuzz_VotingWithFractionalizedParams(
+      uint120[4] memory weights,
+      FractionalVoteSplit[4] memory _voteSplits
+    ) public {
+      Voter[4] memory voters = _setupFractionalVoters(weights, _voteSplits);
+      _fractionalGovernorHappyPathTest(voters);
+    }
+
+    function testFuzz_VoteSplitsCanBenMaxedOut(uint120[4] memory weights, uint8 maxSplit) public {
+      maxSplit = uint8(bound(maxSplit, 0, 2));
+
+      Voter[4] memory voters = _setupNominalVoters(weights);
+
+      // We don't actually want these users to vote.
+      voters[1].weight = 0;
+      voters[2].weight = 0;
+      voters[3].weight = 0;
+
+      // Set one of the splits to 100% and all of the others to 0%.
+      uint forSplit; uint againstSplit; uint abstainSplit;
+      if (maxSplit == 0) forSplit = 1.0e18;
+      if (maxSplit == 1) againstSplit = 1.0e18;
+      if (maxSplit == 2) abstainSplit = 1.0e18;
+      voters[0].voteSplit = FractionalVoteSplit(forSplit, againstSplit, abstainSplit);
+
       _fractionalGovernorHappyPathTest(voters);
     }
 
     function testFuzz_VotingWithMixedFractionalAndNominalVoters(
       uint120[4] memory weights,
+      FractionalVoteSplit[4] memory voteSplits,
       bool[4] memory userIsFractional
     ) public {
-      FractionalVoteSplit[4] memory voteSplits;
+      FractionalVoteSplit memory _emptyVoteSplit;
       for(uint _i; _i < userIsFractional.length; _i++) {
-        // If the user is not a fractional user, we don't define a vote split. This will
+        if (userIsFractional[_i]) {
+          // If the user *is* a fractional user, we randomize the splits and make sure they sum to 1e18.
+          voteSplits[_i] = _randomVoteSplit(voteSplits[_i]);
+        } else {
+        // If the user is *not* a fractional user, we clear the split info from the array. This will
         // cause them to cast their vote nominally.
-        if (userIsFractional[_i]) voteSplits[_i] = _randomVoteSplit();
+          voteSplits[_i] = _emptyVoteSplit;
+        }
       }
       Voter[4] memory voters = _setupFractionalVoters(weights, voteSplits);
       _fractionalGovernorHappyPathTest(voters);
