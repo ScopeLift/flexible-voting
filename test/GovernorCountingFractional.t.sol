@@ -50,6 +50,11 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
+    // We use a min of 1e4 to avoid flooring votes to 0.
+    uint256 constant MIN_VOTE_WEIGHT = 1e4;
+    // This is the vote storage slot size on the Fractional Governor contract.
+    uint256 constant MAX_VOTE_WEIGHT = type(uint128).max;
+
     struct FractionalVoteSplit {
       uint256 percentFor; // wad
       uint256 percentAgainst; // wad
@@ -159,9 +164,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
         voter.addr = _randomAddress(weights[_i], _i);
-        // Since we use at most 4 voters, we set the max to uint128/4.
-        // We use a min of 1e4 to avoid flooring votes to 0.
-        voter.weight = bound(weights[_i], 1e4, type(uint128).max / 4);
+        voter.weight = bound(weights[_i], MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT / 4);
         voter.support = _randomSupportType(weights[_i]);
       }
     }
@@ -424,7 +427,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       voter.addr = _randomAddress(_weight);
       // The weight cannot overflow the max supply for the token, but must overflow the
       // max for the GovernorFractional contract.
-      voter.weight = bound(_weight, type(uint128).max, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
       voter.support = _randomSupportType(_weight);
 
       _mintAndDelegateToVoter(voter);
@@ -444,7 +447,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       voter.addr = _randomAddress(_weight);
       // The weight cannot overflow the max supply for the token, but must overflow the
       // max for the GovernorFractional contract.
-      voter.weight = bound(_weight, type(uint128).max, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
 
       _mintAndDelegateToVoter(voter);
       uint256 _proposalId = _createAndSubmitProposal();
