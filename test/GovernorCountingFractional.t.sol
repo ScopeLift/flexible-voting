@@ -13,7 +13,7 @@ import "./ProposalReceiverMock.sol";
 
 contract GovernorCountingFractionalTest is DSTestPlus {
 
-    using FixedPointMathLib for uint128;
+    using FixedPointMathLib for uint256;
 
     event MockFunctionCalled();
     event VoteCast(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason);
@@ -58,7 +58,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     struct Voter {
       address addr;
-      uint128 weight;
+      uint256 weight;
       uint8 support;
       FractionalVoteSplit voteSplit;
     }
@@ -154,13 +154,14 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       );
     }
 
-    function _setupNominalVoters(uint120[4] memory weights) internal returns(Voter[4] memory voters) {
+    function _setupNominalVoters(uint256[4] memory weights) internal returns(Voter[4] memory voters) {
       Voter memory voter;
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
         voter.addr = _randomAddress(weights[_i], _i);
         // Since we use at most 4 voters, we set the max to uint128/4.
-        voter.weight = uint128(bound(weights[_i], 1e4, type(uint128).max / 4));
+        // We use a min of 1e4 to avoid flooring votes to 0.
+        voter.weight = bound(weights[_i], 1e4, type(uint128).max / 4);
         voter.support = _randomSupportType(weights[_i]);
       }
     }
@@ -185,7 +186,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     // Sets up up a 4-Voter array with specified weights and voteSplits, and random supportTypes.
     function _setupFractionalVoters(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits
     ) internal returns(Voter[4] memory voters) {
       voters = _setupNominalVoters(weights);
@@ -203,9 +204,9 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     }
 
     function _mintAndDelegateToVoters(Voter[4] memory voters) internal returns(
-      uint128 forVotes,
-      uint128 againstVotes,
-      uint128 abstainVotes
+      uint256 forVotes,
+      uint256 againstVotes,
+      uint256 abstainVotes
     ) {
       Voter memory voter;
 
@@ -272,7 +273,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint256 _initGovBalance = address(governor).balance;
       uint256 _initReceiverBalance = address(receiver).balance;
 
-      (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _mintAndDelegateToVoters(voters);
+      (uint256 forVotes, uint256 againstVotes, uint256 abstainVotes) = _mintAndDelegateToVoters(voters);
       uint256 _proposalId = _createAndSubmitProposal();
       _castVotes(voters, _proposalId);
 
@@ -324,20 +325,20 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       assertEq(governor.COUNTING_MODE(), 'support=bravo&quorum=bravo&params=fractional');
     }
 
-    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights) public {
+    function testFuzz_NominalBehaviorIsUnaffected(uint256[4] memory weights) public {
       Voter[4] memory voters = _setupNominalVoters(weights);
       _fractionalGovernorHappyPathTest(voters);
     }
 
     function testFuzz_VotingWithFractionalizedParams(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory _voteSplits
     ) public {
       Voter[4] memory voters = _setupFractionalVoters(weights, _voteSplits);
       _fractionalGovernorHappyPathTest(voters);
     }
 
-    function testFuzz_VoteSplitsCanBeMaxedOut(uint120[4] memory weights, uint8 maxSplit) public {
+    function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory weights, uint8 maxSplit) public {
       maxSplit = uint8(bound(maxSplit, 0, 2));
 
       Voter[4] memory voters = _setupNominalVoters(weights);
@@ -358,7 +359,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     }
 
     function testFuzz_VotingWithMixedFractionalAndNominalVoters(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits,
       bool[4] memory userIsFractional
     ) public {
@@ -378,7 +379,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     }
 
     function testFuzz_FractionalVotingCannotExceedOverallWeight(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits,
       uint256 exceedPercentage,
       uint256 voteTypeToExceed
