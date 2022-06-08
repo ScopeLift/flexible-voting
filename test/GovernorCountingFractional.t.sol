@@ -203,6 +203,15 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       }
     }
 
+    function _mintAndDelegateToVoter(Voter memory voter) internal {
+      // Mint tokens for the user.
+      token.THIS_IS_JUST_A_TEST_HOOK_mint(voter.addr, voter.weight);
+
+      // Self-delegate the tokens.
+      vm.prank(voter.addr);
+      token.delegate(voter.addr);
+    }
+
     function _mintAndDelegateToVoters(Voter[4] memory voters) internal returns(
       uint256 forVotes,
       uint256 againstVotes,
@@ -212,13 +221,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
       for(uint8 _i = 0; _i < voters.length; _i++) {
         voter = voters[_i];
-
-        // Mint tokens for the user.
-        token.THIS_IS_JUST_A_TEST_HOOK_mint(voter.addr, voter.weight);
-
-        // Self-delegate the tokens.
-        vm.prank(voter.addr);
-        token.delegate(voter.addr);
+        _mintAndDelegateToVoter(voter);
 
         if (_isVotingFractionally(voter.voteSplit)) {
           forVotes     += uint128(voter.weight.mulWadDown(voter.voteSplit.percentFor));
@@ -414,5 +417,22 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       vm.prank(voter.addr);
       vm.expectRevert("GovernorCountingFractional: votes exceed weight");
       governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Yay', fractionalizedVotes);
+    }
+
+    function testFuzz_OverFlowWeightIsHandledForNominalVoters(uint256 _weight) public {
+      Voter memory voter;
+      voter.addr = _randomAddress(_weight);
+      // The weight cannot overflow the max supply for the token, but must overflow the
+      // max for the GovernorFractional contract.
+      voter.weight = bound(_weight, type(uint128).max, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+      voter.support = _randomSupportType(_weight);
+
+      _mintAndDelegateToVoter(voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      bytes memory emptyVotingParams;
+      vm.prank(voter.addr);
+      vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
+      governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Yay', emptyVotingParams);
     }
 }
