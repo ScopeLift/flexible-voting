@@ -160,7 +160,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         voter = voters[_i];
         voter.addr = _randomAddress(weights[_i], _i);
         // Since we use at most 4 voters, we set the max to uint128/4.
-        voter.weight = uint128(bound(weights[_i], 1, type(uint128).max / 4));
+        voter.weight = uint128(bound(weights[_i], 1e4, type(uint128).max / 4));
         voter.support = _randomSupportType(weights[_i]);
       }
     }
@@ -195,7 +195,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         voter = voters[_i];
         FractionalVoteSplit memory split = voteSplits[_i];
         // If the voteSplit has been initialized, we use it.
-        if (_isVoteSplitInitialized(split)) {
+        if (_isVotingFractionally(split)) {
           // If the values are valid, _randomVoteSplit won't change them.
           voter.voteSplit = _randomVoteSplit(split);
         }
@@ -219,7 +219,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         vm.prank(voter.addr);
         token.delegate(voter.addr);
 
-        if (_isVoteSplitInitialized(voter.voteSplit)) {
+        if (_isVotingFractionally(voter.voteSplit)) {
           forVotes     += uint128(voter.weight.mulWadDown(voter.voteSplit.percentFor));
           againstVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAgainst));
           abstainVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAbstain));
@@ -231,7 +231,8 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       }
     }
 
-    function _isVoteSplitInitialized(FractionalVoteSplit memory voteSplit) public pure returns(bool){
+    // If we've set up the voteSplit, this voter will vote fractionally
+    function _isVotingFractionally(FractionalVoteSplit memory voteSplit) public pure returns(bool){
       return voteSplit.percentFor > 0
         || voteSplit.percentAgainst > 0
         || voteSplit.percentAbstain > 0;
@@ -247,7 +248,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         bytes memory fractionalizedVotes;
         FractionalVoteSplit memory voteSplit = voter.voteSplit;
 
-        if (_isVoteSplitInitialized(voteSplit)) {
+        if (_isVotingFractionally(voteSplit)) {
           fractionalizedVotes = abi.encodePacked(
             uint128(voter.weight.mulWadDown(voteSplit.percentFor)),
             uint128(voter.weight.mulWadDown(voteSplit.percentAgainst)),
@@ -336,7 +337,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       _fractionalGovernorHappyPathTest(voters);
     }
 
-    function testFuzz_VoteSplitsCanBenMaxedOut(uint120[4] memory weights, uint8 maxSplit) public {
+    function testFuzz_VoteSplitsCanBeMaxedOut(uint120[4] memory weights, uint8 maxSplit) public {
       maxSplit = uint8(bound(maxSplit, 0, 2));
 
       Voter[4] memory voters = _setupNominalVoters(weights);
@@ -376,4 +377,41 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       _fractionalGovernorHappyPathTest(voters);
     }
 
+    function testFuzz_FractionalVotingCannotExceedOverallWeight(
+      uint120[4] memory weights,
+      FractionalVoteSplit[4] memory voteSplits,
+      uint256 exceedPercentage,
+      uint256 voteTypeToExceed
+    ) public {
+      exceedPercentage = bound(exceedPercentage, 0.01e18, 1e18); // Between 1 & 100 percent as a wad
+      voteTypeToExceed = bound(voteTypeToExceed, 0, 2);
+
+      for(uint _i; _i < voteSplits.length; _i++) {
+        voteSplits[_i] = _randomVoteSplit(voteSplits[_i]);
+      }
+
+      Voter[4] memory voters = _setupFractionalVoters(weights, voteSplits);
+      Voter memory voter = voters[0];
+      FractionalVoteSplit memory voteSplit = voter.voteSplit;
+
+      if (voteTypeToExceed == 0) voteSplit.percentFor += exceedPercentage;
+      if (voteTypeToExceed == 1) voteSplit.percentAgainst += exceedPercentage;
+      if (voteTypeToExceed == 2) voteSplit.percentAbstain += exceedPercentage;
+
+      assertGt(voteSplit.percentFor + voteSplit.percentAgainst + voteSplit.percentAbstain, 1e18);
+
+      _mintAndDelegateToVoters(voters);
+      uint256 _proposalId = _createAndSubmitProposal();
+      bytes memory fractionalizedVotes;
+
+      fractionalizedVotes = abi.encodePacked(
+        uint128(voter.weight.mulWadDown(voteSplit.percentFor)),
+        uint128(voter.weight.mulWadDown(voteSplit.percentAgainst)),
+        uint128(voter.weight.mulWadDown(voteSplit.percentAbstain))
+      );
+
+      vm.prank(voter.addr);
+      vm.expectRevert("GovernorCountingFractional: votes exceed weight");
+      governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Yay', fractionalizedVotes);
+    }
 }
