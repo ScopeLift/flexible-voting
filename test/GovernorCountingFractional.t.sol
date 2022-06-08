@@ -435,4 +435,31 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
       governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Yay', emptyVotingParams);
     }
+
+    function testFuzz_OverFlowWeightIsHandledForFractionalVoters(
+      uint256 _weight,
+      bool[3] calldata voteTypeToOverflow
+    ) public {
+      Voter memory voter;
+      voter.addr = _randomAddress(_weight);
+      // The weight cannot overflow the max supply for the token, but must overflow the
+      // max for the GovernorFractional contract.
+      voter.weight = bound(_weight, type(uint128).max, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+
+      _mintAndDelegateToVoter(voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      uint256 forVotes;
+      uint256 againstVotes;
+      uint256 abstainVotes;
+
+      if (voteTypeToOverflow[0]) forVotes = voter.weight;
+      if (voteTypeToOverflow[1]) againstVotes = voter.weight;
+      if (voteTypeToOverflow[2]) abstainVotes = voter.weight;
+
+      bytes memory fractionalizedVotes = abi.encodePacked(forVotes, againstVotes, abstainVotes);
+      vm.prank(voter.addr);
+      vm.expectRevert("GovernorCountingFractional: invalid voteData");
+      governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Weeee', fractionalizedVotes);
+    }
 }
