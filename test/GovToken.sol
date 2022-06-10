@@ -12,4 +12,8 @@ contract GovToken is ERC20Votes {
     function THIS_IS_JUST_A_TEST_HOOK_mint(address to, uint256 amount) public {
         _mint(to, amount);
     }
+
+    function THIS_IS_JUST_A_TEST_HOOK_maxSupply() external view returns (uint256) {
+      return uint256(_maxSupply());
+    }
 }

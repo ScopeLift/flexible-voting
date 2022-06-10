@@ -13,7 +13,7 @@ import "./ProposalReceiverMock.sol";
 
 contract GovernorCountingFractionalTest is DSTestPlus {
 
-    using FixedPointMathLib for uint128;
+    using FixedPointMathLib for uint256;
 
     event MockFunctionCalled();
     event VoteCast(address indexed voter, uint256 proposalId, uint8 support, uint256 weight, string reason);
@@ -50,6 +50,11 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
+    // We use a min of 1e4 to avoid flooring votes to 0.
+    uint256 constant MIN_VOTE_WEIGHT = 1e4;
+    // This is the vote storage slot size on the Fractional Governor contract.
+    uint256 constant MAX_VOTE_WEIGHT = type(uint128).max;
+
     struct FractionalVoteSplit {
       uint256 percentFor; // wad
       uint256 percentAgainst; // wad
@@ -58,7 +63,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     struct Voter {
       address addr;
-      uint128 weight;
+      uint256 weight;
       uint8 support;
       FractionalVoteSplit voteSplit;
     }
@@ -154,13 +159,12 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       );
     }
 
-    function _setupNominalVoters(uint120[4] memory weights) internal returns(Voter[4] memory voters) {
+    function _setupNominalVoters(uint256[4] memory weights) internal returns(Voter[4] memory voters) {
       Voter memory voter;
       for (uint8 _i; _i < voters.length; _i++) {
         voter = voters[_i];
         voter.addr = _randomAddress(weights[_i], _i);
-        // Since we use at most 4 voters, we set the max to uint128/4.
-        voter.weight = uint128(bound(weights[_i], 1e4, type(uint128).max / 4));
+        voter.weight = bound(weights[_i], MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT / 4);
         voter.support = _randomSupportType(weights[_i]);
       }
     }
@@ -185,7 +189,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     // Sets up up a 4-Voter array with specified weights and voteSplits, and random supportTypes.
     function _setupFractionalVoters(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits
     ) internal returns(Voter[4] memory voters) {
       voters = _setupNominalVoters(weights);
@@ -202,22 +206,25 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       }
     }
 
+    function _mintAndDelegateToVoter(Voter memory voter) internal {
+      // Mint tokens for the user.
+      token.THIS_IS_JUST_A_TEST_HOOK_mint(voter.addr, voter.weight);
+
+      // Self-delegate the tokens.
+      vm.prank(voter.addr);
+      token.delegate(voter.addr);
+    }
+
     function _mintAndDelegateToVoters(Voter[4] memory voters) internal returns(
-      uint128 forVotes,
-      uint128 againstVotes,
-      uint128 abstainVotes
+      uint256 forVotes,
+      uint256 againstVotes,
+      uint256 abstainVotes
     ) {
       Voter memory voter;
 
       for(uint8 _i = 0; _i < voters.length; _i++) {
         voter = voters[_i];
-
-        // Mint tokens for the user.
-        token.THIS_IS_JUST_A_TEST_HOOK_mint(voter.addr, voter.weight);
-
-        // Self-delegate the tokens.
-        vm.prank(voter.addr);
-        token.delegate(voter.addr);
+        _mintAndDelegateToVoter(voter);
 
         if (_isVotingFractionally(voter.voteSplit)) {
           forVotes     += uint128(voter.weight.mulWadDown(voter.voteSplit.percentFor));
@@ -272,7 +279,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint256 _initGovBalance = address(governor).balance;
       uint256 _initReceiverBalance = address(receiver).balance;
 
-      (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _mintAndDelegateToVoters(voters);
+      (uint256 forVotes, uint256 againstVotes, uint256 abstainVotes) = _mintAndDelegateToVoters(voters);
       uint256 _proposalId = _createAndSubmitProposal();
       _castVotes(voters, _proposalId);
 
@@ -324,20 +331,20 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       assertEq(governor.COUNTING_MODE(), 'support=bravo&quorum=bravo&params=fractional');
     }
 
-    function testFuzz_NominalBehaviorIsUnaffected(uint120[4] memory weights) public {
+    function testFuzz_NominalBehaviorIsUnaffected(uint256[4] memory weights) public {
       Voter[4] memory voters = _setupNominalVoters(weights);
       _fractionalGovernorHappyPathTest(voters);
     }
 
     function testFuzz_VotingWithFractionalizedParams(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory _voteSplits
     ) public {
       Voter[4] memory voters = _setupFractionalVoters(weights, _voteSplits);
       _fractionalGovernorHappyPathTest(voters);
     }
 
-    function testFuzz_VoteSplitsCanBeMaxedOut(uint120[4] memory weights, uint8 maxSplit) public {
+    function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory weights, uint8 maxSplit) public {
       maxSplit = uint8(bound(maxSplit, 0, 2));
 
       Voter[4] memory voters = _setupNominalVoters(weights);
@@ -358,7 +365,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     }
 
     function testFuzz_VotingWithMixedFractionalAndNominalVoters(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits,
       bool[4] memory userIsFractional
     ) public {
@@ -378,7 +385,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     }
 
     function testFuzz_FractionalVotingCannotExceedOverallWeight(
-      uint120[4] memory weights,
+      uint256[4] memory weights,
       FractionalVoteSplit[4] memory voteSplits,
       uint256 exceedPercentage,
       uint256 voteTypeToExceed
@@ -413,5 +420,49 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       vm.prank(voter.addr);
       vm.expectRevert("GovernorCountingFractional: votes exceed weight");
       governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Yay', fractionalizedVotes);
+    }
+
+    function testFuzz_OverFlowWeightIsHandledForNominalVoters(uint256 _weight) public {
+      Voter memory voter;
+      voter.addr = _randomAddress(_weight);
+      // The weight cannot overflow the max supply for the token, but must overflow the
+      // max for the GovernorFractional contract.
+      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+      voter.support = _randomSupportType(_weight);
+
+      _mintAndDelegateToVoter(voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      bytes memory emptyVotingParams;
+      vm.prank(voter.addr);
+      vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
+      governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Yay', emptyVotingParams);
+    }
+
+    function testFuzz_OverFlowWeightIsHandledForFractionalVoters(
+      uint256 _weight,
+      bool[3] calldata voteTypeToOverflow
+    ) public {
+      Voter memory voter;
+      voter.addr = _randomAddress(_weight);
+      // The weight cannot overflow the max supply for the token, but must overflow the
+      // max for the GovernorFractional contract.
+      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+
+      _mintAndDelegateToVoter(voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      uint256 forVotes;
+      uint256 againstVotes;
+      uint256 abstainVotes;
+
+      if (voteTypeToOverflow[0]) forVotes = voter.weight;
+      if (voteTypeToOverflow[1]) againstVotes = voter.weight;
+      if (voteTypeToOverflow[2]) abstainVotes = voter.weight;
+
+      bytes memory fractionalizedVotes = abi.encodePacked(forVotes, againstVotes, abstainVotes);
+      vm.prank(voter.addr);
+      vm.expectRevert("GovernorCountingFractional: invalid voteData");
+      governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Weeee', fractionalizedVotes);
     }
 }
