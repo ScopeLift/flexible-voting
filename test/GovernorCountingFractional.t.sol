@@ -476,4 +476,68 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       vm.expectRevert("GovernorCountingFractional: invalid voteData");
       governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Weeee', fractionalVoteData);
     }
+
+    function test_QuorumDoesNotIncludeAbstainVotes() public {
+      uint256 _weight = governor.quorum(block.number);
+      FractionalVoteSplit memory _voteSplit;
+      _voteSplit.percentAbstain = 1e18; // All votes go to ABSTAIN.
+
+      _quorumTest(_weight, _voteSplit, uint32(IGovernor.ProposalState.Defeated));
+    }
+
+    function test_QuorumDoesIncludeForVotes() public {
+      uint256 _weight = governor.quorum(block.number);
+      FractionalVoteSplit memory _voteSplit;
+      _voteSplit.percentFor = 1e18; // All votes go to FOR.
+
+      _quorumTest(_weight, _voteSplit, uint32(IGovernor.ProposalState.Succeeded));
+    }
+
+    function testFuzz_Quorum(uint256 _weight, FractionalVoteSplit memory _voteSplit) public {
+      uint256 _quorum = governor.quorum(block.number);
+      _weight = bound(_weight, _quorum, MAX_VOTE_WEIGHT);
+      _voteSplit = _randomVoteSplit(_voteSplit);
+
+      uint128 _forVotes = uint128(_weight.mulWadDown(_voteSplit.percentFor));
+      uint128 _againstVotes = uint128(_weight.mulWadDown(_voteSplit.percentAgainst));
+
+      uint32 _expectedState;
+      if (_forVotes >= _quorum && _forVotes > _againstVotes) {
+        _expectedState = uint32(IGovernor.ProposalState.Succeeded);
+      } else {
+        _expectedState = uint32(IGovernor.ProposalState.Defeated);
+      }
+
+      _quorumTest(_weight, _voteSplit, _expectedState);
+    }
+
+    function _quorumTest(
+      uint256 _weight,
+      FractionalVoteSplit memory _voteSplit,
+      uint32 _expectedState
+    ) internal {
+      // Build the voter.
+      Voter memory _voter;
+      _voter.weight = _weight;
+      _voter.voteSplit = _voteSplit;
+      _voter.addr = _randomAddress(_weight);
+
+      // Mint, delegate, and propose.
+      _mintAndDelegateToVoter(_voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      // Cast votes.
+      bytes memory fractionalizedVotes = abi.encodePacked(
+        uint128(_voter.weight.mulWadDown(_voteSplit.percentFor)),
+        uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst)),
+        uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain))
+      );
+      vm.prank(_voter.addr);
+      governor.castVoteWithReasonAndParams(_proposalId, _voter.support, 'Idaho', fractionalizedVotes);
+
+      // Jump ahead so that we're outside of the proposal's voting period.
+      vm.roll(governor.proposalDeadline(_proposalId) + 1);
+      uint32 _state = uint32(governor.state(_proposalId));
+      assertEq(_state, _expectedState);
+    }
 }
