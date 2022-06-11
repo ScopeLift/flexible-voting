@@ -37,16 +37,6 @@ contract GovernorCountingFractionalTest is DSTestPlus {
         uint256 endBlock,
         string description
     );
-    enum ProposalState {
-        Pending,
-        Active,
-        Canceled,
-        Defeated,
-        Succeeded,
-        Queued,
-        Expired,
-        Executed
-    }
 
     Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
@@ -134,11 +124,11 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
       // Submit the proposal.
       proposalId = governor.propose(_proposal.targets, _proposal.values, _proposal.calldatas, _proposal.description);
-      assertEq(uint(governor.state(proposalId)), uint(ProposalState.Pending));
+      assertEq(uint(governor.state(proposalId)), uint(IGovernor.ProposalState.Pending));
 
       // Advance proposal to active state.
       vm.roll(governor.proposalSnapshot(proposalId) + 1);
-      assertEq(uint(governor.state(proposalId)), uint(ProposalState.Active));
+      assertEq(uint(governor.state(proposalId)), uint(IGovernor.ProposalState.Active));
     }
 
     function _executeProposal() internal {
@@ -296,12 +286,12 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       assertEq(forVotes, forVotesCast);
       assertEq(abstainVotes, abstainVotesCast);
 
-      ProposalState status = ProposalState(uint32(governor.state(_proposalId)));
+      IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
       if (forVotes > againstVotes && forVotes >= governor.quorum(block.number)) {
-        assertEq(uint8(status), uint8(ProposalState.Succeeded));
+        assertEq(uint8(status), uint8(IGovernor.ProposalState.Succeeded));
         _executeProposal();
       } else {
-        assertEq(uint8(status), uint8(ProposalState.Defeated));
+        assertEq(uint8(status), uint8(IGovernor.ProposalState.Defeated));
 
         Proposal memory _rawProposalInfo = _getSimpleProposal();
         vm.expectRevert(bytes('Governor: proposal not successful'));
