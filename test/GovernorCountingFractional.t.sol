@@ -381,7 +381,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint256 voteTypeToExceed
     ) public {
       exceedPercentage = bound(exceedPercentage, 0.01e18, 1e18); // Between 1 & 100 percent as a wad
-      voteTypeToExceed = bound(voteTypeToExceed, 0, 2);
+      voteTypeToExceed = _randomSupportType(voteTypeToExceed);
 
       for(uint _i; _i < voteSplits.length; _i++) {
         voteSplits[_i] = _randomVoteSplit(voteSplits[_i]);
