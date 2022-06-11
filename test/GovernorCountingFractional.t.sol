@@ -465,4 +465,25 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       vm.expectRevert("GovernorCountingFractional: invalid voteData");
       governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Weeee', fractionalizedVotes);
     }
+
+    function testFuzz_ParamLengthIsChecked(
+      uint256 _weight,
+      FractionalVoteSplit memory _voteSplit,
+      uint256 invalidParamLength
+    ) public {
+      invalidParamLength = bound(invalidParamLength, 1, 256);
+      vm.assume(invalidParamLength != 48);
+      bytes memory fractionalVoteData = new bytes(invalidParamLength);
+
+      Voter memory voter;
+      voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+      voter.voteSplit = _randomVoteSplit(_voteSplit);
+      voter.addr = _randomAddress(_weight);
+
+      _mintAndDelegateToVoter(voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      vm.expectRevert("GovernorCountingFractional: invalid voteData");
+      governor.castVoteWithReasonAndParams(_proposalId, voter.support, 'Weeee', fractionalVoteData);
+    }
 }
