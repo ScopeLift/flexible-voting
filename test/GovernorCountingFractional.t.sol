@@ -540,4 +540,48 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       uint32 _state = uint32(governor.state(_proposalId));
       assertEq(_state, _expectedState);
     }
+
+    function testFuzz_CanCastWithPartialWeight(
+      uint256 _salt,
+      FractionalVoteSplit memory _voteSplit
+    ) public {
+      // Build a partial weight vote split.
+      _voteSplit = _randomVoteSplit(_voteSplit);
+      uint256 _percentKeep = bound(_salt, 0.9e18, 0.99e18); // 90% to 99%
+      _voteSplit.percentFor = _voteSplit.percentFor.mulWadDown(_percentKeep);
+      _voteSplit.percentAgainst = _voteSplit.percentAgainst.mulWadDown(_percentKeep);
+      _voteSplit.percentAbstain = _voteSplit.percentAbstain.mulWadDown(_percentKeep);
+      assertGt(1e18, _voteSplit.percentFor + _voteSplit.percentAgainst + _voteSplit.percentAbstain);
+
+      // Build the voter.
+      Voter memory _voter;
+      _voter.addr = _randomAddress(_salt);
+      _voter.weight = bound(_salt, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+      _voter.voteSplit = _voteSplit;
+
+      // Mint, delegate, and propose.
+      _mintAndDelegateToVoter(_voter);
+      uint256 _proposalId = _createAndSubmitProposal();
+
+      // The important thing is just that the abstain votes *cannot* be inferred from
+      // the for-votes and against-votes, e.g. by subtracting them from the total weight.
+      uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
+      uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
+      uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
+      assertGt(_voter.weight - _forVotes - _againstVotes, _abstainVotes);
+
+      // Cast votes.
+      bytes memory fractionalizedVotes = abi.encodePacked(_forVotes, _againstVotes, _abstainVotes);
+      vm.prank(_voter.addr);
+      governor.castVoteWithReasonAndParams(_proposalId, _voter.support, 'Lobster', fractionalizedVotes);
+
+      (
+        uint256 _actualAgainstVotes,
+        uint256 _actualForVotes,
+        uint256 _actualAbstainVotes
+      ) = governor.proposalVotes(_proposalId);
+      assertEq(_forVotes, _actualForVotes);
+      assertEq(_againstVotes, _actualAgainstVotes);
+      assertEq(_abstainVotes, _actualAbstainVotes);
+    }
 }
