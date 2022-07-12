@@ -22,121 +22,81 @@ interface IVotingToken {
     function getPastVotes(address account, uint256 blockNumber) external returns (uint256);
 }
 
+/**
+ * @notice A proof-of-concept implementation demonstrating how Flexible Voting can be used to allow holders of
+ * governance tokens to use them in DeFi but still participate in governance. The FractionalPool simulates a
+ * lending protocol, such as Compound Finance or Aave, in that:
+ *
+ * - Tokens can be deposited into the Pool by suppliers
+ * - Tokens can be withdrawn from the Pool by borrowers
+ * - Depositors are able to express their vote preferences on individual governance proposals
+ * - The vote preferences of all Depositors are expressed proportionally across any tokens held by the pool, and
+ *   rolled up into a single delegated vote made by the pool before the proposal is completed
+ */
 contract FractionalPool {
+
+    /// @notice The voting options corresponding to those used in the Governor.
     enum VoteType {
         Against,
         For,
         Abstain
     }
 
-    IVotingToken immutable public token;
-
-    IFractionalGovernor governor;
-
-    // Map depositor to deposit amount
-    mapping (address => uint256) public deposits;
-
-    // borrower -> total amount borrowed
-    mapping (address => uint256) public borrowTotal;
-
-    // proposalId => (address => whether they have voted)
-    mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
-
+    /// @notice Data structure to store vote preferences expressed by depositors.
     struct ProposalVote {
         uint128 againstVotes;
         uint128 forVotes;
         uint128 abstainVotes;
     }
 
+    /// @notice Must call castVote within this many blocks of the proposal deadline, so-as to allow ample time for all
+    /// depositors to express their vote preferences.
+    uint32 constant public CAST_VOTE_WINDOW = 100; // blocks
+
+    /// @notice The governance token held and lent by this pool.
+    IVotingToken immutable public token;
+
+    /// @notice The governor contract associated with this governance token.
+    IFractionalGovernor immutable public governor;
+
+    /// @notice Map depositor to deposit amount.
+    mapping (address => uint256) public deposits;
+
+    /// @notice Map borrower to total amount borrowed.
+    mapping (address => uint256) public borrowTotal;
+
+    /// @notice Map proposalId to an address to whether they have voted on this proposal.
+    mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
+
+    /// @notice Map proposalId to vote totals expressed on this proposal.
     mapping(uint256 => ProposalVote) public proposalVotes;
 
+    /**
+     * @param _token The governance token held and lent by this pool.
+     * @param _governor The governor contract associated with this governance token.
+     */
     constructor(IVotingToken _token, IFractionalGovernor _governor) {
         token = _token;
         governor = _governor;
         _token.delegate(address(this));
     }
 
+    /**
+     * @notice Allow a holder of the governance token to deposit it into the pool.
+     * @param _amount The amount to be transferred.
+     */
     function deposit(uint256 _amount) public {
         deposits[msg.sender] += _amount;
 
         _writeCheckpoint(_checkpoints[msg.sender], _additionFn, _amount);
         _writeCheckpoint(_totalDepositCheckpoints, _additionFn, _amount);
 
+        // Note: Assumes revert on failure
         token.transferFrom(msg.sender, address(this), _amount);
     }
 
     // TODO: withdrawal method (update fractional voting power)
-      // totalNetDeposits -= _amount;
-
-     function expressVote(uint256 proposalId, uint8 support) external {
-         uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
-         if (weight == 0) revert("no weight");
-
-         if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
-         _proposalVotersHasVoted[proposalId][msg.sender] = true;
-
-         if (support == uint8(VoteType.Against)) {
-             proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
-         } else if (support == uint8(VoteType.For)) {
-             proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
-         } else if (support == uint8(VoteType.Abstain)) {
-             proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
-         } else {
-             revert("invalid support value, must be included in VoteType enum");
-         }
-     }
-
-     // Must call castVote within 20 blocks of the proposal deadline. This is done so as
-     // to prevent someone from calling expressVote and then castVote immediately after,
-     // effectively blocking anyone else in the pool from voting.
-     uint32 constant public CAST_VOTE_WINDOW = 20; // blocks
-
-     function castVote(uint256 proposalId) external {
-       if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
-       uint8 unusedSupportParam = uint8(VoteType.Abstain);
-       ProposalVote memory _proposalVote = proposalVotes[proposalId];
-
-       uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
-
-       // Use the snapshot of total deposits to determine total voting weight. We cannot
-       // use the proposalVote numbers alone, since some people with deposits at the
-       // snapshot might not have expressed votes.
-       uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
-
-       // We need 256 bits because of the multiplication we're about to do.
-       uint256 _votingWeightAtSnapshot = token.getPastVotes(address(this), _proposalSnapshotBlockNumber);
-
-       //      forVotesRaw          forVotesScaled
-       // --------------------- = ---------------------
-       //     totalDeposits        deposits (@snapshot)
-       //
-       // forVotesScaled = forVotesRaw * deposits@snapshot / totalDeposits
-       uint128 _forVotesToCast = SafeCast.toUint128(
-         (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalDepositWeightAtSnapshot
-       );
-       uint128 _againstVotesToCast = SafeCast.toUint128(
-         (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
-       );
-       uint128 _abstainVotesToCast = SafeCast.toUint128(
-         (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
-       );
-
-       bytes memory fractionalizedVotes = abi.encodePacked(
-         _forVotesToCast,
-         _againstVotesToCast,
-         _abstainVotesToCast
-       );
-       governor.castVoteWithReasonAndParams(
-         proposalId,
-         unusedSupportParam,
-         'crowd-sourced vote',
-         fractionalizedVotes
-       );
-     }
-
-     function internalVotingPeriodEnd(uint256 proposalId) public returns(uint256 _lastVotingBlock) {
-       _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
-     }
+    // totalNetDeposits -= _amount;
 
     // Remove funds from the pool, but is not a withdrawal, i.e. not returning
     // funds to a user that deposited them. Ex: someone borrowing from a compound pool.
@@ -145,6 +105,88 @@ contract FractionalPool {
         token.transfer(msg.sender, _amount);
     }
 
+    /**
+     * @notice Allow a depositor to express their voting preference for a given proposal. Their preference
+     * is recorded internally but not moved to the Governor until `castVote` is called.
+     * @param proposalId The proposalId in the associated Governor
+     * @param support The depositor's vote preferences in accordance with the `VoteType` enum.
+     */
+    function expressVote(uint256 proposalId, uint8 support) external {
+        uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+        if (weight == 0) revert("no weight");
+
+        if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
+        _proposalVotersHasVoted[proposalId][msg.sender] = true;
+
+        if (support == uint8(VoteType.Against)) {
+            proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
+        } else if (support == uint8(VoteType.For)) {
+            proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
+        } else if (support == uint8(VoteType.Abstain)) {
+            proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
+        } else {
+            revert("invalid support value, must be included in VoteType enum");
+        }
+    }
+
+    /**
+     * @notice Causes this contract to cast a vote to the Governor for all the tokens it currently holds.
+     * Uses the sum of all depositor voting expressions to decide how to split its voting weight. Can be
+     * called by anyone, but _must_ be called within `CAST_VOTE_WINDOW` blocks before the proposal deadline.
+     * @param proposalId The ID of the proposal which the Pool will now vote on.
+     */
+    function castVote(uint256 proposalId) external {
+        if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
+        uint8 unusedSupportParam = uint8(VoteType.Abstain);
+        ProposalVote memory _proposalVote = proposalVotes[proposalId];
+
+        uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
+
+        // Use the snapshot of total deposits to determine total voting weight. We cannot
+        // use the proposalVote numbers alone, since some people with deposits at the
+        // snapshot might not have expressed votes.
+        uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
+
+        // We need 256 bits because of the multiplication we're about to do.
+        uint256 _votingWeightAtSnapshot = token.getPastVotes(address(this), _proposalSnapshotBlockNumber);
+
+        //      forVotesRaw          forVotesScaled
+        // --------------------- = ---------------------
+        //     totalDeposits        deposits (@snapshot)
+        //
+        // forVotesScaled = forVotesRaw * deposits@snapshot / totalDeposits
+        uint128 _forVotesToCast = SafeCast.toUint128(
+            (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalDepositWeightAtSnapshot
+        );
+        uint128 _againstVotesToCast = SafeCast.toUint128(
+            (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
+        );
+        uint128 _abstainVotesToCast = SafeCast.toUint128(
+            (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
+        );
+
+        bytes memory fractionalizedVotes = abi.encodePacked(
+            _forVotesToCast,
+            _againstVotesToCast,
+            _abstainVotesToCast
+        );
+        governor.castVoteWithReasonAndParams(
+            proposalId,
+            unusedSupportParam,
+            'crowd-sourced vote',
+            fractionalizedVotes
+        );
+    }
+
+    /**
+     * @notice Method which returns the deadline for depositors to express their voting preferences to this Pool
+     * contract. Will always be before the Governor's corresponding proposal deadline.
+     * @param proposalId The ID of the proposal in question.
+     */
+    function internalVotingPeriodEnd(uint256 proposalId) public returns(uint256 _lastVotingBlock) {
+        // TODO: Why can't this be view?
+        _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
+    }
 
     //===========================================================================
     // BEGIN: Checkpointing code.
