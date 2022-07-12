@@ -6,7 +6,7 @@ import "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 interface IFractionalGovernor {
   function proposalSnapshot(uint256 proposalId) external returns (uint256);
-  function proposalDeadline(uint256 proposalId) external returns (uint256);
+  function proposalDeadline(uint256 proposalId) external view returns (uint256);
   function castVoteWithReasonAndParams(
     uint256 proposalId,
     uint8 support,
@@ -183,8 +183,7 @@ contract FractionalPool {
      * contract. Will always be before the Governor's corresponding proposal deadline.
      * @param proposalId The ID of the proposal in question.
      */
-    function internalVotingPeriodEnd(uint256 proposalId) public returns(uint256 _lastVotingBlock) {
-        // TODO: Why can't this be view?
+    function internalVotingPeriodEnd(uint256 proposalId) public view returns(uint256 _lastVotingBlock) {
         _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
     }
 
