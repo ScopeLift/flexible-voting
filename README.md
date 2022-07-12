@@ -1,4 +1,4 @@
-# Flexible Voting: A Powerful Building Block for DAO Governance 💪
+# 💪🗳️ Flexible Voting: A Powerful Building Block for DAO Governance
 
 Flexible Voting is an extension to the widely used OpenZeppelin DAO Governor that enables novel voting patterns for delegates. It is developed by [ScopeLift](https://scopelift.co), and was originally funded by a grant from the Uniswap Grant Program ([UGP](https://twitter.com/uniswapgrants)).
 
@@ -9,6 +9,11 @@ For a DAO that adopts it, the Flexible Governance extension allows delegates to 
   - Shielded voting (i.e. secret/private voting)
   - Cheaper subsidized signature based voting
   - Better voting options with tokens held by custodians
+
+<div align="center">
+	<img width="700" src="readme/flex-voting-diagram-transparent.png" alt="Flexible Voting Diagram">
+	<br />
+</div>
 
 To learn more about Flexible Voting, and the use cases it enables, read the introduction on the [ScopeLift blog](https://www.scopelift.co/blog/introducing-flexible-voting).
 
