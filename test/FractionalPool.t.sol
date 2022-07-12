@@ -160,6 +160,8 @@ contract Deposit is FractionalPoolTest {
 
 }
 
+// TODO: Withdraw testing
+
 contract Vote is FractionalPoolTest {
     function testFuzz_UserCanCastVotes(
       address _hodler,

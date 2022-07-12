@@ -83,7 +83,7 @@ contract FractionalPool {
 
     /**
      * @notice Allow a holder of the governance token to deposit it into the pool.
-     * @param _amount The amount to be transferred.
+     * @param _amount The amount to be deposited.
      */
     function deposit(uint256 _amount) public {
         deposits[msg.sender] += _amount;
@@ -91,15 +91,27 @@ contract FractionalPool {
         _writeCheckpoint(_checkpoints[msg.sender], _additionFn, _amount);
         _writeCheckpoint(_totalDepositCheckpoints, _additionFn, _amount);
 
-        // Note: Assumes revert on failure
-        token.transferFrom(msg.sender, address(this), _amount);
+        token.transferFrom(msg.sender, address(this), _amount); // Assumes revert on failure.
     }
 
-    // TODO: withdrawal method (update fractional voting power)
-    // totalNetDeposits -= _amount;
+    /**
+     * @notice Allow a depositor to withdraw funds previously deposited to the pool.
+     * @param _amount The amount to be withdrawn.
+     */
+    function withdraw(uint256 _amount) public {
+        deposits[msg.sender] -= _amount; // overflows & reverts if user does not have sufficient deposits
 
-    // Remove funds from the pool, but is not a withdrawal, i.e. not returning
-    // funds to a user that deposited them. Ex: someone borrowing from a compound pool.
+        _writeCheckpoint(_checkpoints[msg.sender], _subtractionFn, _amount);
+        _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, _amount);
+
+        token.transfer(msg.sender, _amount); // Assumes revert on failure.
+    }
+
+    /**
+     * @notice Arbitrarily remove tokens from the pool. This is to simulate a borrower, hence the method name. Since
+     * this is just a proof of concept, nothing else is actually done here.
+     * @param _amount The amount to "borrow."
+     */
     function borrow(uint256 _amount) public {
         borrowTotal[msg.sender] += _amount;
         token.transfer(msg.sender, _amount);
