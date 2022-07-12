@@ -51,7 +51,7 @@ contract FractionalPool {
 
     /// @notice Must call castVote within this many blocks of the proposal deadline, so-as to allow ample time for all
     /// depositors to express their vote preferences.
-    uint32 constant public CAST_VOTE_WINDOW = 100; // blocks
+    uint32 constant public CAST_VOTE_WINDOW = 1_200; // In blocks; 4 hours assuming 12 second blocks.
 
     /// @notice The governance token held and lent by this pool.
     IVotingToken immutable public token;

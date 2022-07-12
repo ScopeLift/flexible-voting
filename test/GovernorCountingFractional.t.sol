@@ -316,7 +316,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       assertEq(governor.name(), "Governor");
       assertEq(address(governor.token()), address(token));
       assertEq(governor.votingDelay(), 4);
-      assertEq(governor.votingPeriod(), 100);
+      assertEq(governor.votingPeriod(), 50_400);
       assertEq(governor.quorum(_blockNumber), 10e18);
       assertEq(governor.COUNTING_MODE(), 'support=bravo&quorum=bravo&params=fractional');
     }

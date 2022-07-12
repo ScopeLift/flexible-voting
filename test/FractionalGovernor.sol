@@ -16,7 +16,7 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
     }
 
     function votingPeriod() public pure override returns (uint256) {
-        return 100;
+        return 50_400; // 7 days assuming 12 second block times
     }
 
     function cancel(
