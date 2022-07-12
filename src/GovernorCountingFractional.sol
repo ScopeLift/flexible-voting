@@ -8,9 +8,12 @@ import "openzeppelin-contracts/contracts/governance/compatibility/GovernorCompat
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 /**
- * @dev Extension of {Governor} for 3 option fractional vote counting.
- *
- * _Available since v4.X.X_
+ * @notice Extension of {Governor} for 3 option fractional vote counting. When voting, a delegate may split their vote
+ * weight between For/Against/Abstain. This is most useful when the delegate is itself a contract, implementing its own
+ * rules for voting. By allowing a contract-delegate to split its vote weight, the voting preferences of many disparate
+ * token holders can be rolled up into a single vote to the Governor itself. Some example use cases include voting with
+ * tokens that are held by a DeFi pool, voting from L2 with tokens held by a bridge, or voting privately from a
+ * shielded pool using zero knowledge proofs.
  */
 abstract contract GovernorCountingFractional is Governor {
 
@@ -74,8 +77,16 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev See {Governor-_countVote}. In this module, the support follows the `VoteType` enum (from Governor Bravo).
-     * TODO: Add note for how params is used
+     * @notice See {Governor-_countVote}.
+     *
+     * If the `voteData` bytes parameter is empty, then this module behaves
+     * identically to GovernorBravo. That is, it assigns the full weight of the delegate to the `support` parameter,
+     * which follows the `VoteType` enum from Governor Bravo.
+     *
+     * If the `voteData` bytes parameter is not zero, then it _must_ be three packed uint128s, totaling 48 bytes,
+     * representing the weight the delegate assigns to For, Against, and Abstain respectively, i.e.
+     * encodePacked(forVotes, againstVotes, abstainVotes). The sum total of the three decoded vote weights _must_ be
+     * less than or equal to the delegate's total weight as check-pointed for the proposal being voted on.
      */
     function _countVote(
         uint256 proposalId,
