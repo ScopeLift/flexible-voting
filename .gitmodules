@@ -13,3 +13,6 @@
 [submodule "lib/protocol-v2"]
 	path = lib/protocol-v2
 	url = https://github.com/aave/protocol-v2
+[submodule "lib/aave-v3-core"]
+	path = lib/aave-v3-core
+	url = https://github.com/aave/aave-v3-core
