@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity >=0.8.10;
 
 import { DSTestPlus } from "solmate/test/utils/DSTestPlus.sol";
 import { Vm } from "forge-std/Vm.sol";
