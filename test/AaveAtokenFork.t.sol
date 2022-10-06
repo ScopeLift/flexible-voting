@@ -75,36 +75,54 @@ contract AaveAtokenForkTest is DSTestPlus {
     _poolConfigurator.initReserves(_initReservesInput);
 
     // Get the AToken instance just deployed.
-    // forge inspect lib/aave-v3-core/contracts/protocol/pool/Pool.sol:Pool storage
-    //   reservesCount: "offset": 8, "slot": "59",
-    bytes32 _reservesCountStorageSlot = bytes32(uint256(59));
-    uint256 _reservesCountStorageOffset = 64; // 8 byte offset
-    uint256 _reservesCountStorageSize = 16; // it is a uint16
-    bytes32 _reservesCountStorageVal = vm.load(address(pool), _reservesCountStorageSlot);
-    bytes32 _reservesCountMask = bytes32((1 << _reservesCountStorageSize) - 1);
-
-    uint16 _reservesCount = uint16(uint256((_reservesCountStorageVal >> _reservesCountStorageOffset) & _reservesCountMask));
-    console2.log("david reservesCount", _reservesCount);
-
-    // Next, we compute the slot of the reservesList storage given the
-    // reservesCount above. It is a mapping, so the storage slot is equal to the
-    // hash of the key we are interested in, concatenated with the mapping slot
-    // itself.
-    // https://docs.soliditylang.org/en/v0.8.11/internals/layout_in_storage.html#mappings-and-dynamic-arrays
-    // forge inspect lib/aave-v3-core/contracts/protocol/pool/Pool.sol:Pool storage
-    //   reservesList: "offset": 0, "slot": "54",
-    bytes32 _reservesListStorageSlot = keccak256(
+    //
+    // The aTokenAddress is stored in the pool's _reserves storage var, and
+    // would be accessible internally as:
+    //   _reserves[address(token)].aTokenAddress
+    //
+    // Unfortunately, _reserves is an internal var, so we will have to manually
+    // extract the data. Looking it up in forge we see:
+    //   $ forge inspect lib/aave-v3-core/contracts/protocol/pool/Pool.sol:Pool storage
+    //     ...
+    //     "label": "_reserves",
+    //     "offset": 0,
+    //     "slot": "52",
+    //     "type": "t_mapping(t_address,t_struct(ReserveData)12580_storage)"
+    //
+    // We can see here that _reserves is a mapping pointing to a struct, namely:
+    // DataTypes.ReserveData. The struct is a big one, occupying many slots. So
+    // we need to find out which slot we want. In this case, the property we
+    // care about is called "aTokenAddress" and it is stored fairly deep within
+    // the data structure. These are the properties leading up to it (see
+    // aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol):
+    //
+    //   slot 1: ReserveConfigurationMap configuration; <-- just a uint256
+    //   slot 2: uint128 liquidityIndex;
+    //   slot 2: uint128 currentLiquidityRate;
+    //   slot 3: uint128 variableBorrowIndex;
+    //   slot 3: uint128 currentVariableBorrowRate;
+    //   slot 4: uint128 currentStableBorrowRate;
+    //   slot 4: uint40 lastUpdateTimestamp;
+    //   slot 4: uint16 id;
+    //   slot 5: address aTokenAddress;
+    //
+    // So we need to take the 4th slot after the one we compute for the mapping:
+    bytes32 _aTokenAddressStorageSlot = bytes32(uint256(keccak256(
       bytes.concat(
-        bytes32(uint256(_reservesCount - 1)), // the mapping key, we subtract 1 b/c it's zero indexed
-        bytes32(uint256(54)) // reservesList slot, as determined by forge
+        bytes32(uint256(uint160(address(token)))), // map key == the token addr
+        bytes32(uint256(52)) // _reserves slot, as determined by forge
       )
-    );
+    )) + 4); // 4 slots *after* the slot computed for the struct
+
     aToken = AToken(
-      address(uint160(uint256(vm.load(address(pool), _reservesListStorageSlot))))
+      address(uint160(uint256(
+        vm.load(address(pool), _aTokenAddressStorageSlot)
+      )))
     );
 
-    assertEq(aToken.symbol(), "Aave V3 Optimism GOV");
-
+    // TODO confirm that the atoken._underlyingAsset == token
+    assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
+    assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
   }
 
   function testFork_ATokenWorks() public {
