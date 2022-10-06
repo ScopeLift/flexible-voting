@@ -74,14 +74,18 @@ contract AaveAtokenForkTest is DSTestPlus {
     vm.prank(_aaveAdmin);
     _poolConfigurator.initReserves(_initReservesInput);
 
-    // Get the AToken instance just deployed.
+    // Get the address of the AToken instance just deployed.
     //
-    // The aTokenAddress is stored in the pool's _reserves storage var, and
-    // would be accessible internally as:
+    // Unfortunately, this is not trivial. Aave emits this address as a part of
+    // the ReserveInitialized event. But we don't have access to events with
+    // forge. So we're going to have to read it from storage. The aTokenAddress
+    // is stored in the pool's _reserves storage var, and would be accessible
+    // internally as:
+    //
     //   _reserves[address(token)].aTokenAddress
     //
-    // Unfortunately, _reserves is an internal var, so we will have to manually
-    // extract the data. Looking it up in forge we see:
+    // But _reserves is an internal var, so we will have to manually extract
+    // the data. Looking it up in forge we see:
     //   $ forge inspect lib/aave-v3-core/contracts/protocol/pool/Pool.sol:Pool storage
     //     ...
     //     "label": "_reserves",
@@ -112,23 +116,37 @@ contract AaveAtokenForkTest is DSTestPlus {
         bytes32(uint256(uint160(address(token)))), // map key == the token addr
         bytes32(uint256(52)) // _reserves slot, as determined by forge
       )
-    )) + 4); // 4 slots *after* the slot computed for the struct
+    )) + 4); // 4 slots *after* the slot computed for the struct, i.e. the 5th slot
 
     aToken = AToken(
       address(uint160(uint256(
         vm.load(address(pool), _aTokenAddressStorageSlot)
       )))
     );
-
-    // TODO confirm that the atoken._underlyingAsset == token
-    assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
-    assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
   }
 
-  function testFork_ATokenWorks() public {
+  function testFork_SetupWorked() public {
+    assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
+    assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
+
+    // Confirm that the atoken._underlyingAsset == token
+    // forge inspect lib/aave-v3-core/contracts/protocol/tokenization/AToken.sol:AToken storage
+    //
+    //   "label": "_underlyingAsset",
+    //   "offset": 0,
+    //   "slot": "61",
+    //   "type": "t_address"
+    assertEq(
+      address(uint160(uint256(
+        vm.load(address(aToken), bytes32(uint256(61)))
+      ))),
+      address(token)
+    );
+
+    // Confirm that we can supply GOV to the aToken.
     assertEq(aToken.balanceOf(address(this)), 0);
 
-    // mint GOV and deposit into aave
+    // Mint GOV and deposit into aave.
     token.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
     token.approve(address(pool), type(uint256).max);
     pool.supply(
@@ -137,8 +155,16 @@ contract AaveAtokenForkTest is DSTestPlus {
       address(this),
       0 // referral code
     );
+    assertEq(token.balanceOf(address(this)), 40 ether);
     assertEq(aToken.balanceOf(address(this)), 2 ether);
 
-      // if ERC20: approve the pool to transfer, call `supply` on the pool
+    // We can withdraw our GOV when we want to.
+    pool.withdraw(
+      address(token),
+      2 ether,
+      address(this)
+    );
+    assertEq(token.balanceOf(address(this)), 42 ether);
+    assertEq(aToken.balanceOf(address(this)), 0 ether);
   }
 }
