@@ -23,6 +23,7 @@ contract AaveAtokenForkTest is DSTestPlus {
 
   function setUp() public {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
+    // https://docs.aave.com/developers/deployed-contracts/v3-mainnet
     uint256 optimismForkBlock = 26332308; // The optimism block number at the time this test was written.
     forkId = vm.createSelectFork(vm.envString("OPTIMISM_RPC_URL"), optimismForkBlock);
 
