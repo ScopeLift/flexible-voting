@@ -22,38 +22,41 @@ contract AaveAtokenForkTest is DSTestPlus {
   IPool pool;
 
   function setUp() public {
-    uint256 optimismForkBlock = 26332308; // The mainnet block number at the time this test was written.
+    // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
+    uint256 optimismForkBlock = 26332308; // The optimism block number at the time this test was written.
     forkId = vm.createSelectFork(vm.envString("OPTIMISM_RPC_URL"), optimismForkBlock);
 
     // deploy the GOV token
     token = new GovToken();
-
-    // deploy the aGOV token
     pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
     PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
+
+    // deploy the aGOV token
     AToken _aTokenImplementation = new AToken(pool);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
     // Each token uses a different stableDebtToken, but those are just proxies.
-    // They each proxy to this address for their implementation.
-    address _stableDebtToken = 0x52A1CeB68Ee6b7B5D13E0376A1E0E4423A8cE26e;
+    // They each proxy to this address for their implementation. We will do the
+    // same.
+    address _stableDebtTokenImpl = 0x52A1CeB68Ee6b7B5D13E0376A1E0E4423A8cE26e;
     string memory _stableDebtTokenName = "Aave Optimism Stable Debt GOV";
     string memory _stableDebtTokenSymbol = "stableDebtOptGOV";
 
     // This is the variableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
     // Each token uses a different variableDebtToken, but those are just proxies.
-    // They each proxy to this address for their implementation.
-    address _variableDebtToken = 0x81387c40EB75acB02757C1Ae55D5936E78c9dEd3;
+    // They each proxy to this address for their implementation. We will do the
+    // same.
+    address _variableDebtTokenImpl = 0x81387c40EB75acB02757C1Ae55D5936E78c9dEd3;
     string memory _variableDebtTokenName = "Aave Optimism Variable Debt GOV";
     string memory _variableDebtTokenSymbol = "variableDebtOptGOV";
 
     ConfiguratorInputTypes.InitReserveInput[] memory _initReservesInput = new ConfiguratorInputTypes.InitReserveInput[](1);
     _initReservesInput[0] = ConfiguratorInputTypes.InitReserveInput(
       address(_aTokenImplementation), // aTokenImpl
-      _stableDebtToken, // stableDebtTokenImpl
-      _variableDebtToken, // variableDebtTokenImpl
+      _stableDebtTokenImpl, // stableDebtTokenImpl
+      _variableDebtTokenImpl, // variableDebtTokenImpl
       token.decimals(), // underlyingAssetDecimals
       0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress, taken from https://dune.com/queries/1332820
       address(token), // underlyingAsset
