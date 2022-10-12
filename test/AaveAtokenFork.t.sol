@@ -11,14 +11,14 @@ import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { ConfiguratorInputTypes } from 'aave-v3-core/contracts/protocol/libraries/types/ConfiguratorInputTypes.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
 
-import {GovToken} from "./GovToken.sol";
+import { GovToken } from "./GovToken.sol";
 
 contract AaveAtokenForkTest is DSTestPlus {
   uint256 forkId;
   Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
   IAToken aToken;
-  GovToken token;
+  GovToken govToken;
   IPool pool;
 
   function setUp() public {
@@ -28,7 +28,7 @@ contract AaveAtokenForkTest is DSTestPlus {
     forkId = vm.createSelectFork(vm.envString("OPTIMISM_RPC_URL"), optimismForkBlock);
 
     // deploy the GOV token
-    token = new GovToken();
+    govToken = new GovToken();
     pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
     PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
 
@@ -58,9 +58,9 @@ contract AaveAtokenForkTest is DSTestPlus {
       address(_aTokenImplementation), // aTokenImpl
       _stableDebtTokenImpl, // stableDebtTokenImpl
       _variableDebtTokenImpl, // variableDebtTokenImpl
-      token.decimals(), // underlyingAssetDecimals
+      govToken.decimals(), // underlyingAssetDecimals
       0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress, taken from https://dune.com/queries/1332820
-      address(token), // underlyingAsset
+      address(govToken), // underlyingAsset
       // treasury + incentives data from https://dune.com/queries/1329814
       0xB2289E329D2F85F1eD31Adbb30eA345278F21bcf, // treasury
       0x0aadeE9418641b5749e872eDEF9844200143865D, // incentivesController
@@ -86,7 +86,7 @@ contract AaveAtokenForkTest is DSTestPlus {
     // storage. The aTokenAddress is stored in the pool's _reserves storage var,
     // and would be accessible internally as:
     //
-    //   _reserves[address(token)].aTokenAddress
+    //   _reserves[address(govToken)].aTokenAddress
     //
     // But _reserves is an internal var, so we have to manually extract the
     // data. Looking it up in forge we see:
@@ -119,7 +119,7 @@ contract AaveAtokenForkTest is DSTestPlus {
     // So we need to read the 5th slot allocated to the struct.
     //
     // To compute the slot where the desired struct begins in storage we need
-    // to concat the mapping key (i.e. the token address) with the slot number
+    // to concat the mapping key (i.e. the govToken address) with the slot number
     // reserved for the mapping (i.e. 52, as found with `forge inspect`), then hash
     // the result. *Then* we can cast and add the offset to find the position of
     // the 5th slot for the struct.
@@ -128,7 +128,7 @@ contract AaveAtokenForkTest is DSTestPlus {
     // https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html
     bytes32 _aTokenAddressStorageSlot = bytes32(uint256(keccak256(
       bytes.concat(
-        bytes32(uint256(uint160(address(token)))), // map key == the token addr
+        bytes32(uint256(uint160(address(govToken)))), // map key == the govToken addr
         bytes32(uint256(52)) // _reserves slot, as determined by forge
       )
     )) + 4); // 4 slots *after* the slot computed for the struct, i.e. the 5th slot
@@ -144,7 +144,7 @@ contract AaveAtokenForkTest is DSTestPlus {
     assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
     assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
 
-    // Confirm that the atoken._underlyingAsset == token
+    // Confirm that the atoken._underlyingAsset == govToken
     //
     //   $ forge inspect lib/aave-v3-core/contracts/protocol/tokenization/AToken.sol:AToken storage
     //     ...
@@ -156,31 +156,31 @@ contract AaveAtokenForkTest is DSTestPlus {
       address(uint160(uint256(
         vm.load(address(aToken), bytes32(uint256(61)))
       ))),
-      address(token)
+      address(govToken)
     );
 
     // Confirm that we can supply GOV to the aToken.
     assertEq(aToken.balanceOf(address(this)), 0);
 
     // Mint GOV and deposit into aave.
-    token.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
-    token.approve(address(pool), type(uint256).max);
+    govToken.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
+    govToken.approve(address(pool), type(uint256).max);
     pool.supply(
-      address(token),
+      address(govToken),
       2 ether,
       address(this),
       0 // referral code
     );
-    assertEq(token.balanceOf(address(this)), 40 ether);
+    assertEq(govToken.balanceOf(address(this)), 40 ether);
     assertEq(aToken.balanceOf(address(this)), 2 ether);
 
     // We can withdraw our GOV when we want to.
     pool.withdraw(
-      address(token),
+      address(govToken),
       2 ether,
       address(this)
     );
-    assertEq(token.balanceOf(address(this)), 42 ether);
+    assertEq(govToken.balanceOf(address(this)), 42 ether);
     assertEq(aToken.balanceOf(address(this)), 0 ether);
   }
 }
