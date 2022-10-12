@@ -81,15 +81,16 @@ contract AaveAtokenForkTest is DSTestPlus {
     // Get the address of the AToken instance just deployed.
     //
     // Unfortunately, this is not trivial. Aave emits this address as a part of
-    // the ReserveInitialized event. But we don't have access to events with
-    // forge. So we're going to have to read it from storage. The aTokenAddress
-    // is stored in the pool's _reserves storage var, and would be accessible
-    // internally as:
+    // the ReserveInitialized event, which is how it's intended to be retrieved.
+    // But we don't have access to events with forge. So we have to read it from
+    // storage. The aTokenAddress is stored in the pool's _reserves storage var,
+    // and would be accessible internally as:
     //
     //   _reserves[address(token)].aTokenAddress
     //
-    // But _reserves is an internal var, so we will have to manually extract
-    // the data. Looking it up in forge we see:
+    // But _reserves is an internal var, so we have to manually extract the
+    // data. Looking it up in forge we see:
+    //
     //   $ forge inspect lib/aave-v3-core/contracts/protocol/pool/Pool.sol:Pool storage
     //     ...
     //     "label": "_reserves",
@@ -97,11 +98,12 @@ contract AaveAtokenForkTest is DSTestPlus {
     //     "slot": "52",
     //     "type": "t_mapping(t_address,t_struct(ReserveData)12580_storage)"
     //
-    // We can see here that _reserves is a mapping pointing to a struct, namely:
-    // DataTypes.ReserveData. The struct is a big one, occupying many slots. So
-    // we need to find out which slot we want. In this case, the property we
-    // care about is called "aTokenAddress" and it is stored fairly deep within
-    // the data structure. These are the properties leading up to it (see
+    // We can see here that _reserves is a mapping with an address as key and a
+    // struct (DataTypes.ReserveData) as value. The ReserveData struct is
+    // a big one, occupying many slots. So we need to find out which slot we
+    // want. In this case, the property we care about is called "aTokenAddress"
+    // and it is stored fairly deep within the data structure. These are the
+    // properties leading up to it (see
     // aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol):
     //
     //   slot 1: ReserveConfigurationMap configuration; <-- just a uint256
@@ -114,7 +116,16 @@ contract AaveAtokenForkTest is DSTestPlus {
     //   slot 4: uint16 id;
     //   slot 5: address aTokenAddress;
     //
-    // So we need to take the 4th slot after the one we compute for the mapping:
+    // So we need to read the 5th slot allocated to the struct.
+    //
+    // To compute the slot where the desired struct begins in storage we need
+    // to concat the mapping key (i.e. the token address) with the slot number
+    // reserved for the mapping (i.e. 52, as found with `forge inspect`), then hash
+    // the result. *Then* we can cast and add the offset to find the position of
+    // the 5th slot for the struct.
+    //
+    // This is all per:
+    // https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html
     bytes32 _aTokenAddressStorageSlot = bytes32(uint256(keccak256(
       bytes.concat(
         bytes32(uint256(uint160(address(token)))), // map key == the token addr
@@ -134,12 +145,13 @@ contract AaveAtokenForkTest is DSTestPlus {
     assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
 
     // Confirm that the atoken._underlyingAsset == token
-    // forge inspect lib/aave-v3-core/contracts/protocol/tokenization/AToken.sol:AToken storage
     //
-    //   "label": "_underlyingAsset",
-    //   "offset": 0,
-    //   "slot": "61",
-    //   "type": "t_address"
+    //   $ forge inspect lib/aave-v3-core/contracts/protocol/tokenization/AToken.sol:AToken storage
+    //     ...
+    //     "label": "_underlyingAsset",
+    //     "offset": 0,
+    //     "slot": "61",
+    //     "type": "t_address"
     assertEq(
       address(uint160(uint256(
         vm.load(address(aToken), bytes32(uint256(61)))
