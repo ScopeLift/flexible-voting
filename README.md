@@ -30,9 +30,10 @@ To learn more about Flexible Voting, and the use cases it enables, read the intr
 This repo is built using [Foundry](https://github.com/foundry-rs/foundry)
 
 1. [Install Foundry](https://github.com/foundry-rs/foundry#installation)
-2. Install dependencies with `forge install`
-3. Build the contracts with `forge build`
-4. Run the test suite with `forge test`
+1. Install dependencies with `forge install`
+1. Build the contracts with `forge build`
+1. `cp .env.example .env` and edit `.env` with your keys
+1. Run the test suite with `forge test`
 
 ## Contribute
 
