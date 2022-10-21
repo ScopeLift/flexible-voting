@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.10;
 
-import { DSTestPlus } from "solmate/test/utils/DSTestPlus.sol";
+import { Test } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
 import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
@@ -10,16 +10,23 @@ import { AToken } from "aave-v3-core/contracts/protocol/tokenization/AToken.sol"
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { ConfiguratorInputTypes } from 'aave-v3-core/contracts/protocol/libraries/types/ConfiguratorInputTypes.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
+import { DataTypes } from 'aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol';
+import { AaveOracle } from 'aave-v3-core/contracts/misc/AaveOracle.sol';
 
 import { GovToken } from "./GovToken.sol";
 
-contract AaveAtokenForkTest is DSTestPlus {
+import { Pool } from 'aave-v3-core/contracts/protocol/pool/Pool.sol';
+import "forge-std/console2.sol";
+
+contract AaveAtokenForkTest is Test {
   uint256 forkId;
-  Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
   IAToken aToken;
   GovToken govToken;
   IPool pool;
+
+  address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
+  address weth = 0x4200000000000000000000000000000000000006;
 
   function setUp() public {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
@@ -30,6 +37,11 @@ contract AaveAtokenForkTest is DSTestPlus {
     // deploy the GOV token
     govToken = new GovToken();
     pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
+
+    // Temporarily etch local code onto the fork address so that we can do
+    // things like add console.log statements during debugging.
+    // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
+
     PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
 
     // deploy the aGOV token
@@ -77,6 +89,34 @@ contract AaveAtokenForkTest is DSTestPlus {
     address _aaveAdmin = 0xE50c8C619d05ff98b22Adf991F17602C774F785c;
     vm.prank(_aaveAdmin);
     _poolConfigurator.initReserves(_initReservesInput);
+
+    // Configure GOV to serve as collateral.
+    //
+    // We are copying the DAI configs here. Configs were obtained by inserting
+    // console.log statements and printing out
+    // _reserves[daiAddr].configuration.getParams() from within
+    // GenericLogic.calculateUserAccountData.
+    // tok   ltv   liqThr  liqBon
+    // ------------------------
+    // DAI   7500  8000    10500
+    // wETH  8000  8250    10500
+    // wBTC  7000  7500    11000
+    // USDC  8000  8500    10500
+    vm.prank(_aaveAdmin);
+    _poolConfigurator.configureReserveAsCollateral(
+      address(govToken), // underlyingAsset
+      7500, // ltv, i.e. loan-to-value
+      8000, // liquidationThreshold, i.e. threshold at which positions will be liquidated
+      10500 // liquidationBonus
+    );
+
+    // Configure GOV to be borrowed.
+    vm.prank(_aaveAdmin);
+    _poolConfigurator.setReserveBorrowing(address(govToken), true);
+
+    // Allow GOV to be borrowed with stablecoins as collateral.
+    vm.prank(_aaveAdmin);
+    _poolConfigurator.setReserveStableRateBorrowing(address(govToken), true);
 
     // Get the address of the AToken instance just deployed.
     //
@@ -138,9 +178,26 @@ contract AaveAtokenForkTest is DSTestPlus {
         vm.load(address(pool), _aTokenAddressStorageSlot)
       )))
     );
+
+    // Sometimes Aave uses oracles to get price information, e.g. when
+    // determining the value of collateral relative to loan value. Since GOV
+    // isn't a real thing and doesn't have a real price, we need to mock these
+    // calls. When borrowing, the oracle interaction happens in
+    // GenericLogic.calculateUserAccountData L130
+    address _priceOracle = pool.ADDRESSES_PROVIDER().getPriceOracle();
+    vm.mockCall(
+      _priceOracle,
+      abi.encodeWithSelector(
+        AaveOracle.getAssetPrice.selector,
+        address(govToken)
+      ),
+      // Aave only seems to use USD-based oracles, so we will do the same.
+      abi.encode(1e8) // 1 GOV == $1 USD
+    );
+
   }
 
-  function testFork_SetupWorked() public {
+  function testFork_Setup_CanSupplyGovToAave() public {
     assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
     assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
 
@@ -159,10 +216,9 @@ contract AaveAtokenForkTest is DSTestPlus {
       address(govToken)
     );
 
+    // Mint GOV and deposit into aave.
     // Confirm that we can supply GOV to the aToken.
     assertEq(aToken.balanceOf(address(this)), 0);
-
-    // Mint GOV and deposit into aave.
     govToken.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
     govToken.approve(address(pool), type(uint256).max);
     pool.supply(
@@ -182,5 +238,93 @@ contract AaveAtokenForkTest is DSTestPlus {
     );
     assertEq(govToken.balanceOf(address(this)), 42 ether);
     assertEq(aToken.balanceOf(address(this)), 0 ether);
+  }
+
+  function testFork_Setup_CanBorrowAgainstGovCollateral() public {
+    // supply GOV
+    govToken.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
+    govToken.approve(address(pool), type(uint256).max);
+    pool.supply(
+      address(govToken),
+      2 ether,
+      address(this),
+      0 // referral code
+    );
+    assertEq(govToken.balanceOf(address(this)), 40 ether);
+    assertEq(aToken.balanceOf(address(this)), 2 ether);
+
+    assertEq(ERC20(dai).balanceOf(address(this)), 0);
+
+    // borrow DAI against GOV
+    pool.borrow(
+      dai,
+      42, // amount of DAI to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+
+    assertEq(ERC20(dai).balanceOf(address(this)), 42);
+  }
+
+  function testFork_Setup_CanBorrowGovAndBeLiquidated() public {
+    // Someone else supplies GOV -- necessary so we can borrow it
+    address _bob = address(0xBEEF);
+    govToken.THIS_IS_JUST_A_TEST_HOOK_mint(_bob, 1100e18);
+    vm.startPrank(_bob);
+    govToken.approve(address(pool), type(uint256).max);
+    // Don't supply all of the GOV, some will be needed to liquidate.
+    pool.supply(address(govToken), 1000e18, _bob, 0);
+    vm.stopPrank();
+
+    // We suppy WETH.
+    deal(weth, address(this), 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, address(this), 0);
+    ERC20 _awethToken = ERC20(0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8);
+    uint256 _thisATokenBalance = _awethToken.balanceOf(address(this));
+    assertEq(_thisATokenBalance, 100 ether);
+
+    // Borrow GOV against WETH
+    uint256 _initGovBalance = govToken.balanceOf(address(this));
+    pool.borrow(
+      address(govToken),
+      42e18, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+    uint256 _currentGovBalance = govToken.balanceOf(address(this));
+    assertEq(_initGovBalance, 0);
+    assertEq(_currentGovBalance, 42e18);
+
+    // Oh no, WETH goes to ~zero!
+    address _priceOracle = pool.ADDRESSES_PROVIDER().getPriceOracle();
+    vm.mockCall(
+      _priceOracle,
+      abi.encodeWithSelector(
+        AaveOracle.getAssetPrice.selector,
+        weth
+      ),
+      abi.encode(1) // 1 bip
+    );
+
+    // Liquidate GOV position
+    uint256 _bobInitAtokenBalance = _awethToken.balanceOf(_bob);
+    vm.prank(_bob);
+    pool.liquidationCall(
+      weth, // collateralAsset
+      address(govToken), // borrow asset
+      address(this), // borrower
+      42e18, // amount borrowed
+      true // don't receive atoken, receive underlying
+    );
+    uint256 _bobCurrentAtokenBalance = _awethToken.balanceOf(_bob);
+    assertEq(_bobInitAtokenBalance, 0);
+    assertApproxEqRel(
+      _bobCurrentAtokenBalance,
+      _thisATokenBalance,
+      0.01e18
+    );
   }
 }
