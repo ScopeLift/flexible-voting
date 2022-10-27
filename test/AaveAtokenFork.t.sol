@@ -32,14 +32,15 @@ contract AaveAtokenForkTest is Test {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
     // https://docs.aave.com/developers/deployed-contracts/v3-mainnet
     uint256 optimismForkBlock = 26332308; // The optimism block number at the time this test was written.
-    forkId = vm.createSelectFork(vm.envString("OPTIMISM_RPC_URL"), optimismForkBlock);
+    forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
 
     // deploy the GOV token
     govToken = new GovToken();
     pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
 
-    // Temporarily etch local code onto the fork address so that we can do
-    // things like add console.log statements during debugging.
+    // Uncomment this line to temporarily etch local code onto the fork address
+    // so that we can do things like add console.log statements during
+    // debugging:
     // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
 
     PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
@@ -88,7 +89,26 @@ contract AaveAtokenForkTest is Test {
     // Add our AToken to Aave.
     address _aaveAdmin = 0xE50c8C619d05ff98b22Adf991F17602C774F785c;
     vm.prank(_aaveAdmin);
+    vm.recordLogs();
     _poolConfigurator.initReserves(_initReservesInput);
+
+    // Retrieve the address of the aToken contract just deployed.
+    Vm.Log[] memory _emittedEvents = vm.getRecordedLogs();
+    Vm.Log memory _event;
+    bytes32 _eventSig = keccak256("ReserveInitialized(address,address,address,address,address)");
+    for (uint256 _i; _i < _emittedEvents.length; _i++) {
+      _event = _emittedEvents[_i];
+      if (_event.topics[0] == _eventSig) {
+        // event ReserveInitialized(
+        //   address indexed asset,
+        //   address indexed aToken,     <-- The topic we want.
+        //   address stableDebtToken,
+        //   address variableDebtToken,
+        //   address interestRateStrategyAddress
+        // );
+        aToken = AToken(address(uint160(uint256(_event.topics[2]))));
+      }
+    }
 
     // Configure GOV to serve as collateral.
     //
@@ -118,67 +138,6 @@ contract AaveAtokenForkTest is Test {
     vm.prank(_aaveAdmin);
     _poolConfigurator.setReserveStableRateBorrowing(address(govToken), true);
 
-    // Get the address of the AToken instance just deployed.
-    //
-    // Unfortunately, this is not trivial. Aave emits this address as a part of
-    // the ReserveInitialized event, which is how it's intended to be retrieved.
-    // But we don't have access to events with forge. So we have to read it from
-    // storage. The aTokenAddress is stored in the pool's _reserves storage var,
-    // and would be accessible internally as:
-    //
-    //   _reserves[address(govToken)].aTokenAddress
-    //
-    // But _reserves is an internal var, so we have to manually extract the
-    // data. Looking it up in forge we see:
-    //
-    //   $ forge inspect lib/aave-v3-core/contracts/protocol/pool/Pool.sol:Pool storage
-    //     ...
-    //     "label": "_reserves",
-    //     "offset": 0,
-    //     "slot": "52",
-    //     "type": "t_mapping(t_address,t_struct(ReserveData)12580_storage)"
-    //
-    // We can see here that _reserves is a mapping with an address as key and a
-    // struct (DataTypes.ReserveData) as value. The ReserveData struct is
-    // a big one, occupying many slots. So we need to find out which slot we
-    // want. In this case, the property we care about is called "aTokenAddress"
-    // and it is stored fairly deep within the data structure. These are the
-    // properties leading up to it (see
-    // aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol):
-    //
-    //   slot 1: ReserveConfigurationMap configuration; <-- just a uint256
-    //   slot 2: uint128 liquidityIndex;
-    //   slot 2: uint128 currentLiquidityRate;
-    //   slot 3: uint128 variableBorrowIndex;
-    //   slot 3: uint128 currentVariableBorrowRate;
-    //   slot 4: uint128 currentStableBorrowRate;
-    //   slot 4: uint40 lastUpdateTimestamp;
-    //   slot 4: uint16 id;
-    //   slot 5: address aTokenAddress;
-    //
-    // So we need to read the 5th slot allocated to the struct.
-    //
-    // To compute the slot where the desired struct begins in storage we need
-    // to concat the mapping key (i.e. the govToken address) with the slot number
-    // reserved for the mapping (i.e. 52, as found with `forge inspect`), then hash
-    // the result. *Then* we can cast and add the offset to find the position of
-    // the 5th slot for the struct.
-    //
-    // This is all per:
-    // https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html
-    bytes32 _aTokenAddressStorageSlot = bytes32(uint256(keccak256(
-      bytes.concat(
-        bytes32(uint256(uint160(address(govToken)))), // map key == the govToken addr
-        bytes32(uint256(52)) // _reserves slot, as determined by forge
-      )
-    )) + 4); // 4 slots *after* the slot computed for the struct, i.e. the 5th slot
-
-    aToken = AToken(
-      address(uint160(uint256(
-        vm.load(address(pool), _aTokenAddressStorageSlot)
-      )))
-    );
-
     // Sometimes Aave uses oracles to get price information, e.g. when
     // determining the value of collateral relative to loan value. Since GOV
     // isn't a real thing and doesn't have a real price, we need to mock these
@@ -197,7 +156,7 @@ contract AaveAtokenForkTest is Test {
 
   }
 
-  function testFork_Setup_CanSupplyGovToAave() public {
+  function testFork_SetupCanSupplyGovToAave() public {
     assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
     assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
 
@@ -219,7 +178,7 @@ contract AaveAtokenForkTest is Test {
     // Mint GOV and deposit into aave.
     // Confirm that we can supply GOV to the aToken.
     assertEq(aToken.balanceOf(address(this)), 0);
-    govToken.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
+    govToken.exposed_mint(address(this), 42 ether);
     govToken.approve(address(pool), type(uint256).max);
     pool.supply(
       address(govToken),
@@ -240,9 +199,9 @@ contract AaveAtokenForkTest is Test {
     assertEq(aToken.balanceOf(address(this)), 0 ether);
   }
 
-  function testFork_Setup_CanBorrowAgainstGovCollateral() public {
+  function testFork_SetupCanBorrowAgainstGovCollateral() public {
     // supply GOV
-    govToken.THIS_IS_JUST_A_TEST_HOOK_mint(address(this), 42 ether);
+    govToken.exposed_mint(address(this), 42 ether);
     govToken.approve(address(pool), type(uint256).max);
     pool.supply(
       address(govToken),
@@ -267,10 +226,10 @@ contract AaveAtokenForkTest is Test {
     assertEq(ERC20(dai).balanceOf(address(this)), 42);
   }
 
-  function testFork_Setup_CanBorrowGovAndBeLiquidated() public {
+  function testFork_SetupCanBorrowGovAndBeLiquidated() public {
     // Someone else supplies GOV -- necessary so we can borrow it
     address _bob = address(0xBEEF);
-    govToken.THIS_IS_JUST_A_TEST_HOOK_mint(_bob, 1100e18);
+    govToken.exposed_mint(_bob, 1100e18);
     vm.startPrank(_bob);
     govToken.approve(address(pool), type(uint256).max);
     // Don't supply all of the GOV, some will be needed to liquidate.

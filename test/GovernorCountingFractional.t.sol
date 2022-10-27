@@ -198,7 +198,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
 
     function _mintAndDelegateToVoter(Voter memory voter) internal {
       // Mint tokens for the user.
-      token.THIS_IS_JUST_A_TEST_HOOK_mint(voter.addr, voter.weight);
+      token.exposed_mint(voter.addr, voter.weight);
 
       // Self-delegate the tokens.
       vm.prank(voter.addr);
@@ -417,7 +417,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       voter.addr = _randomAddress(_weight);
       // The weight cannot overflow the max supply for the token, but must overflow the
       // max for the GovernorFractional contract.
-      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.exposed_maxSupply());
       voter.support = _randomSupportType(_weight);
 
       _mintAndDelegateToVoter(voter);
@@ -437,7 +437,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
       voter.addr = _randomAddress(_weight);
       // The weight cannot overflow the max supply for the token, but must overflow the
       // max for the GovernorFractional contract.
-      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.THIS_IS_JUST_A_TEST_HOOK_maxSupply());
+      voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.exposed_maxSupply());
 
       _mintAndDelegateToVoter(voter);
       uint256 _proposalId = _createAndSubmitProposal();
