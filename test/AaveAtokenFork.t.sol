@@ -13,18 +13,19 @@ import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfi
 import { DataTypes } from 'aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol';
 import { AaveOracle } from 'aave-v3-core/contracts/misc/AaveOracle.sol';
 
-import { GovToken } from "./GovToken.sol";
+import { GovToken } from "test/GovToken.sol";
+import { ATokenNaive } from "src/ATokenNaive.sol";
 
-import { Pool } from 'aave-v3-core/contracts/protocol/pool/Pool.sol';
 import "forge-std/console2.sol";
 
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
-  IAToken aToken;
+  ATokenNaive aToken;
   GovToken govToken;
   IPool pool;
 
+  // These are addresses on Optimism.
   address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
   address weth = 0x4200000000000000000000000000000000000006;
 
@@ -46,7 +47,7 @@ contract AaveAtokenForkTest is Test {
     PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new AToken(pool);
+    AToken _aTokenImplementation = new ATokenNaive(pool);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -106,7 +107,7 @@ contract AaveAtokenForkTest is Test {
         //   address variableDebtToken,
         //   address interestRateStrategyAddress
         // );
-        aToken = AToken(address(uint160(uint256(_event.topics[2]))));
+        aToken = ATokenNaive(address(uint160(uint256(_event.topics[2]))));
       }
     }
 
@@ -153,9 +154,18 @@ contract AaveAtokenForkTest is Test {
       // Aave only seems to use USD-based oracles, so we will do the same.
       abi.encode(1e8) // 1 GOV == $1 USD
     );
-
   }
 
+  function _mintGovAndSupplyToAave(address _who, uint256 _govAmount) internal {
+    govToken.exposed_mint(_who, _govAmount);
+    vm.startPrank(_who);
+    govToken.approve(address(pool), type(uint256).max);
+    pool.supply(address(govToken), _govAmount, _who, 0 /* referral code*/);
+    vm.stopPrank();
+  }
+}
+
+contract Setup is AaveAtokenForkTest {
   function testFork_SetupCanSupplyGovToAave() public {
     assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
     assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
@@ -285,5 +295,42 @@ contract AaveAtokenForkTest is Test {
       _thisATokenBalance,
       0.01e18
     );
+  }
+}
+
+contract Supply is AaveAtokenForkTest {
+  function test_DepositsAreCheckpointed() public {
+    address _who = address(0xBEEF);
+
+    // TODO randomize?
+    uint256 _amountA = 42 ether;
+    uint256 _amountB = 3 ether;
+
+    // token = govToken
+    // pool = aToken, or aave pool -- kinda depends
+
+    // There are no initial deposits.
+    uint256[] memory _checkpoints = new uint256[](3);
+    _checkpoints[0] = block.number;
+
+    // Advance the clock so that checkpoints become meaningful.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+    _checkpoints[1] = block.number;
+    _mintGovAndSupplyToAave(_who, _amountA);
+
+    // Advance the clock and supply again.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+    _checkpoints[2] = block.number;
+    _mintGovAndSupplyToAave(_who, _amountB);
+
+    // One more time, so that checkpoint 2 is in the past.
+    vm.roll(block.number + 1);
+
+    // We can still retrieve the user's balance at the given blocks.
+    assertEq(aToken.getPastDeposits(_who, _checkpoints[0]), 0);
+    assertEq(aToken.getPastDeposits(_who, _checkpoints[1]), _amountA);
+    assertEq(aToken.getPastDeposits(_who, _checkpoints[2]), _amountA + _amountB);
   }
 }
