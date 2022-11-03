@@ -1,0 +1,95 @@
+# Copied from: https://github.com/ScopeLift/foundry-template/blob/main/.github/workflows/ci.yml
+me: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install dependencies
+        run: forge install
+
+      - name: Build contracts
+        run: |
+          forge --version
+          forge build --sizes
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install dependencies
+        run: forge install
+
+      - name: Run tests
+        run: forge test
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          override: true
+
+      - name: Install scopelint
+        uses: engineerd/configurator@v0.0.8
+        with:
+          name: scopelint
+          repo: ScopeLift/scopelint
+          fromGitHubReleases: true
+          version: latest
+          pathInArchive: scopelint-x86_64-linux/scopelint
+          urlTemplate: https://github.com/ScopeLift/scopelint/releases/download/{{version}}/scopelint-x86_64-linux.tar.xz
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check formatting
+        run: scopelint check
+
+  slither-analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run Slither
+        uses: crytic/slither-action@v0.2.0
+        id: slither # Required to reference this step in the next step.
+        with:
+          fail-on: none # Required to avoid failing the CI run regardless of findings.
+          sarif: results.sarif
+          slither-args: --filter-paths "./lib|./test" --exclude naming-convention
+
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: ${{ steps.slither.outputs.sarif }}
