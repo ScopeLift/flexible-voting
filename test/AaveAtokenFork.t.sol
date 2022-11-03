@@ -427,6 +427,57 @@ contract VoteTest is AaveAtokenForkTest {
   function test_UserCannotExpressAbstainVotesWithoutWeight() public {
     _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Abstain));
   }
+  function test_UserCannotCastAfterVotingPeriodAgainst() public {
+    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Against));
+  }
+  function test_UserCannotCastAfterVotingPeriodFor() public {
+    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.For));
+  }
+  function test_UserCannotCastAfterVotingPeriodAbstain() public {
+    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Abstain));
+  }
+  function test_UserCannotDoubleVoteAfterVotingAgainst() public {
+    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Against));
+  }
+  function test_UserCannotDoubleVoteAfterVotingFor() public {
+    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.For));
+  }
+  function test_UserCannotDoubleVoteAfterVotingAbstain() public {
+    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Abstain));
+  }
+  function test_UserCannotExpressAgainstVotesPriorToDepositing() public {
+    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.Against));
+  }
+  function test_UserCannotExpressForVotesPriorToDepositing() public {
+    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.For));
+  }
+  function test_UserCannotExpressAbstainVotesPriorToDepositing() public {
+    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.Abstain));
+  }
+  function test_UserAgainstVotingWeightIsSnapshotDependent() public {
+    _testUserVotingWeightIsSnapshotDependent(
+      address(0xDAD),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.Against)
+    );
+  }
+  function test_UserForVotingWeightIsSnapshotDependent() public {
+    _testUserVotingWeightIsSnapshotDependent(
+      address(0xDAD),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.For)
+    );
+  }
+  function test_UserAbstainVotingWeightIsSnapshotDependent() public {
+    _testUserVotingWeightIsSnapshotDependent(
+      address(0xDAD),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.Abstain)
+    );
+  }
 
   function _testUserCanCastVotes(
     address _who,
@@ -501,6 +552,9 @@ contract VoteTest is AaveAtokenForkTest {
     assertEq(govToken.balanceOf(_who), _voteWeight);
     assertEq(aToken.deposits(_who), 0);
 
+    // Advance one block so that our votes will be checkpointed by the govToken;
+    vm.roll(block.number + 1);
+
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -509,4 +563,117 @@ contract VoteTest is AaveAtokenForkTest {
     vm.prank(_who);
     aToken.expressVote(_proposalId, uint8(_supportType));
   }
+
+  function _testUserCannotCastAfterVotingPeriod(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express vote preference.
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // Jump ahead so that we're outside of the proposal's voting period.
+    vm.roll(governor.proposalDeadline(_proposalId) + 1);
+
+    // We should not be able to castVote at this point.
+    vm.expectRevert(bytes("Governor: vote not currently active"));
+    aToken.castVote(_proposalId);
+  }
+
+  function _tesNoDoubleVoting(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // _who should now be able to express his/her vote on the proposal.
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // Vote early and often.
+    vm.expectRevert(bytes("already voted"));
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+  }
+
+  function _testUserCannotExpressVotesPriorToDepositing(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Create the proposal *before* the user deposits anything.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+
+    // Now try to express a voting preference on the proposal.
+    assertEq(aToken.deposits(_who), _voteWeight);
+    vm.expectRevert(bytes("no weight"));
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+  }
+
+  function _testUserVotingWeightIsSnapshotDependent(
+    address _who,
+    uint256 _voteWeightA,
+    uint256 _voteWeightB,
+    uint8 _supportType
+  ) public {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeightA);
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Sometime later the user deposits some more.
+    vm.roll(governor.proposalDeadline(_proposalId) - 1);
+    _mintGovAndSupplyToAave(_who, _voteWeightB);
+
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // The internal proposal vote weight should not reflect the new deposit weight.
+    (
+      uint256 _againstVotesExpressed,
+      uint256 _forVotesExpressed,
+      uint256 _abstainVotesExpressed
+    ) = aToken.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
+    assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
+    assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    // Votes cast should likewise reflect only the earlier balance.
+    (uint _againstVotes, uint _forVotes, uint _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
+    assertEq(_againstVotes, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
+    assertEq(_abstainVotes, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
+  }
+
+  // TODO user cannot express vote after votes have been cast
+  // TODO voting after token balance has rebased
 }
