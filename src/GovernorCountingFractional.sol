@@ -3,6 +3,9 @@
 
 pragma solidity ^0.8.0;
 
+// Disabling forgefmt to stay consistent with OZ's style.
+// forgefmt: disable-start
+
 import "openzeppelin-contracts/contracts/governance/Governor.sol";
 import "openzeppelin-contracts/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
@@ -175,3 +178,4 @@ abstract contract GovernorCountingFractional is Governor {
         }
     }
 }
+// forgefmt: disable-stop

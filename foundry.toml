@@ -1,10 +1,10 @@
 [profile.default]
   libs = ['lib']
-  out = 'out'
-  src = 'src'
   optimizer = true
   optimizer_runs = 10_000_000
+  out = 'out'
   solc_version = "0.8.16"
+  src = 'src'
   verbosity = 3
 
 [profile.ci]
@@ -31,5 +31,5 @@
   tab_width = 2
   wrap_comments = true
 
-# Copied from https://github.com/ScopeLift/foundry-template/blob/main/foundry.toml
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+  # Copied from https://github.com/ScopeLift/foundry-template/blob/main/foundry.toml
+  # See more config options https://github.com/foundry-rs/foundry/tree/master/config

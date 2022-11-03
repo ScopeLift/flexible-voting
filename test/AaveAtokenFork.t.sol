@@ -1,22 +1,24 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.10;
 
-import { Test } from "forge-std/Test.sol";
-import { Vm } from "forge-std/Vm.sol";
-import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+// forgefmt: disable-start
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
+import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
-import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
-import { AToken } from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
-import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
-import { ConfiguratorInputTypes } from 'aave-v3-core/contracts/protocol/libraries/types/ConfiguratorInputTypes.sol';
-import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
-import { DataTypes } from 'aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol';
-import { AaveOracle } from 'aave-v3-core/contracts/misc/AaveOracle.sol';
+import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
+import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
+import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
+import {ConfiguratorInputTypes} from "aave-v3-core/contracts/protocol/libraries/types/ConfiguratorInputTypes.sol";
+import {PoolConfigurator} from "aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol";
+import {DataTypes} from "aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol";
+import {AaveOracle} from "aave-v3-core/contracts/misc/AaveOracle.sol";
 
-import { GovToken } from "./GovToken.sol";
+import {GovToken} from "./GovToken.sol";
 
-import { Pool } from 'aave-v3-core/contracts/protocol/pool/Pool.sol';
+import {Pool} from "aave-v3-core/contracts/protocol/pool/Pool.sol";
 import "forge-std/console2.sol";
+// forgefmt: disable-stop
 
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
@@ -31,19 +33,22 @@ contract AaveAtokenForkTest is Test {
   function setUp() public {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
     // https://docs.aave.com/developers/deployed-contracts/v3-mainnet
-    uint256 optimismForkBlock = 26332308; // The optimism block number at the time this test was written.
+    uint256 optimismForkBlock = 26_332_308; // The optimism block number at the time this test was
+      // written.
     forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
 
     // deploy the GOV token
     govToken = new GovToken();
-    pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
+    pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from
+      // https://dune.com/queries/1329814
 
     // Uncomment this line to temporarily etch local code onto the fork address
     // so that we can do things like add console.log statements during
     // debugging:
     // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
 
-    PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
+    PoolConfigurator _poolConfigurator =
+      PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
 
     // deploy the aGOV token
     AToken _aTokenImplementation = new AToken(pool);
@@ -66,13 +71,15 @@ contract AaveAtokenForkTest is Test {
     string memory _variableDebtTokenName = "Aave Optimism Variable Debt GOV";
     string memory _variableDebtTokenSymbol = "variableDebtOptGOV";
 
-    ConfiguratorInputTypes.InitReserveInput[] memory _initReservesInput = new ConfiguratorInputTypes.InitReserveInput[](1);
+    ConfiguratorInputTypes.InitReserveInput[] memory _initReservesInput =
+      new ConfiguratorInputTypes.InitReserveInput[](1);
     _initReservesInput[0] = ConfiguratorInputTypes.InitReserveInput(
       address(_aTokenImplementation), // aTokenImpl
       _stableDebtTokenImpl, // stableDebtTokenImpl
       _variableDebtTokenImpl, // variableDebtTokenImpl
       govToken.decimals(), // underlyingAssetDecimals
-      0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress, taken from https://dune.com/queries/1332820
+      0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress, taken from
+        // https://dune.com/queries/1332820
       address(govToken), // underlyingAsset
       // treasury + incentives data from https://dune.com/queries/1329814
       0xB2289E329D2F85F1eD31Adbb30eA345278F21bcf, // treasury
@@ -127,7 +134,7 @@ contract AaveAtokenForkTest is Test {
       address(govToken), // underlyingAsset
       7500, // ltv, i.e. loan-to-value
       8000, // liquidationThreshold, i.e. threshold at which positions will be liquidated
-      10500 // liquidationBonus
+      10_500 // liquidationBonus
     );
 
     // Configure GOV to be borrowed.
@@ -146,14 +153,10 @@ contract AaveAtokenForkTest is Test {
     address _priceOracle = pool.ADDRESSES_PROVIDER().getPriceOracle();
     vm.mockCall(
       _priceOracle,
-      abi.encodeWithSelector(
-        AaveOracle.getAssetPrice.selector,
-        address(govToken)
-      ),
+      abi.encodeWithSelector(AaveOracle.getAssetPrice.selector, address(govToken)),
       // Aave only seems to use USD-based oracles, so we will do the same.
       abi.encode(1e8) // 1 GOV == $1 USD
     );
-
   }
 
   function testFork_SetupCanSupplyGovToAave() public {
@@ -169,10 +172,7 @@ contract AaveAtokenForkTest is Test {
     //     "slot": "61",
     //     "type": "t_address"
     assertEq(
-      address(uint160(uint256(
-        vm.load(address(aToken), bytes32(uint256(61)))
-      ))),
-      address(govToken)
+      address(uint160(uint256(vm.load(address(aToken), bytes32(uint256(61)))))), address(govToken)
     );
 
     // Mint GOV and deposit into aave.
@@ -190,11 +190,7 @@ contract AaveAtokenForkTest is Test {
     assertEq(aToken.balanceOf(address(this)), 2 ether);
 
     // We can withdraw our GOV when we want to.
-    pool.withdraw(
-      address(govToken),
-      2 ether,
-      address(this)
-    );
+    pool.withdraw(address(govToken), 2 ether, address(this));
     assertEq(govToken.balanceOf(address(this)), 42 ether);
     assertEq(aToken.balanceOf(address(this)), 0 ether);
   }
@@ -261,10 +257,7 @@ contract AaveAtokenForkTest is Test {
     address _priceOracle = pool.ADDRESSES_PROVIDER().getPriceOracle();
     vm.mockCall(
       _priceOracle,
-      abi.encodeWithSelector(
-        AaveOracle.getAssetPrice.selector,
-        weth
-      ),
+      abi.encodeWithSelector(AaveOracle.getAssetPrice.selector, weth),
       abi.encode(1) // 1 bip
     );
 
@@ -280,10 +273,6 @@ contract AaveAtokenForkTest is Test {
     );
     uint256 _bobCurrentAtokenBalance = _awethToken.balanceOf(_bob);
     assertEq(_bobInitAtokenBalance, 0);
-    assertApproxEqRel(
-      _bobCurrentAtokenBalance,
-      _thisATokenBalance,
-      0.01e18
-    );
+    assertApproxEqRel(_bobCurrentAtokenBalance, _thisATokenBalance, 0.01e18);
   }
 }
