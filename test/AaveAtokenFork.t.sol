@@ -4,6 +4,7 @@ pragma solidity >=0.8.10;
 import { Test } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
 import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import { IVotes } from "openzeppelin-contracts/contracts/governance/utils/IVotes.sol";
 
 import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import { AToken } from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
@@ -13,9 +14,12 @@ import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfi
 import { DataTypes } from 'aave-v3-core/contracts/protocol/libraries/types/DataTypes.sol';
 import { AaveOracle } from 'aave-v3-core/contracts/misc/AaveOracle.sol';
 
-import { GovToken } from "test/GovToken.sol";
 import { ATokenNaive } from "src/ATokenNaive.sol";
+import { FractionalGovernor } from "test/FractionalGovernor.sol";
+import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
+import { GovToken } from "test/GovToken.sol";
 
+import { Pool } from 'aave-v3-core/contracts/protocol/pool/Pool.sol'; // Used to etch below.
 import "forge-std/console2.sol";
 
 contract AaveAtokenForkTest is Test {
@@ -23,11 +27,30 @@ contract AaveAtokenForkTest is Test {
 
   ATokenNaive aToken;
   GovToken govToken;
+  FractionalGovernor governor;
+  ProposalReceiverMock receiver;
   IPool pool;
 
   // These are addresses on Optimism.
   address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
   address weth = 0x4200000000000000000000000000000000000006;
+
+  enum ProposalState {
+    Pending,
+    Active,
+    Canceled,
+    Defeated,
+    Succeeded,
+    Queued,
+    Expired,
+    Executed
+  }
+
+  enum VoteType {
+    Against,
+    For,
+      Abstain
+  }
 
   function setUp() public {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
@@ -35,19 +58,29 @@ contract AaveAtokenForkTest is Test {
     uint256 optimismForkBlock = 26332308; // The optimism block number at the time this test was written.
     forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
 
-    // deploy the GOV token
+    // Deploy the GOV token.
     govToken = new GovToken();
     pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
+    vm.label(address(pool), "pool");
+
+    // Deploy the governor.
+    governor = new FractionalGovernor("Governor", IVotes(govToken));
+    vm.label(address(governor), "governor");
+
+    // Deploy the contract which will receive proposal calls.
+    receiver = new ProposalReceiverMock();
+    vm.label(address(receiver), "receiver");
 
     // Uncomment this line to temporarily etch local code onto the fork address
     // so that we can do things like add console.log statements during
     // debugging:
-    // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
+    vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
 
-    PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
+    // This address is from: pool.ADDRESSES_PROVIDER().getPoolConfigurator();
+    PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new ATokenNaive(pool);
+    AToken _aTokenImplementation = new ATokenNaive(pool, address(governor));
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -108,6 +141,7 @@ contract AaveAtokenForkTest is Test {
         //   address interestRateStrategyAddress
         // );
         aToken = ATokenNaive(address(uint160(uint256(_event.topics[2]))));
+        vm.label(address(aToken), "aToken");
       }
     }
 
@@ -156,12 +190,38 @@ contract AaveAtokenForkTest is Test {
     );
   }
 
+  // ------------------
+  // Helper functions
+  // ------------------
+
   function _mintGovAndSupplyToAave(address _who, uint256 _govAmount) internal {
     govToken.exposed_mint(_who, _govAmount);
     vm.startPrank(_who);
     govToken.approve(address(pool), type(uint256).max);
     pool.supply(address(govToken), _govAmount, _who, 0 /* referral code*/);
     vm.stopPrank();
+  }
+
+  function _createAndSubmitProposal() internal returns(uint256 proposalId) {
+    // Proposal will underflow if we're on the zero block.
+    if (block.number == 0) vm.roll(42);
+
+    // Create a dummy proposal.
+    bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
+    address[] memory targets = new address[](1);
+    uint256[] memory values = new uint256[](1);
+    bytes[] memory calldatas = new bytes[](1);
+    targets[0] = address(receiver);
+    values[0] = 0; // no ETH will be sent
+    calldatas[0] = receiverCallData;
+
+    // Submit the proposal.
+    proposalId = governor.propose(targets, values, calldatas, "A great proposal");
+    assertEq(uint(governor.state(proposalId)), uint(ProposalState.Pending));
+
+    // advance proposal to active state
+    vm.roll(governor.proposalSnapshot(proposalId) + 1);
+    assertEq(uint(governor.state(proposalId)), uint(ProposalState.Active));
   }
 }
 
@@ -306,9 +366,6 @@ contract Supply is AaveAtokenForkTest {
     uint256 _amountA = 42 ether;
     uint256 _amountB = 3 ether;
 
-    // token = govToken
-    // pool = aToken, or aave pool -- kinda depends
-
     // There are no initial deposits.
     uint256[] memory _checkpoints = new uint256[](3);
     _checkpoints[0] = block.number;
@@ -332,5 +389,91 @@ contract Supply is AaveAtokenForkTest {
     assertEq(aToken.getPastDeposits(_who, _checkpoints[0]), 0);
     assertEq(aToken.getPastDeposits(_who, _checkpoints[1]), _amountA);
     assertEq(aToken.getPastDeposits(_who, _checkpoints[2]), _amountA + _amountB);
+    // TODO why isn't this rebasing?
+    assertEq(aToken.balanceOf(_who), _amountA + _amountB);
+  }
+}
+
+// TODO Why can't I just do `contract Vote is...` here?
+contract VoteTest is AaveAtokenForkTest {
+  function test_UserCanCastAgainstVotes() public {
+    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Against));
+  }
+  function test_UserCanCastForVotes() public {
+    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.For));
+  }
+  function test_UserCanCastAbstainVotes() public {
+    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Abstain));
+  }
+
+  function _testUserCanCastVotes(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // TODO where to do this??
+    vm.prank(address(aToken));
+    govToken.delegate(address(aToken));
+
+    // The AToken should be delegating to itself.
+    assertEq(
+      govToken.delegates(address(aToken)),
+      address(aToken),
+      "aToken is not delegating to itself"
+    );
+
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+    assertEq(aToken.balanceOf(_who), _voteWeight, "aToken balance wrong");
+    assertEq(govToken.balanceOf(address(aToken)), _voteWeight, "govToken balance wrong");
+
+    // Advance one block so that our votes will be checkpointed by the govToken;
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+    assertEq(
+      govToken.getPastVotes(address(aToken), block.number - 1),
+      _voteWeight,
+      "getPastVotes returned unexpected result"
+    );
+
+    // _who should now be able to express his/her vote on the proposal.
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    (
+      uint256 _againstVotesExpressed,
+      uint256 _forVotesExpressed,
+      uint256 _abstainVotesExpressed
+    ) = aToken.proposalVotes(_proposalId);
+
+    // Vote preferences have been expressed.
+    assertEq(_forVotesExpressed, _supportType == uint8(VoteType.For) ? _voteWeight : 0);
+    assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
+    assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
+
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    // But no actual votes have been cast yet.
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, 0);
+    assertEq(_abstainVotes, 0);
+
+    // Wait until after the voting period
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // submit votes on behalf of the pool
+    aToken.castVote(_proposalId);
+
+    // governor should now record votes from the pool
+    (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _forVotesExpressed, "for votes not as expected");
+    assertEq(_againstVotes, _againstVotesExpressed, "against votes not as expected");
+    assertEq(_abstainVotes, _abstainVotesExpressed, "abstain votes not as expected");
   }
 }

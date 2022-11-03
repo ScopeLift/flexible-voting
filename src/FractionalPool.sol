@@ -191,8 +191,10 @@ contract FractionalPool {
     }
 
     /**
-     * @notice Method which returns the deadline for depositors to express their voting preferences to this Pool
-     * contract. Will always be before the Governor's corresponding proposal deadline.
+     * @notice Method which returns the deadline (expressed as a block number)
+     * by which depositors must express their voting preferences to this Pool
+     * contract. It will always be before the Governor's corresponding proposal
+     * deadline.
      * @param proposalId The ID of the proposal in question.
      */
     function internalVotingPeriodEnd(uint256 proposalId) public view returns(uint256 _lastVotingBlock) {

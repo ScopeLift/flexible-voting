@@ -9,6 +9,25 @@ import { WadRayMath } from 'aave-v3-core/contracts/protocol/libraries/math/WadRa
 import { SafeCast } from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import { Math } from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
+interface IFractionalGovernor {
+  function token() external returns (address);
+  function proposalSnapshot(uint256 proposalId) external returns (uint256);
+  function proposalDeadline(uint256 proposalId) external view returns (uint256);
+  function castVoteWithReasonAndParams(
+    uint256 proposalId,
+    uint8 support,
+    string calldata reason,
+    bytes memory params
+  ) external returns (uint256);
+}
+
+interface IVotingToken {
+  function transfer(address to, uint256 amount) external returns (bool);
+  function transferFrom(address from, address to, uint256 amount) external returns (bool);
+  function delegate(address delegatee) external;
+  function getPastVotes(address account, uint256 blockNumber) external returns (uint256);
+}
+
 contract ATokenNaive is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
@@ -44,12 +63,106 @@ contract ATokenNaive is AToken {
   /// @notice Map proposalId to vote totals expressed on this proposal.
   mapping(uint256 => ProposalVote) public proposalVotes;
 
+  /// @notice The governor contract associated with this governance token.
+  IFractionalGovernor immutable public governor;
+
   /// @dev Constructor.
-  /// @param pool The address of the Pool contract
-  constructor(IPool pool) AToken(pool) {
-    // Intentionally left blank in favor of the initializer function.
+  /// @param _pool The address of the Pool contract
+  /// @param _governor The address of the flex-voting-compatable governance contract.
+  constructor(IPool _pool, address _governor) AToken(_pool) {
+    governor = IFractionalGovernor(_governor);
   }
 
+  /// @notice Method which returns the deadline (as a block number) by which
+  /// depositors must express their voting preferences to this Pool contract. It
+  /// will always be before the Governor's corresponding proposal deadline.
+  /// @param proposalId The ID of the proposal in question.
+  function internalVotingPeriodEnd(
+    uint256 proposalId
+  ) public view returns(uint256 _lastVotingBlock) {
+    _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
+  }
+
+  /// TODO how to handle onBehalfOf?
+  /// TODO should this revert if the vote has been cast?
+  /// @notice Allow a depositor to express their voting preference for a given
+  /// proposal. Their preference is recorded internally but not moved to the
+  /// Governor until `castVote` is called. We deliberately do NOT revert if the
+  /// internalVotingPeriodEnd has passed.
+  /// @param proposalId The proposalId in the associated Governor
+  /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
+  function expressVote(uint256 proposalId, uint8 support) external {
+    uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+    if (weight == 0) revert("no weight");
+
+    if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
+    _proposalVotersHasVoted[proposalId][msg.sender] = true;
+
+    if (support == uint8(VoteType.Against)) {
+      proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
+    } else if (support == uint8(VoteType.For)) {
+      proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
+    } else if (support == uint8(VoteType.Abstain)) {
+      proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
+    } else {
+      revert("invalid support value, must be included in VoteType enum");
+    }
+  }
+
+  /// @notice Causes this contract to cast a vote to the Governor for all the
+  /// tokens it currently holds.  Uses the sum of all depositor voting
+  /// expressions to decide how to split its voting weight. Can be called by
+  /// anyone, but _must_ be called within `CAST_VOTE_WINDOW` blocks before the
+  /// proposal deadline.
+  /// @param proposalId The ID of the proposal which the Pool will now vote on.
+  function castVote(uint256 proposalId) external {
+    if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
+    uint8 unusedSupportParam = uint8(VoteType.Abstain);
+    ProposalVote memory _proposalVote = proposalVotes[proposalId];
+
+    uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
+
+    // Use the snapshot of total deposits to determine total voting weight. We cannot
+    // use the proposalVote numbers alone, since some people with deposits at the
+    // snapshot might not have expressed votes.
+    uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
+
+    // We need 256 bits because of the multiplication we're about to do.
+    uint256 _votingWeightAtSnapshot = IVotingToken(
+      address(_underlyingAsset)
+    ).getPastVotes(address(this), _proposalSnapshotBlockNumber);
+
+    //      forVotesRaw          forVotesScaled
+    // --------------------- = ---------------------
+    //     totalDeposits        deposits (@snapshot)
+    //
+    // forVotesScaled = forVotesRaw * deposits@snapshot / totalDeposits
+    uint128 _forVotesToCast = SafeCast.toUint128(
+      (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalDepositWeightAtSnapshot
+    );
+    uint128 _againstVotesToCast = SafeCast.toUint128(
+      (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
+    );
+    uint128 _abstainVotesToCast = SafeCast.toUint128(
+      (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
+    );
+
+    bytes memory fractionalizedVotes = abi.encodePacked(
+      _forVotesToCast,
+      _againstVotesToCast,
+      _abstainVotesToCast
+    );
+    governor.castVoteWithReasonAndParams(
+      proposalId,
+      unusedSupportParam,
+      'crowd-sourced vote',
+      fractionalizedVotes
+    );
+  }
+
+  /// Note: this has been modified from Aave v3's AToken to call our custom
+  /// mintScaled function.
+  ///
   /// @inheritdoc IAToken
   function mint(
     address caller,
