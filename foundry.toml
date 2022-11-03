@@ -1,10 +1,7 @@
 [profile.default]
-  libs = ['lib']
   optimizer = true
   optimizer_runs = 10_000_000
-  out = 'out'
   solc_version = "0.8.16"
-  src = 'src'
   verbosity = 3
 
 [profile.ci]
