@@ -33,22 +33,22 @@ contract AaveAtokenForkTest is Test {
   function setUp() public {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
     // https://docs.aave.com/developers/deployed-contracts/v3-mainnet
-    uint256 optimismForkBlock = 26_332_308; // The optimism block number at the time this test was
-      // written.
+    // This was the optimism block number at the time this test was written.
+    uint256 optimismForkBlock = 26_332_308;
     forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
 
     // deploy the GOV token
     govToken = new GovToken();
-    pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from
-      // https://dune.com/queries/1329814
+    // Pool address taken from https://dune.com/queries/1329814.
+    pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
 
     // Uncomment this line to temporarily etch local code onto the fork address
     // so that we can do things like add console.log statements during
     // debugging:
     // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
 
-    PoolConfigurator _poolConfigurator =
-      PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E); // pool.ADDRESSES_PROVIDER().getPoolConfigurator()
+    // Address from: pool.ADDRESSES_PROVIDER().getPoolConfigurator();
+    PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
     AToken _aTokenImplementation = new AToken(pool);
@@ -78,8 +78,8 @@ contract AaveAtokenForkTest is Test {
       _stableDebtTokenImpl, // stableDebtTokenImpl
       _variableDebtTokenImpl, // variableDebtTokenImpl
       govToken.decimals(), // underlyingAssetDecimals
-      0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress, taken from
-        // https://dune.com/queries/1332820
+      // Taken from https://dune.com/queries/1332820
+      0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress
       address(govToken), // underlyingAsset
       // treasury + incentives data from https://dune.com/queries/1329814
       0xB2289E329D2F85F1eD31Adbb30eA345278F21bcf, // treasury
