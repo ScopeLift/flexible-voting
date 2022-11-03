@@ -418,6 +418,15 @@ contract VoteTest is AaveAtokenForkTest {
   function test_UserCanCastAbstainVotes() public {
     _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Abstain));
   }
+  function test_UserCannotExpressAgainstVotesWithoutWeight() public {
+    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Against));
+  }
+  function test_UserCannotExpressForVotesWithoutWeight() public {
+    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.For));
+  }
+  function test_UserCannotExpressAbstainVotesWithoutWeight() public {
+    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Abstain));
+  }
 
   function _testUserCanCastVotes(
     address _who,
@@ -477,5 +486,27 @@ contract VoteTest is AaveAtokenForkTest {
     assertEq(_forVotes, _forVotesExpressed, "for votes not as expected");
     assertEq(_againstVotes, _againstVotesExpressed, "against votes not as expected");
     assertEq(_abstainVotes, _abstainVotesExpressed, "abstain votes not as expected");
+  }
+
+  function _testUserCannotExpressVotesWithoutATokens(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Mint gov but do not deposit
+    govToken.exposed_mint(_who, _voteWeight);
+    vm.prank(_who);
+    govToken.approve(address(pool), type(uint256).max);
+
+    assertEq(govToken.balanceOf(_who), _voteWeight);
+    assertEq(aToken.deposits(_who), 0);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // _who should NOT be able to express his/her vote on the proposal
+    vm.expectRevert(bytes("no weight"));
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, uint8(_supportType));
   }
 }
