@@ -188,6 +188,10 @@ contract AaveAtokenForkTest is Test {
       // Aave only seems to use USD-based oracles, so we will do the same.
       abi.encode(1e8) // 1 GOV == $1 USD
     );
+
+    // We need to call this selfDelegate function so that the aToken will give
+    // its voting power to itself.
+    aToken.selfDelegate();
   }
 
   // ------------------
@@ -226,7 +230,7 @@ contract AaveAtokenForkTest is Test {
 }
 
 contract Setup is AaveAtokenForkTest {
-  function testFork_SetupCanSupplyGovToAave() public {
+  function testFork_SetupATokenDeploy() public {
     assertEq(ERC20(address(aToken)).symbol(), "aOptGOV");
     assertEq(ERC20(address(aToken)).name(), "Aave V3 Optimism GOV");
 
@@ -245,6 +249,15 @@ contract Setup is AaveAtokenForkTest {
       address(govToken)
     );
 
+    // The AToken should be delegating to itself.
+    assertEq(
+      govToken.delegates(address(aToken)),
+      address(aToken),
+      "aToken is not delegating to itself"
+    );
+  }
+
+  function testFork_SetupCanSupplyGovToAave() public {
     // Mint GOV and deposit into aave.
     // Confirm that we can supply GOV to the aToken.
     assertEq(aToken.balanceOf(address(this)), 0);
@@ -411,17 +424,6 @@ contract VoteTest is AaveAtokenForkTest {
     uint256 _voteWeight,
     uint8 _supportType
   ) public {
-    // TODO where to do this??
-    vm.prank(address(aToken));
-    govToken.delegate(address(aToken));
-
-    // The AToken should be delegating to itself.
-    assertEq(
-      govToken.delegates(address(aToken)),
-      address(aToken),
-      "aToken is not delegating to itself"
-    );
-
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
     assertEq(aToken.balanceOf(_who), _voteWeight, "aToken balance wrong");

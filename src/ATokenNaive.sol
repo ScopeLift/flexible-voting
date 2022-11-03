@@ -73,6 +73,13 @@ contract ATokenNaive is AToken {
     governor = IFractionalGovernor(_governor);
   }
 
+  // TODO Is there a better way to do this? It cannot be done in the constructor
+  // because the AToken is just used a proxy -- it won't share an address with
+  // the implementation (i.e. this code).
+  function selfDelegate() public {
+    IVotingToken(governor.token()).delegate(address(this));
+  }
+
   /// @notice Method which returns the deadline (as a block number) by which
   /// depositors must express their voting preferences to this Pool contract. It
   /// will always be before the Governor's corresponding proposal deadline.
