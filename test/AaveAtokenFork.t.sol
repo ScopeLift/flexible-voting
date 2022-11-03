@@ -445,6 +445,15 @@ contract VoteTest is AaveAtokenForkTest {
   function test_UserCannotDoubleVoteAfterVotingAbstain() public {
     _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Abstain));
   }
+  function test_UserCannotCastVotesTwiceAfterVotingAgainst() public {
+    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Against));
+  }
+  function test_UserCannotCastVotesTwiceAfterVotingFor() public {
+    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.For));
+  }
+  function test_UserCannotCastVotesTwiceAfterVotingAbstain() public {
+    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Abstain));
+  }
   function test_UserCannotExpressAgainstVotesPriorToDepositing() public {
     _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.Against));
   }
@@ -475,6 +484,35 @@ contract VoteTest is AaveAtokenForkTest {
       address(0xDAD),
       0.00042 ether,
       0.042 ether,
+      uint8(VoteType.Abstain)
+    );
+  }
+  function test_MultipleUsersCanCastVotes() public {
+    _testMultipleUsersCanCastVotes(
+      address(0xD00D),
+      address(0xF00D),
+      0.42424242 ether,
+      0.00000042 ether
+    );
+  }
+  function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAgainst() public {
+    _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
+      address(0xDEAF),
+      0.000001 ether,
+      uint8(VoteType.Against)
+    );
+  }
+  function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingFor() public {
+    _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
+      address(0xDEAF),
+      0.000001 ether,
+      uint8(VoteType.For)
+    );
+  }
+  function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAbstain() public {
+    _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
+      address(0xDEAF),
+      0.000001 ether,
       uint8(VoteType.Abstain)
     );
   }
@@ -614,6 +652,35 @@ contract VoteTest is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
   }
 
+  function _testUserCannotCastVotesTwice(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // _who should now be able to express his/her vote on the proposal.
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // Wait until after the voting period.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    // Try to submit them again.
+    vm.expectRevert(bytes("GovernorCountingFractional: vote already cast"));
+    aToken.castVote(_proposalId);
+  }
+
   function _testUserCannotExpressVotesPriorToDepositing(
     address _who,
     uint256 _voteWeight,
@@ -672,6 +739,82 @@ contract VoteTest is AaveAtokenForkTest {
     assertEq(_forVotes,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
     assertEq(_againstVotes, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
     assertEq(_abstainVotes, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
+  }
+
+  function _testMultipleUsersCanCastVotes(
+    address _userA,
+    address _userB,
+    uint256 _voteWeightA,
+    uint256 _voteWeightB
+  ) public {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_userA, _voteWeightA);
+    _mintGovAndSupplyToAave(_userB, _voteWeightB);
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Users should now be able to express their votes on the proposal.
+    vm.prank(_userA);
+    aToken.expressVote(_proposalId, uint8(VoteType.Against));
+    vm.prank(_userB);
+    aToken.expressVote(_proposalId, uint8(VoteType.Abstain));
+
+    (
+      uint256 _againstVotesExpressed,
+      uint256 _forVotesExpressed,
+      uint256 _abstainVotesExpressed
+    ) = aToken.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed, 0);
+    assertEq(_againstVotesExpressed, _voteWeightA);
+    assertEq(_abstainVotesExpressed, _voteWeightB);
+
+    // The governor should have not recieved any votes yet.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, 0);
+    assertEq(_abstainVotes, 0);
+
+    // Wait until after the voting period.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    // Governor should now record votes for the pool.
+    (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, _voteWeightA);
+    assertEq(_abstainVotes, _voteWeightB);
+  }
+
+  function _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
+    address _who,
+    uint256 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express vote.
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // The AToken's internal voting period has not passed.
+    assert(aToken.internalVotingPeriodEnd(_proposalId) > block.number);
+
+    // Try to submit votes on behalf of the pool.
+    vm.expectRevert(bytes("cannot castVote yet"));
+    aToken.castVote(_proposalId);
   }
 
   // TODO user cannot express vote after votes have been cast
