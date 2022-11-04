@@ -516,6 +516,114 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.Abstain)
     );
   }
+  function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstFor() public {
+    _testVoteWeightIsScaledBasedOnPoolBalance(
+      VoteWeightIsScaledVars(
+        address(0xFADE),         // voterA
+        address(0xDEED),         // voterB
+        address(0xB0D),          // borrower
+        12 ether,                // voteWeightA
+        4 ether,                 // voteWeightB
+        7 ether,                 // borrowerAssets
+        uint8(VoteType.Against), // supportTypeA
+        uint8(VoteType.For)      // supportTypeB
+      )
+    );
+  }
+  function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstAbstain() public {
+    _testVoteWeightIsScaledBasedOnPoolBalance(
+      VoteWeightIsScaledVars(
+        address(0xFEED),         // voterA
+        address(0xADE),          // voterB
+        address(0xD0E),          // borrower
+        2 ether,                 // voteWeightA
+        7 ether,                 // voteWeightB
+        4 ether,                 // borrowerAssets
+        uint8(VoteType.Against), // supportTypeA
+        uint8(VoteType.Abstain)  // supportTypeB
+      )
+    );
+  }
+  function test_VoteWeightIsScaledBasedOnPoolBalanceForAbstain() public {
+    _testVoteWeightIsScaledBasedOnPoolBalance(
+      VoteWeightIsScaledVars(
+        address(0xED),           // voterA
+        address(0xABE),          // voterB
+        address(0xBED),          // borrower
+        1 ether,                 // voteWeightA
+        1 ether,                 // voteWeightB
+        1 ether,                 // borrowerAssets
+        uint8(VoteType.For),     // supportTypeA
+        uint8(VoteType.Abstain)  // supportTypeB
+      )
+    );
+  }
+  function test_AgainstVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
+    _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
+      VotingWeightIsAbandonedVars(
+        address(0x111),         // voterA
+        address(0x222),         // voterB
+        address(0x333),         // borrower
+        1 ether,                // voteWeightA
+        1 ether,                // voteWeightB
+        1 ether,                // borrowerAssets
+        uint8(VoteType.Against) // supportTypeA
+      )
+    );
+  }
+  function test_ForVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
+    _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
+      VotingWeightIsAbandonedVars(
+        address(0xAAA),         // voterA
+        address(0xBBB),         // voterB
+        address(0xCCC),         // borrower
+        42 ether,               // voteWeightA
+        24 ether,               // voteWeightB
+        11 ether,               // borrowerAssets
+        uint8(VoteType.For)     // supportTypeA
+      )
+    );
+  }
+  function test_AbstainVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
+    _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
+      VotingWeightIsAbandonedVars(
+        address(0x123),         // voterA
+        address(0x456),         // voterB
+        address(0x789),         // borrower
+        24 ether,               // voteWeightA
+        42 ether,               // voteWeightB
+        100 ether,              // borrowerAssets
+        uint8(VoteType.Abstain) // supportTypeA
+      )
+    );
+  }
+  function test_AgainstVotingWeightIsUnaffectedByDepositsAfterProposal() public {
+    _testVotingWeightIsUnaffectedByDepositsAfterProposal(
+      address(0xAAAA),        // voterA
+      address(0xBBBB),        // voterB
+      1 ether,                // voteWeightA
+      2 ether,                // voteWeightB
+      uint8(VoteType.Against) // supportTypeA
+    );
+  }
+  function test_ForVotingWeightIsUnaffectedByDepositsAfterProposal() public {
+    _testVotingWeightIsUnaffectedByDepositsAfterProposal(
+      address(0xCCCC),        // voterA
+      address(0xDDDD),        // voterB
+      0.42 ether,             // voteWeightA
+      0.042 ether,            // voteWeightB
+      uint8(VoteType.For)     // supportTypeA
+    );
+  }
+  function test_AbstainVotingWeightIsUnaffectedByDepositsAfterProposal() public {
+    _testVotingWeightIsUnaffectedByDepositsAfterProposal(
+      address(0xEEEE),        // voterA
+      address(0xFFFF),        // voterB
+      10 ether,               // voteWeightA
+      20 ether,               // voteWeightB
+      uint8(VoteType.Abstain) // supportTypeA
+    );
+  }
 
   function _testUserCanCastVotes(
     address _who,
@@ -815,6 +923,261 @@ contract VoteTest is AaveAtokenForkTest {
     // Try to submit votes on behalf of the pool.
     vm.expectRevert(bytes("cannot castVote yet"));
     aToken.castVote(_proposalId);
+  }
+
+  struct VoteWeightIsScaledVars {
+    address voterA;
+    address voterB;
+    address borrower;
+    uint256 voteWeightA;
+    uint256 voteWeightB;
+    uint256 borrowerAssets;
+    uint8 supportTypeA;
+    uint8 supportTypeB;
+  }
+
+  function _testVoteWeightIsScaledBasedOnPoolBalance(
+    VoteWeightIsScaledVars memory _vars
+  ) public {
+    // This would be a vm.assume if we could do fuzz tests.
+    assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
+
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_vars.voterA, _vars.voteWeightA);
+    _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
+    uint256 _initGovBalance = govToken.balanceOf(address(aToken));
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Borrow GOV from the pool, decreasing its token balance.
+    deal(weth, _vars.borrower, _vars.borrowerAssets);
+    vm.startPrank(_vars.borrower);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, _vars.borrowerAssets, _vars.borrower, 0);
+    // Borrow GOV against WETH
+    pool.borrow(
+      address(govToken),
+      (_vars.voteWeightA + _vars.voteWeightB) / 7, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      _vars.borrower // onBehalfOf
+    );
+    assertLt(
+      govToken.balanceOf(address(aToken)),
+      _initGovBalance
+    );
+    vm.stopPrank();
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the pool's balance.
+    vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+    uint256 _expectedVotingWeight = govToken.balanceOf(address(aToken));
+    assert(_expectedVotingWeight < _initGovBalance);
+
+    // A+B express votes
+    vm.prank(_vars.voterA);
+    aToken.expressVote(_proposalId, _vars.supportTypeA);
+    vm.prank(_vars.voterB);
+    aToken.expressVote(_proposalId, _vars.supportTypeB);
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // the actual weight is different from the deposit weight.
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    // These can differ because votes are rounded.
+    assertApproxEqAbs(
+      _againstVotes + _forVotes + _abstainVotes,
+      _expectedVotingWeight,
+      1
+    );
+
+    if (_vars.supportTypeA == _vars.supportTypeB) {
+      assertEq(_forVotes,     _vars.supportTypeA == uint8(VoteType.For)     ? _expectedVotingWeight : 0);
+      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
+      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
+    } else {
+      uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initGovBalance;
+      uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initGovBalance;
+
+      // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+      if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
+    }
+  }
+
+  struct VotingWeightIsAbandonedVars {
+    address voterA;
+    address voterB;
+    address borrower;
+    uint256 voteWeightA;
+    uint256 voteWeightB;
+    uint256 borrowerAssets;
+    uint8 supportTypeA;
+  }
+
+  function _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
+    VotingWeightIsAbandonedVars memory _vars
+  ) public {
+    // This would be a vm.assume if we could do fuzz tests.
+    assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
+
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_vars.voterA, _vars.voteWeightA);
+    _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
+    uint256 _initGovBalance = govToken.balanceOf(address(aToken));
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Borrow GOV from the pool, decreasing its token balance.
+    deal(weth, _vars.borrower, _vars.borrowerAssets);
+    vm.startPrank(_vars.borrower);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, _vars.borrowerAssets, _vars.borrower, 0);
+    // Borrow GOV against WETH
+    pool.borrow(
+      address(govToken),
+      (_vars.voteWeightA + _vars.voteWeightB) / 5, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      _vars.borrower // onBehalfOf
+    );
+    assertLt(
+      govToken.balanceOf(address(aToken)),
+      _initGovBalance
+    );
+    vm.stopPrank();
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the pool's balance.
+    vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+    uint256 _totalPossibleVotingWeight = govToken.balanceOf(address(aToken));
+
+    uint256 _fullVotingWeight = govToken.balanceOf(address(aToken));
+    assert(_fullVotingWeight < _initGovBalance);
+    uint256 _borrowedGov = govToken.balanceOf(address(_vars.borrower));
+    assertEq(
+      _fullVotingWeight,
+      _vars.voteWeightA + _vars.voteWeightB - _borrowedGov,
+      "voting weight doesn't match calculated value"
+    );
+
+    // Only user A expresses a vote.
+    vm.prank(_vars.voterA);
+    aToken.expressVote(_proposalId, _vars.supportTypeA);
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // the actual weight is different from the deposit weight.
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    uint256 _expectedVotingWeightA = (_vars.voteWeightA * _fullVotingWeight) / _initGovBalance;
+    uint256 _expectedVotingWeightB = (_vars.voteWeightB * _fullVotingWeight) / _initGovBalance;
+
+    // The pool *could* have voted with this much weight.
+    assertApproxEqAbs(
+      _totalPossibleVotingWeight,
+      _expectedVotingWeightA + _expectedVotingWeightB,
+      1
+    );
+
+    // Actually, though, the pool did not vote with all of the weight it could have.
+    // VoterB's votes were never cast because he/she did not express his/her preference.
+    assertApproxEqAbs(
+      _againstVotes + _forVotes + _abstainVotes, // The total actual weight.
+      _expectedVotingWeightA, // VoterB's weight has been abandoned, only A's is counted.
+      1
+    );
+
+    // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+    if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+  }
+
+  function _testVotingWeightIsUnaffectedByDepositsAfterProposal(
+    address _voterA,
+    address _voterB,
+    uint256 _voteWeightA,
+    uint256 _voteWeightB,
+    uint8 _supportTypeA
+  ) public {
+    // This would be a vm.assume if we could do fuzz tests.
+    assertLt(_voteWeightA + _voteWeightB, type(uint128).max);
+
+    // Mint and deposit for just userA.
+    _mintGovAndSupplyToAave(_voterA, _voteWeightA);
+    uint256 _initGovBalance = govToken.balanceOf(address(aToken));
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the pool's balance.
+    vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+
+    // Now mint and deposit for userB.
+    _mintGovAndSupplyToAave(_voterB, _voteWeightB);
+
+    uint256 _fullVotingWeight = govToken.balanceOf(address(aToken));
+    assert(_fullVotingWeight > _initGovBalance);
+    assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB);
+
+    // Only user A expresses a vote.
+    vm.prank(_voterA);
+    aToken.expressVote(_proposalId, _supportTypeA);
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _voteWeightA);
+    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeightA);
+    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
   }
 
   // TODO user cannot express vote after votes have been cast
