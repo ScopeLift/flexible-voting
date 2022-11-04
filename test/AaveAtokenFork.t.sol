@@ -18,7 +18,7 @@ import {GovToken} from "./GovToken.sol";
 
 import {Pool} from "aave-v3-core/contracts/protocol/pool/Pool.sol";
 import "forge-std/console2.sol";
-// forgefmt: disable-stop
+// forgefmt: disable-end
 
 contract AaveAtokenForkTest is Test {
   uint256 forkId;

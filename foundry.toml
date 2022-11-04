@@ -1,7 +1,8 @@
 [profile.default]
   optimizer = true
   optimizer_runs = 10_000_000
-  solc_version = "0.8.16"
+  # We are stuck with this version because Aave v3 contracts use it.
+  # solc_version = ">=0.8.10"
   verbosity = 3
 
 [profile.ci]

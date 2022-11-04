@@ -178,4 +178,4 @@ abstract contract GovernorCountingFractional is Governor {
         }
     }
 }
-// forgefmt: disable-stop
+// forgefmt: disable-end
