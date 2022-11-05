@@ -3,7 +3,9 @@ pragma solidity >=0.8.10;
 
 import { AToken } from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
 import { Errors } from 'aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol';
+import { GPv2SafeERC20 } from 'aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol';
 import { IAToken } from 'aave-v3-core/contracts/interfaces/IAToken.sol';
+import { IERC20 } from 'aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol';
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { WadRayMath } from 'aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol';
 import { SafeCast } from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
@@ -31,6 +33,7 @@ interface IVotingToken {
 contract ATokenNaive is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
+  using GPv2SafeERC20 for IERC20;
 
   /// @notice The voting options corresponding to those used in the Governor.
   enum VoteType {
@@ -189,6 +192,32 @@ contract ATokenNaive is AToken {
       return;
     }
     __mintScaled(address(POOL), _treasury, amount, index);
+  }
+
+  /// Note: this has been modified from Aave v3's AToken to update deposit
+  /// balance accordingly. We cannot just call `super` here because the function
+  /// is external.
+  ///
+  /// @inheritdoc IAToken
+  function burn(
+    address from,
+    address receiverOfUnderlying,
+    uint256 amount,
+    uint256 index
+  ) external virtual override onlyPool {
+    // Begin modifications.
+    // We decrement by `amount` instead of any computed/rebased amounts because
+    // `amount` is what actually gets transferred of the underlying asset. We
+    // need our checkpoints to still match up with the underlying asset balance.
+    deposits[from] -= amount;
+    _writeCheckpoint(_checkpoints[from], _subtractionFn, amount);
+    _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, amount);
+    // End modifications.
+
+    _burnScaled(from, receiverOfUnderlying, amount, index);
+    if (receiverOfUnderlying != address(this)) {
+      IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
+    }
   }
 
   /// Note: this has been modified from Aave v3's ScaledBalanceTokenBase
