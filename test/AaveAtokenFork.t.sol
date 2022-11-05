@@ -624,6 +624,78 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.Abstain) // supportTypeA
     );
   }
+  function test_AgainstVotingWeightDoesNotGoDownWhenUsersBorrow() public {
+    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+      address(0xC0D),
+      4.242 ether,            // GOV deposit amount
+      1 ether,                // DAI borrow amount
+      uint8(VoteType.Against) // supportType
+    );
+  }
+  function test_ForVotingWeightDoesNotGoDownWhenUsersBorrow() public {
+    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+      address(0xD0C),
+      424.2 ether,            // GOV deposit amount
+      4 ether,                // DAI borrow amount
+      uint8(VoteType.For)     // supportType
+    );
+  }
+  function test_AbstainVotingWeightDoesNotGoDownWhenUsersBorrow() public {
+    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+      address(0xCAD),
+      0.4242 ether,           // GOV deposit amount
+      0.0424 ether,           // DAI borrow amount
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+  function testAgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xC0D3),
+      42 ether,               // supplyAmount
+      type(uint256).max,      // withdrawAmount
+      uint8(VoteType.Against) // supportType
+    );
+  }
+  function testForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xD0C3),
+      42 ether,               // supplyAmount
+      type(uint256).max,      // withdrawAmount
+      uint8(VoteType.For)     // supportType
+    );
+  }
+  function testAbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xCAD3),
+      42 ether,               // supplyAmount
+      type(uint256).max,      // withdrawAmount
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+  function testAgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xC0D4),
+      42 ether,               // supplyAmount
+      2 ether,                // withdrawAmount
+      uint8(VoteType.Against) // supportType
+    );
+  }
+  function testForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xD0C4),
+      42 ether,               // supplyAmount
+      3 ether,                // withdrawAmount
+      uint8(VoteType.For)     // supportType
+    );
+  }
+  function testAbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xCAD4),
+      42 ether,               // supplyAmount
+      10 ether,               // withdrawAmount
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
 
   function _testUserCanCastVotes(
     address _who,
@@ -1180,6 +1252,114 @@ contract VoteTest is AaveAtokenForkTest {
     if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
   }
 
-  // TODO user cannot express vote after votes have been cast
+  function _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+    address _who,
+    uint256 _voteWeight,
+    uint256 _borrowAmount,
+    uint8 _supportType
+  ) private {
+    // Mint and deposit.
+    _mintGovAndSupplyToAave(_who, _voteWeight);
+
+    // Borrow DAI against GOV position.
+    vm.prank(_who);
+    pool.borrow(
+      dai,
+      _borrowAmount,
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      _who // onBehalfOf
+    );
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express voting preference.
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    // Actual voting weight should match the initial deposit.
+    if (_supportType == uint8(VoteType.For)) assertEq(_forVotes, _voteWeight);
+    if (_supportType == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeight);
+    if (_supportType == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeight);
+  }
+
+  function _testVotingWeightGoesDownWhenUsersWithdraw(
+    address _who,
+    uint256 _supplyAmount,
+    uint256 _withdrawAmount,
+    uint8 _supportType
+  ) private {
+    // Mint and deposit.
+    _mintGovAndSupplyToAave(_who, _supplyAmount);
+
+    // Immediately withdraw.
+    vm.prank(_who);
+    pool.withdraw(address(govToken), _withdrawAmount, _who);
+    if (_withdrawAmount == type(uint256).max) {
+      assertEq(aToken.balanceOf(_who), 0);
+    } else {
+      assertEq(aToken.balanceOf(_who), _supplyAmount - _withdrawAmount);
+
+      _mintGovAndSupplyToAave(address(this), _withdrawAmount);
+    }
+
+    // TODO what if someone came in and immediately supplied the amount
+    // withdrawn but didn't express a vote
+
+    // Advance one block so that our votes will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express a voting preference.
+    if (_withdrawAmount == type(uint256).max) vm.expectRevert(bytes("no weight"));
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+    if (_withdrawAmount == type(uint256).max) return; // Nothing left to test.
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    uint256 _expectedVoteWeight = _supplyAmount - _withdrawAmount;
+    if (_supportType == uint8(VoteType.For)) assertEq(_forVotes, _expectedVoteWeight);
+    if (_supportType == uint8(VoteType.Against)) assertEq(_againstVotes, _expectedVoteWeight);
+    if (_supportType == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _expectedVoteWeight);
+  }
+
+  function _testVotingWeightWorksWithRebasing(
+  ) private {
   // TODO voting after token balance has rebased
+    // one voter supplies gov
+    // a year passes, his aTokens should now be worth more gov
+    // second voter suppies the same amount of gov
+    // first user should have more voting weight than second user
+  }
+
+  // TODO user cannot express vote after votes have been cast
 }
