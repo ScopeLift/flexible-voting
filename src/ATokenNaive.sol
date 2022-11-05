@@ -180,16 +180,16 @@ contract ATokenNaive is AToken {
     return __mintScaled(caller, onBehalfOf, amount, index);
   }
 
-  // TODO Uncomment when we figure out the simplest way to override this
-  // non-virtual function.
-  //
-  // /// @inheritdoc IAToken
-  // function mintToTreasury(uint256 amount, uint256 index) external override onlyPool {
-  //   if (amount == 0) {
-  //     return;
-  //   }
-  //   _mintScaled(address(POOL), _treasury, amount, index);
-  // }
+  /// Note: this has been modified from Aave v3's AToken to call our custom
+  /// mintScaled function.
+  ///
+  /// @inheritdoc IAToken
+  function mintToTreasury(uint256 amount, uint256 index) external override onlyPool {
+    if (amount == 0) {
+      return;
+    }
+    __mintScaled(address(POOL), _treasury, amount, index);
+  }
 
   /// Note: this has been modified from Aave v3's ScaledBalanceTokenBase
   /// contract to include balance checkpointing code.
