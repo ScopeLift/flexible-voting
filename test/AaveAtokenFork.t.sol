@@ -629,7 +629,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
     assertEq(aToken.balanceOf(_who), _voteWeight, "aToken balance wrong");
@@ -689,7 +689,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Mint gov but do not deposit
     govToken.exposed_mint(_who, _voteWeight);
     vm.prank(_who);
@@ -714,7 +714,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
@@ -740,7 +740,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
@@ -764,7 +764,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
@@ -793,7 +793,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Create the proposal *before* the user deposits anything.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -812,7 +812,7 @@ contract VoteTest is AaveAtokenForkTest {
     uint256 _voteWeightA,
     uint256 _voteWeightB,
     uint8 _supportType
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeightA);
 
@@ -854,7 +854,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _userB,
     uint256 _voteWeightA,
     uint256 _voteWeightB
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_userA, _voteWeightA);
     _mintGovAndSupplyToAave(_userB, _voteWeightB);
@@ -903,7 +903,7 @@ contract VoteTest is AaveAtokenForkTest {
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
-  ) public {
+  ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
@@ -938,7 +938,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function _testVoteWeightIsScaledBasedOnPoolBalance(
     VoteWeightIsScaledVars memory _vars
-  ) public {
+  ) private {
     // This would be a vm.assume if we could do fuzz tests.
     assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
 
@@ -1037,7 +1037,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
     VotingWeightIsAbandonedVars memory _vars
-  ) public {
+  ) private {
     // This would be a vm.assume if we could do fuzz tests.
     assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
 
@@ -1135,7 +1135,7 @@ contract VoteTest is AaveAtokenForkTest {
     uint256 _voteWeightA,
     uint256 _voteWeightB,
     uint8 _supportTypeA
-  ) public {
+  ) private {
     // This would be a vm.assume if we could do fuzz tests.
     assertLt(_voteWeightA + _voteWeightB, type(uint128).max);
 
