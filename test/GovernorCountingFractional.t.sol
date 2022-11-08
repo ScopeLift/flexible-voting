@@ -431,7 +431,7 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     voter.addr = _randomAddress(_weight);
     // The weight cannot overflow the max supply for the token, but must overflow the
     // max for the GovernorFractional contract.
-    voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.exposed_maxSupply());
+    voter.weight = bound(_weight, MAX_VOTE_WEIGHT + 1, token.exposed_maxSupply());
     voter.support = _randomSupportType(_weight);
 
     _mintAndDelegateToVoter(voter);
