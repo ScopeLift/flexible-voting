@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
+import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
 import "./GovToken.sol";
 import "./FractionalGovernor.sol";
 import "./ProposalReceiverMock.sol";
 
-contract FractionalPoolTest is DSTestPlus {
+contract FractionalPoolTest is Test {
   enum ProposalState {
     Pending,
     Active,
@@ -25,8 +25,6 @@ contract FractionalPoolTest is DSTestPlus {
     For,
     Abstain
   }
-
-  Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
   FractionalPool pool;
   GovToken token;
@@ -94,12 +92,6 @@ contract FractionalPoolTest is DSTestPlus {
     vm.assume(_supportType <= uint8(VoteType.Abstain)); // couldn't get fuzzer to work w/ the enum
     // This max is a limitation of the fractional governance protocol storage.
     return bound(_voteWeight, 1, type(uint128).max);
-  }
-
-  function _assertWithinRange(uint256 amount, uint256 target, uint256 range) public {
-    if (amount > target) assert(amount - target <= range);
-    if (amount < target) assert(target - amount <= range);
-    if (amount == target) assertEq(amount, target);
   }
 }
 
@@ -448,40 +440,49 @@ contract Vote is FractionalPoolTest {
     pool.castVote(_proposalId);
   }
 
-  function testFuzz_VoteWeightIsScaledBasedOnPoolBalance(
-    uint256 _voteWeightA,
-    uint8 _supportTypeA,
-    uint256 _voteWeightB,
-    uint8 _supportTypeB,
-    uint256 _borrowAmountC,
-    uint256 _borrowAmountD
-  ) public {
-    // We need to do this to prevent:
-    // "CompilerError: Stack too deep, try removing local variables."
-    address[4] memory _userArray = [
-      address(0xbeef), // userA
-      address(0xbabe), // userB
-      address(0xf005ba11), // userC
-      address(0xba5eba11) // userD
-    ];
-    _voteWeightA = _commonFuzzerAssumptions(_userArray[0], _voteWeightA, _supportTypeA);
-    _voteWeightB = _commonFuzzerAssumptions(_userArray[1], _voteWeightB, _supportTypeB);
-    _borrowAmountC = _commonFuzzerAssumptions(_userArray[2], _borrowAmountC);
-    _borrowAmountD = _commonFuzzerAssumptions(_userArray[3], _borrowAmountD);
+  struct VoteWeightIsScaledTestVars {
+    address userA;
+    address userB;
+    address userC;
+    address userD;
+    uint256 voteWeightA;
+    uint8 supportTypeA;
+    uint256 voteWeightB;
+    uint8 supportTypeB;
+    uint256 borrowAmountC;
+    uint256 borrowAmountD;
+  }
 
-    _voteWeightA = bound(_voteWeightA, 0, type(uint128).max);
-    _voteWeightB = bound(_voteWeightB, 0, type(uint128).max);
-    vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
-    vm.assume(_voteWeightA + _voteWeightB > _borrowAmountC + _borrowAmountD);
+  function testFuzz_VoteWeightIsScaledBasedOnPoolBalance(
+    VoteWeightIsScaledTestVars memory _vars
+  ) public {
+    _vars.userA = address(0xbeef);
+    _vars.userB = address(0xbabe);
+    _vars.userC = address(0xf005ba11);
+    _vars.userD = address(0xba5eba11);
+
+    _vars.supportTypeA = uint8(bound(_vars.supportTypeA, 0, uint8(VoteType.Abstain)));
+    _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, uint8(VoteType.Abstain)));
+
+    _vars.voteWeightA = bound(_vars.voteWeightA, 1e4, type(uint128).max - 1e4);
+    _vars.voteWeightB = bound(_vars.voteWeightB, 1e4, type(uint128).max - _vars.voteWeightA - 1);
+
+    uint256 _maxBorrowWeight = _vars.voteWeightA + _vars.voteWeightB - 1;
+    _vars.borrowAmountC = bound(_vars.borrowAmountC, 1, _maxBorrowWeight);
+    _vars.borrowAmountD = bound(_vars.borrowAmountD, 1, _maxBorrowWeight - _vars.borrowAmountC);
+
+    // These are here just as a sanity check that all of the bounding above worked.
+    vm.assume(_vars.voteWeightA + _vars.voteWeightB < type(uint128).max);
+    vm.assume(_vars.voteWeightA + _vars.voteWeightB > _vars.borrowAmountC + _vars.borrowAmountD);
 
     // Mint and deposit.
-    _mintGovAndDepositIntoPool(_userArray[0], _voteWeightA);
-    _mintGovAndDepositIntoPool(_userArray[1], _voteWeightB);
+    _mintGovAndDepositIntoPool(_vars.userA, _vars.voteWeightA);
+    _mintGovAndDepositIntoPool(_vars.userB, _vars.voteWeightB);
     uint256 _initDepositWeight = token.balanceOf(address(pool));
 
     // Borrow from the pool, decreasing its token balance.
-    vm.prank(_userArray[2]);
-    pool.borrow(_borrowAmountC);
+    vm.prank(_vars.userC);
+    pool.borrow(_vars.borrowAmountC);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -492,15 +493,15 @@ contract Vote is FractionalPoolTest {
     assert(_expectedVotingWeight < _initDepositWeight);
 
     // A+B express votes
-    vm.prank(_userArray[0]);
-    pool.expressVote(_proposalId, _supportTypeA);
-    vm.prank(_userArray[1]);
-    pool.expressVote(_proposalId, _supportTypeB);
+    vm.prank(_vars.userA);
+    pool.expressVote(_proposalId, _vars.supportTypeA);
+    vm.prank(_vars.userB);
+    pool.expressVote(_proposalId, _vars.supportTypeB);
 
     // Borrow more from the pool, just to confirm that the vote weight will be based
     // on the snapshot blocktime/number.
-    vm.prank(_userArray[3]);
-    pool.borrow(_borrowAmountD);
+    vm.prank(_vars.userD);
+    pool.borrow(_vars.borrowAmountD);
 
     // Wait until after the pool's voting period closes.
     vm.roll(pool.internalVotingPeriodEnd(_proposalId) + 1);
@@ -514,34 +515,34 @@ contract Vote is FractionalPoolTest {
       governor.proposalVotes(_proposalId);
 
     // These can differ because votes are rounded.
-    _assertWithinRange(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
+    assertApproxEqAbs(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
 
-    if (_supportTypeA == _supportTypeB) {
-      assertEq(_forVotes, _supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
-      assertEq(_againstVotes, _supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
-      assertEq(_abstainVotes, _supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
+    if (_vars.supportTypeA == _vars.supportTypeB) {
+      assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
+      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
+      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
     } else {
-      uint256 _expectedVotingWeightA = (_voteWeightA * _expectedVotingWeight) / _initDepositWeight;
-      uint256 _expectedVotingWeightB = (_voteWeightB * _expectedVotingWeight) / _initDepositWeight;
+      uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initDepositWeight;
+      uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initDepositWeight;
 
       // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-      if (_supportTypeA == uint8(VoteType.For)) {
-        _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeA == uint8(VoteType.For)) {
+        assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
       }
-      if (_supportTypeB == uint8(VoteType.For)) {
-        _assertWithinRange(_forVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeB == uint8(VoteType.For)) {
+        assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
       }
-      if (_supportTypeA == uint8(VoteType.Against)) {
-        _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Against)) {
+        assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
       }
-      if (_supportTypeB == uint8(VoteType.Against)) {
-        _assertWithinRange(_againstVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Against)) {
+        assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
       }
-      if (_supportTypeA == uint8(VoteType.Abstain)) {
-        _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
+        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
       }
-      if (_supportTypeB == uint8(VoteType.Abstain)) {
-        _assertWithinRange(_abstainVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Abstain)) {
+        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
       }
     }
   }
@@ -564,7 +565,7 @@ contract Vote is FractionalPoolTest {
     _borrowAmount = _commonFuzzerAssumptions(_userArray[2], _borrowAmount);
 
     _voteWeightA = bound(_voteWeightA, 0, type(uint128).max);
-    _voteWeightB = bound(_voteWeightB, 0, type(uint128).max);
+    _voteWeightB = bound(_voteWeightB, 0, type(uint128).max - _voteWeightA);
     vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
     vm.assume(_voteWeightA + _voteWeightB > _borrowAmount);
 
@@ -607,13 +608,13 @@ contract Vote is FractionalPoolTest {
     uint256 _expectedVotingWeightB = (_voteWeightB * _fullVotingWeight) / _initDepositWeight;
 
     // The pool *could* have voted with this much weight.
-    _assertWithinRange(
+    assertApproxEqAbs(
       _totalPossibleVotingWeight, _expectedVotingWeightA + _expectedVotingWeightB, 1
     );
 
     // Actually, though, the pool did not vote with all of the weight it could have.
     // VoterB's votes were never cast because he/she did not express his/her preference.
-    _assertWithinRange(
+    assertApproxEqAbs(
       _againstVotes + _forVotes + _abstainVotes, // The total actual weight.
       _expectedVotingWeightA, // VoterB's weight has been abandoned, only A's is counted.
       1
@@ -621,13 +622,13 @@ contract Vote is FractionalPoolTest {
 
     // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
     if (_supportTypeA == uint8(VoteType.For)) {
-      _assertWithinRange(_forVotes, _expectedVotingWeightA, 1);
+      assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
     }
     if (_supportTypeA == uint8(VoteType.Against)) {
-      _assertWithinRange(_againstVotes, _expectedVotingWeightA, 1);
+      assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
     }
     if (_supportTypeA == uint8(VoteType.Abstain)) {
-      _assertWithinRange(_abstainVotes, _expectedVotingWeightA, 1);
+      assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
     }
   }
 
