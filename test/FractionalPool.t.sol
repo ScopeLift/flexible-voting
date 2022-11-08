@@ -464,16 +464,16 @@ contract Vote is FractionalPoolTest {
     _vars.supportTypeA = uint8(bound(_vars.supportTypeA, 0, uint8(VoteType.Abstain)));
     _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, uint8(VoteType.Abstain)));
 
-    _vars.voteWeightA = bound(_vars.voteWeightA, 1e4, type(uint128).max - 1e4);
+    _vars.voteWeightA = bound(_vars.voteWeightA, 1e4, type(uint128).max - 1e4 - 1);
     _vars.voteWeightB = bound(_vars.voteWeightB, 1e4, type(uint128).max - _vars.voteWeightA - 1);
 
-    uint256 _maxBorrowWeight = _vars.voteWeightA + _vars.voteWeightB - 1;
-    _vars.borrowAmountC = bound(_vars.borrowAmountC, 1, _maxBorrowWeight);
+    uint256 _maxBorrowWeight = _vars.voteWeightA + _vars.voteWeightB;
+    _vars.borrowAmountC = bound(_vars.borrowAmountC, 1, _maxBorrowWeight - 1);
     _vars.borrowAmountD = bound(_vars.borrowAmountD, 1, _maxBorrowWeight - _vars.borrowAmountC);
 
     // These are here just as a sanity check that all of the bounding above worked.
     vm.assume(_vars.voteWeightA + _vars.voteWeightB < type(uint128).max);
-    vm.assume(_vars.voteWeightA + _vars.voteWeightB > _vars.borrowAmountC + _vars.borrowAmountD);
+    vm.assume(_vars.voteWeightA + _vars.voteWeightB >= _vars.borrowAmountC + _vars.borrowAmountD);
 
     // Mint and deposit.
     _mintGovAndDepositIntoPool(_vars.userA, _vars.voteWeightA);
