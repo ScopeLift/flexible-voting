@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.10;
 
-import {DSTestPlus} from "solmate/test/utils/DSTestPlus.sol";
+import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
 import "openzeppelin-contracts/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
@@ -11,7 +11,7 @@ import "./GovToken.sol";
 import "./FractionalGovernor.sol";
 import "./ProposalReceiverMock.sol";
 
-contract GovernorCountingFractionalTest is DSTestPlus {
+contract GovernorCountingFractionalTest is Test {
   using FixedPointMathLib for uint256;
 
   event MockFunctionCalled();
@@ -38,8 +38,6 @@ contract GovernorCountingFractionalTest is DSTestPlus {
     uint256 endBlock,
     string description
   );
-
-  Vm vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
   // We use a min of 1e4 to avoid flooring votes to 0.
   uint256 constant MIN_VOTE_WEIGHT = 1e4;
