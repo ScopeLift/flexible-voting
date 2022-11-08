@@ -48,7 +48,8 @@ contract AaveAtokenForkTest is Test {
     // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
 
     // Address from: pool.ADDRESSES_PROVIDER().getPoolConfigurator();
-    PoolConfigurator _poolConfigurator = PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
+    PoolConfigurator _poolConfigurator =
+      PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
     AToken _aTokenImplementation = new AToken(pool);
