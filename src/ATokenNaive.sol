@@ -206,6 +206,7 @@ contract ATokenNaive is AToken {
     uint256 index
   ) external virtual override onlyPool {
     // Begin modifications.
+    //
     // We decrement by `amount` instead of any computed/rebased amounts because
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with the underlying asset balance.
@@ -249,9 +250,12 @@ contract ATokenNaive is AToken {
     _mint(onBehalfOf, amountScaled.toUint128());
 
     // Begin modifications.
-    deposits[onBehalfOf] += amountScaled;
-    _writeCheckpoint(_checkpoints[onBehalfOf], _additionFn, amountScaled);
-    _writeCheckpoint(_totalDepositCheckpoints, _additionFn, amountScaled);
+    // We increment by `amount` instead of any computed/rebased amounts because
+    // `amount` is what actually gets transferred of the underlying asset. We
+    // need our checkpoints to still match up with the underlying asset balance.
+    deposits[onBehalfOf] += amount;
+    _writeCheckpoint(_checkpoints[onBehalfOf], _additionFn, amount);
+    _writeCheckpoint(_totalDepositCheckpoints, _additionFn, amount);
     // End modifications.
 
     uint256 amountToMint = amount + balanceIncrease;

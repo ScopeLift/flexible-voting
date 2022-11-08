@@ -1316,11 +1316,10 @@ contract VoteTest is AaveAtokenForkTest {
     } else {
       assertEq(aToken.balanceOf(_who), _supplyAmount - _withdrawAmount);
 
+      // Have someone else immediately supply the withdrawn amount to make sure
+      // our accounting is handling the change in internal deposit balances.
       _mintGovAndSupplyToAave(address(this), _withdrawAmount);
     }
-
-    // TODO what if someone came in and immediately supplied the amount
-    // withdrawn but didn't express a vote
 
     // Advance one block so that our votes will be checkpointed by the govToken.
     vm.roll(block.number + 1);
@@ -1362,4 +1361,5 @@ contract VoteTest is AaveAtokenForkTest {
   }
 
   // TODO user cannot express vote after votes have been cast
+  // TODO do we try to handle voting onbehalf of someone else?
 }
