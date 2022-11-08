@@ -453,9 +453,9 @@ contract Vote is FractionalPoolTest {
     uint256 borrowAmountD;
   }
 
-  function testFuzz_VoteWeightIsScaledBasedOnPoolBalance(
-    VoteWeightIsScaledTestVars memory _vars
-  ) public {
+  function testFuzz_VoteWeightIsScaledBasedOnPoolBalance(VoteWeightIsScaledTestVars memory _vars)
+    public
+  {
     _vars.userA = address(0xbeef);
     _vars.userB = address(0xbabe);
     _vars.userC = address(0xf005ba11);
@@ -519,11 +519,17 @@ contract Vote is FractionalPoolTest {
 
     if (_vars.supportTypeA == _vars.supportTypeB) {
       assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
-      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
-      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
+      assertEq(
+        _againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0
+      );
+      assertEq(
+        _abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0
+      );
     } else {
-      uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initDepositWeight;
-      uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initDepositWeight;
+      uint256 _expectedVotingWeightA =
+        (_vars.voteWeightA * _expectedVotingWeight) / _initDepositWeight;
+      uint256 _expectedVotingWeightB =
+        (_vars.voteWeightB * _expectedVotingWeight) / _initDepositWeight;
 
       // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
       if (_vars.supportTypeA == uint8(VoteType.For)) {
