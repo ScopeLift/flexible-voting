@@ -468,6 +468,9 @@ contract Vote is FractionalPoolTest {
     _voteWeightB = _commonFuzzerAssumptions(_userArray[1], _voteWeightB, _supportTypeB);
     _borrowAmountC = _commonFuzzerAssumptions(_userArray[2], _borrowAmountC);
     _borrowAmountD = _commonFuzzerAssumptions(_userArray[3], _borrowAmountD);
+
+    _voteWeightA = bound(_voteWeightA, 0, type(uint128).max);
+    _voteWeightB = bound(_voteWeightB, 0, type(uint128).max);
     vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
     vm.assume(_voteWeightA + _voteWeightB > _borrowAmountC + _borrowAmountD);
 
@@ -560,6 +563,8 @@ contract Vote is FractionalPoolTest {
     _voteWeightB = _commonFuzzerAssumptions(_userArray[1], _voteWeightB);
     _borrowAmount = _commonFuzzerAssumptions(_userArray[2], _borrowAmount);
 
+    _voteWeightA = bound(_voteWeightA, 0, type(uint128).max);
+    _voteWeightB = bound(_voteWeightB, 0, type(uint128).max);
     vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
     vm.assume(_voteWeightA + _voteWeightB > _borrowAmount);
 
