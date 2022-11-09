@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - master
+
+env:
+  FOUNDRY_PROFILE: ci
+  OPTIMISM_RPC_URL: ${{ secrets.OPTIMISM_RPC_URL }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Build contracts
+        run: |
+          forge --version
+          forge build --sizes
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Run tests
+        run: forge test
+
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - name: Install scopelint
+        uses: engineerd/configurator@v0.0.8
+        with:
+          name: scopelint
+          repo: ScopeLift/scopelint
+          fromGitHubReleases: true
+          version: latest
+          pathInArchive: scopelint-x86_64-linux/scopelint
+          urlTemplate: https://github.com/ScopeLift/scopelint/releases/download/{{version}}/scopelint-x86_64-linux.tar.xz
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check formatting
+        run: |
+          scopelint --version
+          scopelint check
+
+  # TODO figure out why this is failing and uncomment
+  # slither-analyze:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #
+  #     - name: Run Slither
+  #       uses: crytic/slither-action@v0.2.0
+  #       id: slither # Required to reference this step in the next step.
+  #       with:
+  #         fail-on: none # Required to avoid failing the CI run regardless of findings.
+  #         sarif: results.sarif
+  #         slither-args: --filter-paths "./lib|./test" --exclude naming-convention
+  #
+  #     - name: Upload SARIF file
+  #       uses: github/codeql-action/upload-sarif@v2
+  #       with:
+  #         sarif_file: ${{ steps.slither.outputs.sarif }}

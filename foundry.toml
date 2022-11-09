@@ -1,9 +1,34 @@
 [profile.default]
-src = 'src'
-out = 'out'
-libs = ['lib']
+  # We don't specify a solc version because Aave contracts are pinned to 0.8.10,
+  # but we use more recent solc versions for other contracts, so we let forge
+  # auto-detect solc versions.
+  optimizer = true
+  optimizer_runs = 10_000_000
+  verbosity = 3
+
+[profile.ci]
+  fuzz = { runs = 5000 }
+  invariant = { runs = 1000 }
+
+[profile.lite]
+  fuzz = { runs = 50 }
+  invariant = { runs = 10 }
+  # Speed up compilation and tests during development.
+  optimizer = false
 
 [rpc_endpoints]
-optimism = "${OPTIMISM_RPC_URL}"
+  optimism = "${OPTIMISM_RPC_URL}"
 
-# See more config options https://github.com/foundry-rs/foundry/tree/master/config
+[fmt]
+  bracket_spacing = false
+  int_types = "long"
+  line_length = 100
+  multiline_func_header = "attributes_first"
+  number_underscore = "thousands"
+  quote_style = "double"
+  single_line_statement_blocks = "single"
+  tab_width = 2
+  wrap_comments = true
+
+  # Copied from https://github.com/ScopeLift/foundry-template/blob/main/foundry.toml
+  # See more config options https://github.com/foundry-rs/foundry/tree/master/config
