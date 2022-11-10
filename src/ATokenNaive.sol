@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.10;
 
-import { AToken } from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
-import { Errors } from 'aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol';
-import { GPv2SafeERC20 } from 'aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol';
-import { IAToken } from 'aave-v3-core/contracts/interfaces/IAToken.sol';
-import { IERC20 } from 'aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol';
-import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
-import { WadRayMath } from 'aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol';
-import { SafeCast } from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
-import { Math } from "openzeppelin-contracts/contracts/utils/math/Math.sol";
+import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
+import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
+import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
+import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
+import {IERC20} from "aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
+import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
+import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
+import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 interface IFractionalGovernor {
   function token() external returns (address);
@@ -52,13 +52,13 @@ contract ATokenNaive is AToken {
   /// @notice Must call castVote within this many blocks of the proposal
   /// deadline, so-as to allow ample time for all depositors to express their
   /// vote preferences. Corresponds to roughly 4 hours, assuming 12s/block.
-  uint32 constant public CAST_VOTE_WINDOW = 1_200;
+  uint32 public constant CAST_VOTE_WINDOW = 1200;
 
   /// @notice Map depositor to deposit amount.
-  mapping (address => uint256) public deposits;
+  mapping(address => uint256) public deposits;
 
   /// @notice Map borrower to total amount borrowed.
-  mapping (address => uint256) public borrowTotal;
+  mapping(address => uint256) public borrowTotal;
 
   /// @notice Map proposalId to an address to whether they have voted on this proposal.
   mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
@@ -67,7 +67,7 @@ contract ATokenNaive is AToken {
   mapping(uint256 => ProposalVote) public proposalVotes;
 
   /// @notice The governor contract associated with this governance token.
-  IFractionalGovernor immutable public governor;
+  IFractionalGovernor public immutable governor;
 
   /// @dev Constructor.
   /// @param _pool The address of the Pool contract
@@ -87,9 +87,11 @@ contract ATokenNaive is AToken {
   /// depositors must express their voting preferences to this Pool contract. It
   /// will always be before the Governor's corresponding proposal deadline.
   /// @param proposalId The ID of the proposal in question.
-  function internalVotingPeriodEnd(
-    uint256 proposalId
-  ) public view returns(uint256 _lastVotingBlock) {
+  function internalVotingPeriodEnd(uint256 proposalId)
+    public
+    view
+    returns (uint256 _lastVotingBlock)
+  {
     _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
   }
 
@@ -138,9 +140,9 @@ contract ATokenNaive is AToken {
     uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
-    uint256 _votingWeightAtSnapshot = IVotingToken(
-      address(_underlyingAsset)
-    ).getPastVotes(address(this), _proposalSnapshotBlockNumber);
+    uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
+      address(this), _proposalSnapshotBlockNumber
+    );
 
     //      forVotesRaw          forVotesScaled
     // --------------------- = ---------------------
@@ -157,19 +159,17 @@ contract ATokenNaive is AToken {
       (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
     );
 
-    bytes memory fractionalizedVotes = abi.encodePacked(
-      _forVotesToCast,
-      _againstVotesToCast,
-      _abstainVotesToCast
-    );
+    bytes memory fractionalizedVotes =
+      abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
     governor.castVoteWithReasonAndParams(
-      proposalId,
-      unusedSupportParam,
-      'crowd-sourced vote',
-      fractionalizedVotes
+      proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
     );
   }
 
+  // forgefmt: disable-start
+  //===========================================================================
+  // BEGIN: Aave overrides
+  //===========================================================================
   /// Note: this has been modified from Aave v3's AToken to call our custom
   /// mintScaled function.
   ///
@@ -264,6 +264,9 @@ contract ATokenNaive is AToken {
 
     return (scaledBalance == 0);
   }
+  //===========================================================================
+  // END: Aave overrides
+  //===========================================================================
 
   //===========================================================================
   // BEGIN: Checkpointing code.
@@ -350,4 +353,5 @@ contract ATokenNaive is AToken {
   //===========================================================================
   // END: Checkpointing code.
   //===========================================================================
+  // forgefmt: disable-end
 }
