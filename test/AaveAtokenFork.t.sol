@@ -20,7 +20,10 @@ import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
 
-import { Pool } from 'aave-v3-core/contracts/protocol/pool/Pool.sol'; // Used to etch below.
+// Uncomment these lines if you need to etch below.
+// import { Pool } from 'aave-v3-core/contracts/protocol/pool/Pool.sol';
+// import { DefaultReserveInterestRateStrategy } from 'aave-v3-core/contracts/protocol/pool/DefaultReserveInterestRateStrategy.sol';
+// import { IPoolAddressesProvider } from 'aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol';
 // forgefmt: disable-end
 
 contract AaveAtokenForkTest is Test {
@@ -77,6 +80,28 @@ contract AaveAtokenForkTest is Test {
     // so that we can do things like add console.log statements during
     // debugging:
     // vm.etch(address(pool), address(new Pool(pool.ADDRESSES_PROVIDER())).code);
+
+    // Uncomment to etch local code to the DefaultReserveInterestRateStrategy to
+    // understand how/when reserve interest rates are calculated (as these are
+    // used to determine rebasing rates).
+    // vm.etch(
+    //   0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress
+    //   address(
+    //     new DefaultReserveInterestRateStrategy(
+    //       These values were taken from Optimism scan for the etched address.
+    //       IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb), // provider
+    //       800000000000000000000000000, // optimalUsageRatio
+    //       0, // baseVariableBorrowRate
+    //       40000000000000000000000000, // variableRateSlope1,
+    //       750000000000000000000000000, // variableRateSlope2,
+    //       20000000000000000000000000, //stableRateSlope1,
+    //       750000000000000000000000000, // stableRateSlope2,
+    //       20000000000000000000000000, // baseStableRateOffset,
+    //       50000000000000000000000000, // stableRateExcessOffset,
+    //       200000000000000000000000000 // optimalStableToTotalDebtRatio
+    //     )
+    //   ).code
+    // );
 
     // Address from: pool.ADDRESSES_PROVIDER().getPoolConfigurator();
     PoolConfigurator _poolConfigurator =
@@ -653,7 +678,7 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.Abstain) // supportType
     );
   }
-  function testAgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+  function test_AgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
       address(0xC0D3),
       42 ether,               // supplyAmount
@@ -661,7 +686,7 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.Against) // supportType
     );
   }
-  function testForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+  function test_ForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
       address(0xD0C3),
       42 ether,               // supplyAmount
@@ -669,7 +694,7 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.For)     // supportType
     );
   }
-  function testAbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+  function test_AbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
       address(0xCAD3),
       42 ether,               // supplyAmount
@@ -677,7 +702,7 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.Abstain) // supportType
     );
   }
-  function testAgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+  function test_AgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
       address(0xC0D4),
       42 ether,               // supplyAmount
@@ -685,7 +710,7 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.Against) // supportType
     );
   }
-  function testForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+  function test_ForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
       address(0xD0C4),
       42 ether,               // supplyAmount
@@ -693,12 +718,19 @@ contract VoteTest is AaveAtokenForkTest {
       uint8(VoteType.For)     // supportType
     );
   }
-  function testAbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+  function test_AbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
       address(0xCAD4),
       42 ether,               // supplyAmount
       10 ether,               // withdrawAmount
       uint8(VoteType.Abstain) // supportType
+    );
+  }
+  function test_VotingWeightWorksWithRebasing() public {
+    _testVotingWeightWorksWithRebasing(
+      address(0xABE1),
+      address(0xABE2),
+      424242 ether
     );
   }
 
@@ -1357,12 +1389,69 @@ contract VoteTest is AaveAtokenForkTest {
   }
 
   function _testVotingWeightWorksWithRebasing(
+    address _userA,
+    address _userB,
+    uint256 _supplyAmount
   ) private {
-  // TODO voting after token balance has rebased
-    // one voter supplies gov
-    // a year passes, his aTokens should now be worth more gov
-    // second voter suppies the same amount of gov
-    // first user should have more voting weight than second user
+    // Someone supplies GOV to Aave.
+    _mintGovAndSupplyToAave(_userA, _supplyAmount);
+    uint256 _initATokenBalanceA = aToken.balanceOf(_userA);
+
+    // Borrow some Gov for aGOV to start rebasing.
+    deal(weth, address(this), _supplyAmount);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, _supplyAmount, address(this), 0);
+    pool.borrow(
+      address(govToken),
+      _supplyAmount / 10, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+
+    // Let those aGovTokens rebase \o/.
+    vm.roll(block.number + 365 * 24 * 60 * 12); // 12 blocks per min for a year.
+    vm.warp(block.timestamp + 365 days);
+    assertGt(aToken.balanceOf(_userA), _initATokenBalanceA, "aToken did not rebase");
+
+    // Someone else supplies the same amount of GOV to Aave.
+    _mintGovAndSupplyToAave(_userB, _supplyAmount);
+    assertGt(
+      aToken.balanceOf(_userA),
+      aToken.balanceOf(_userB),
+      "userA does not have more aTokens than userB"
+    );
+
+    // Advance one block so that weight will be checkpointed by the govToken.
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express voting preferences.
+    vm.prank(_userA);
+    aToken.expressVote(_proposalId, uint8(VoteType.For));
+    vm.prank(_userB);
+    aToken.expressVote(_proposalId, uint8(VoteType.Against));
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (
+      uint256 _againstVotes,
+      uint256 _forVotes,
+      uint256 _abstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    // userA's vote should have beaten userB's.
+    assertGt(
+      _forVotes,
+      _againstVotes,
+      "userA did not have more voting power than userB"
+    );
   }
 
   // TODO user cannot express vote after votes have been cast
