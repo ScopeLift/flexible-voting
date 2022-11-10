@@ -65,7 +65,8 @@ contract AaveAtokenForkTest is Test {
 
     // Deploy the GOV token.
     govToken = new GovToken();
-    pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD); // pool from https://dune.com/queries/1329814
+    // Pool from https://dune.com/queries/1329814.
+    pool = IPool(0x794a61358D6845594F94dc1DB02A252b5b4814aD);
     vm.label(address(pool), "pool");
 
     // Deploy the governor.
@@ -211,10 +212,7 @@ contract AaveAtokenForkTest is Test {
     address _priceOracle = pool.ADDRESSES_PROVIDER().getPriceOracle();
     vm.mockCall(
       _priceOracle,
-      abi.encodeWithSelector(
-        AaveOracle.getAssetPrice.selector,
-        address(govToken)
-      ),
+      abi.encodeWithSelector(AaveOracle.getAssetPrice.selector, address(govToken)),
       // Aave only seems to use USD-based oracles, so we will do the same.
       abi.encode(1e8) // 1 GOV == $1 USD
     );
@@ -232,11 +230,11 @@ contract AaveAtokenForkTest is Test {
     govToken.exposed_mint(_who, _govAmount);
     vm.startPrank(_who);
     govToken.approve(address(pool), type(uint256).max);
-    pool.supply(address(govToken), _govAmount, _who, 0 /* referral code*/);
+    pool.supply(address(govToken), _govAmount, _who, 0 /* referral code*/ );
     vm.stopPrank();
   }
 
-  function _createAndSubmitProposal() internal returns(uint256 proposalId) {
+  function _createAndSubmitProposal() internal returns (uint256 proposalId) {
     // Proposal will underflow if we're on the zero block.
     if (block.number == 0) vm.roll(42);
 
@@ -251,11 +249,11 @@ contract AaveAtokenForkTest is Test {
 
     // Submit the proposal.
     proposalId = governor.propose(targets, values, calldatas, "A great proposal");
-    assertEq(uint(governor.state(proposalId)), uint(ProposalState.Pending));
+    assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Pending));
 
     // advance proposal to active state
     vm.roll(governor.proposalSnapshot(proposalId) + 1);
-    assertEq(uint(governor.state(proposalId)), uint(ProposalState.Active));
+    assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Active));
   }
 }
 
@@ -273,17 +271,12 @@ contract Setup is AaveAtokenForkTest {
     //     "slot": "61",
     //     "type": "t_address"
     assertEq(
-      address(uint160(uint256(
-        vm.load(address(aToken), bytes32(uint256(61)))
-      ))),
-      address(govToken)
+      address(uint160(uint256(vm.load(address(aToken), bytes32(uint256(61)))))), address(govToken)
     );
 
     // The AToken should be delegating to itself.
     assertEq(
-      govToken.delegates(address(aToken)),
-      address(aToken),
-      "aToken is not delegating to itself"
+      govToken.delegates(address(aToken)), address(aToken), "aToken is not delegating to itself"
     );
   }
 
@@ -303,11 +296,7 @@ contract Setup is AaveAtokenForkTest {
     assertEq(aToken.balanceOf(address(this)), 2 ether);
 
     // We can withdraw our GOV when we want to.
-    pool.withdraw(
-      address(govToken),
-      2 ether,
-      address(this)
-    );
+    pool.withdraw(address(govToken), 2 ether, address(this));
     assertEq(govToken.balanceOf(address(this)), 42 ether);
     assertEq(aToken.balanceOf(address(this)), 0 ether);
   }
@@ -374,10 +363,7 @@ contract Setup is AaveAtokenForkTest {
     address _priceOracle = pool.ADDRESSES_PROVIDER().getPriceOracle();
     vm.mockCall(
       _priceOracle,
-      abi.encodeWithSelector(
-        AaveOracle.getAssetPrice.selector,
-        weth
-      ),
+      abi.encodeWithSelector(AaveOracle.getAssetPrice.selector, weth),
       abi.encode(1) // 1 bip
     );
 
@@ -393,11 +379,7 @@ contract Setup is AaveAtokenForkTest {
     );
     uint256 _bobCurrentAtokenBalance = _awethToken.balanceOf(_bob);
     assertEq(_bobInitAtokenBalance, 0);
-    assertApproxEqRel(
-      _bobCurrentAtokenBalance,
-      _thisATokenBalance,
-      0.01e18
-    );
+    assertApproxEqRel(_bobCurrentAtokenBalance, _thisATokenBalance, 0.01e18);
   }
 }
 
@@ -442,303 +424,324 @@ contract VoteTest is AaveAtokenForkTest {
   function test_UserCanCastAgainstVotes() public {
     _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Against));
   }
+
   function test_UserCanCastForVotes() public {
     _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.For));
   }
+
   function test_UserCanCastAbstainVotes() public {
     _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Abstain));
   }
+
   function test_UserCannotExpressAgainstVotesWithoutWeight() public {
     _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Against));
   }
+
   function test_UserCannotExpressForVotesWithoutWeight() public {
     _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.For));
   }
+
   function test_UserCannotExpressAbstainVotesWithoutWeight() public {
     _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Abstain));
   }
+
   function test_UserCannotCastAfterVotingPeriodAgainst() public {
     _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Against));
   }
+
   function test_UserCannotCastAfterVotingPeriodFor() public {
     _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.For));
   }
+
   function test_UserCannotCastAfterVotingPeriodAbstain() public {
     _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Abstain));
   }
+
   function test_UserCannotDoubleVoteAfterVotingAgainst() public {
     _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Against));
   }
+
   function test_UserCannotDoubleVoteAfterVotingFor() public {
     _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.For));
   }
+
   function test_UserCannotDoubleVoteAfterVotingAbstain() public {
     _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Abstain));
   }
+
   function test_UserCannotCastVotesTwiceAfterVotingAgainst() public {
     _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Against));
   }
+
   function test_UserCannotCastVotesTwiceAfterVotingFor() public {
     _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.For));
   }
+
   function test_UserCannotCastVotesTwiceAfterVotingAbstain() public {
     _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Abstain));
   }
+
   function test_UserCannotExpressAgainstVotesPriorToDepositing() public {
-    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.Against));
+    _testUserCannotExpressVotesPriorToDepositing(
+      address(0xC0DE), 4.242 ether, uint8(VoteType.Against)
+    );
   }
+
   function test_UserCannotExpressForVotesPriorToDepositing() public {
     _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.For));
   }
+
   function test_UserCannotExpressAbstainVotesPriorToDepositing() public {
-    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.Abstain));
+    _testUserCannotExpressVotesPriorToDepositing(
+      address(0xC0DE), 4.242 ether, uint8(VoteType.Abstain)
+    );
   }
+
   function test_UserAgainstVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD),
-      0.00042 ether,
-      0.042 ether,
-      uint8(VoteType.Against)
+      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.Against)
     );
   }
+
   function test_UserForVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD),
-      0.00042 ether,
-      0.042 ether,
-      uint8(VoteType.For)
+      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.For)
     );
   }
+
   function test_UserAbstainVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD),
-      0.00042 ether,
-      0.042 ether,
-      uint8(VoteType.Abstain)
+      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.Abstain)
     );
   }
+
   function test_MultipleUsersCanCastVotes() public {
     _testMultipleUsersCanCastVotes(
-      address(0xD00D),
-      address(0xF00D),
-      0.42424242 ether,
-      0.00000042 ether
+      address(0xD00D), address(0xF00D), 0.42424242 ether, 0.00000042 ether
     );
   }
+
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAgainst() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF),
-      0.000001 ether,
-      uint8(VoteType.Against)
+      address(0xDEAF), 0.000001 ether, uint8(VoteType.Against)
     );
   }
+
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingFor() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF),
-      0.000001 ether,
-      uint8(VoteType.For)
+      address(0xDEAF), 0.000001 ether, uint8(VoteType.For)
     );
   }
+
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAbstain() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF),
-      0.000001 ether,
-      uint8(VoteType.Abstain)
+      address(0xDEAF), 0.000001 ether, uint8(VoteType.Abstain)
     );
   }
+
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstFor() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xFADE),         // voterA
-        address(0xDEED),         // voterB
-        address(0xB0D),          // borrower
-        12 ether,                // voteWeightA
-        4 ether,                 // voteWeightB
-        7 ether,                 // borrowerAssets
+        address(0xFADE), // voterA
+        address(0xDEED), // voterB
+        address(0xB0D), // borrower
+        12 ether, // voteWeightA
+        4 ether, // voteWeightB
+        7 ether, // borrowerAssets
         uint8(VoteType.Against), // supportTypeA
-        uint8(VoteType.For)      // supportTypeB
+        uint8(VoteType.For) // supportTypeB
       )
     );
   }
+
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstAbstain() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xFEED),         // voterA
-        address(0xADE),          // voterB
-        address(0xD0E),          // borrower
-        2 ether,                 // voteWeightA
-        7 ether,                 // voteWeightB
-        4 ether,                 // borrowerAssets
+        address(0xFEED), // voterA
+        address(0xADE), // voterB
+        address(0xD0E), // borrower
+        2 ether, // voteWeightA
+        7 ether, // voteWeightB
+        4 ether, // borrowerAssets
         uint8(VoteType.Against), // supportTypeA
-        uint8(VoteType.Abstain)  // supportTypeB
+        uint8(VoteType.Abstain) // supportTypeB
       )
     );
   }
+
   function test_VoteWeightIsScaledBasedOnPoolBalanceForAbstain() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xED),           // voterA
-        address(0xABE),          // voterB
-        address(0xBED),          // borrower
-        1 ether,                 // voteWeightA
-        1 ether,                 // voteWeightB
-        1 ether,                 // borrowerAssets
-        uint8(VoteType.For),     // supportTypeA
-        uint8(VoteType.Abstain)  // supportTypeB
+        address(0xED), // voterA
+        address(0xABE), // voterB
+        address(0xBED), // borrower
+        1 ether, // voteWeightA
+        1 ether, // voteWeightB
+        1 ether, // borrowerAssets
+        uint8(VoteType.For), // supportTypeA
+        uint8(VoteType.Abstain) // supportTypeB
       )
     );
   }
+
   function test_AgainstVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0x111),         // voterA
-        address(0x222),         // voterB
-        address(0x333),         // borrower
-        1 ether,                // voteWeightA
-        1 ether,                // voteWeightB
-        1 ether,                // borrowerAssets
+        address(0x111), // voterA
+        address(0x222), // voterB
+        address(0x333), // borrower
+        1 ether, // voteWeightA
+        1 ether, // voteWeightB
+        1 ether, // borrowerAssets
         uint8(VoteType.Against) // supportTypeA
       )
     );
   }
+
   function test_ForVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0xAAA),         // voterA
-        address(0xBBB),         // voterB
-        address(0xCCC),         // borrower
-        42 ether,               // voteWeightA
-        24 ether,               // voteWeightB
-        11 ether,               // borrowerAssets
-        uint8(VoteType.For)     // supportTypeA
+        address(0xAAA), // voterA
+        address(0xBBB), // voterB
+        address(0xCCC), // borrower
+        42 ether, // voteWeightA
+        24 ether, // voteWeightB
+        11 ether, // borrowerAssets
+        uint8(VoteType.For) // supportTypeA
       )
     );
   }
+
   function test_AbstainVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0x123),         // voterA
-        address(0x456),         // voterB
-        address(0x789),         // borrower
-        24 ether,               // voteWeightA
-        42 ether,               // voteWeightB
-        100 ether,              // borrowerAssets
+        address(0x123), // voterA
+        address(0x456), // voterB
+        address(0x789), // borrower
+        24 ether, // voteWeightA
+        42 ether, // voteWeightB
+        100 ether, // borrowerAssets
         uint8(VoteType.Abstain) // supportTypeA
       )
     );
   }
+
   function test_AgainstVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xAAAA),        // voterA
-      address(0xBBBB),        // voterB
-      1 ether,                // voteWeightA
-      2 ether,                // voteWeightB
+      address(0xAAAA), // voterA
+      address(0xBBBB), // voterB
+      1 ether, // voteWeightA
+      2 ether, // voteWeightB
       uint8(VoteType.Against) // supportTypeA
     );
   }
+
   function test_ForVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xCCCC),        // voterA
-      address(0xDDDD),        // voterB
-      0.42 ether,             // voteWeightA
-      0.042 ether,            // voteWeightB
-      uint8(VoteType.For)     // supportTypeA
-    );
-  }
-  function test_AbstainVotingWeightIsUnaffectedByDepositsAfterProposal() public {
-    _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xEEEE),        // voterA
-      address(0xFFFF),        // voterB
-      10 ether,               // voteWeightA
-      20 ether,               // voteWeightB
-      uint8(VoteType.Abstain) // supportTypeA
-    );
-  }
-  function test_AgainstVotingWeightDoesNotGoDownWhenUsersBorrow() public {
-    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xC0D),
-      4.242 ether,            // GOV deposit amount
-      1 ether,                // DAI borrow amount
-      uint8(VoteType.Against) // supportType
-    );
-  }
-  function test_ForVotingWeightDoesNotGoDownWhenUsersBorrow() public {
-    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xD0C),
-      424.2 ether,            // GOV deposit amount
-      4 ether,                // DAI borrow amount
-      uint8(VoteType.For)     // supportType
-    );
-  }
-  function test_AbstainVotingWeightDoesNotGoDownWhenUsersBorrow() public {
-    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xCAD),
-      0.4242 ether,           // GOV deposit amount
-      0.0424 ether,           // DAI borrow amount
-      uint8(VoteType.Abstain) // supportType
-    );
-  }
-  function test_AgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
-    _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xC0D3),
-      42 ether,               // supplyAmount
-      type(uint256).max,      // withdrawAmount
-      uint8(VoteType.Against) // supportType
-    );
-  }
-  function test_ForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
-    _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xD0C3),
-      42 ether,               // supplyAmount
-      type(uint256).max,      // withdrawAmount
-      uint8(VoteType.For)     // supportType
-    );
-  }
-  function test_AbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
-    _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xCAD3),
-      42 ether,               // supplyAmount
-      type(uint256).max,      // withdrawAmount
-      uint8(VoteType.Abstain) // supportType
-    );
-  }
-  function test_AgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
-    _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xC0D4),
-      42 ether,               // supplyAmount
-      2 ether,                // withdrawAmount
-      uint8(VoteType.Against) // supportType
-    );
-  }
-  function test_ForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
-    _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xD0C4),
-      42 ether,               // supplyAmount
-      3 ether,                // withdrawAmount
-      uint8(VoteType.For)     // supportType
-    );
-  }
-  function test_AbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
-    _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xCAD4),
-      42 ether,               // supplyAmount
-      10 ether,               // withdrawAmount
-      uint8(VoteType.Abstain) // supportType
-    );
-  }
-  function test_VotingWeightWorksWithRebasing() public {
-    _testVotingWeightWorksWithRebasing(
-      address(0xABE1),
-      address(0xABE2),
-      424242 ether
+      address(0xCCCC), // voterA
+      address(0xDDDD), // voterB
+      0.42 ether, // voteWeightA
+      0.042 ether, // voteWeightB
+      uint8(VoteType.For) // supportTypeA
     );
   }
 
-  function _testUserCanCastVotes(
-    address _who,
-    uint256 _voteWeight,
-    uint8 _supportType
-  ) private {
+  function test_AbstainVotingWeightIsUnaffectedByDepositsAfterProposal() public {
+    _testVotingWeightIsUnaffectedByDepositsAfterProposal(
+      address(0xEEEE), // voterA
+      address(0xFFFF), // voterB
+      10 ether, // voteWeightA
+      20 ether, // voteWeightB
+      uint8(VoteType.Abstain) // supportTypeA
+    );
+  }
+
+  function test_AgainstVotingWeightDoesNotGoDownWhenUsersBorrow() public {
+    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+      address(0xC0D),
+      4.242 ether, // GOV deposit amount
+      1 ether, // DAI borrow amount
+      uint8(VoteType.Against) // supportType
+    );
+  }
+
+  function test_ForVotingWeightDoesNotGoDownWhenUsersBorrow() public {
+    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+      address(0xD0C),
+      424.2 ether, // GOV deposit amount
+      4 ether, // DAI borrow amount
+      uint8(VoteType.For) // supportType
+    );
+  }
+
+  function test_AbstainVotingWeightDoesNotGoDownWhenUsersBorrow() public {
+    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
+      address(0xCAD),
+      0.4242 ether, // GOV deposit amount
+      0.0424 ether, // DAI borrow amount
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+
+  function test_AgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xC0D3),
+      42 ether, // supplyAmount
+      type(uint256).max, // withdrawAmount
+      uint8(VoteType.Against) // supportType
+    );
+  }
+
+  function test_ForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xD0C3),
+      42 ether, // supplyAmount
+      type(uint256).max, // withdrawAmount
+      uint8(VoteType.For) // supportType
+    );
+  }
+
+  function test_AbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xCAD3),
+      42 ether, // supplyAmount
+      type(uint256).max, // withdrawAmount
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+
+  function test_AgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xC0D4),
+      42 ether, // supplyAmount
+      2 ether, // withdrawAmount
+      uint8(VoteType.Against) // supportType
+    );
+  }
+
+  function test_ForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xD0C4),
+      42 ether, // supplyAmount
+      3 ether, // withdrawAmount
+      uint8(VoteType.For) // supportType
+    );
+  }
+
+  function test_AbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
+    _testVotingWeightGoesDownWhenUsersWithdraw(
+      address(0xCAD4),
+      42 ether, // supplyAmount
+      10 ether, // withdrawAmount
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+
+  function test_VotingWeightWorksWithRebasing() public {
+    _testVotingWeightWorksWithRebasing(address(0xABE1), address(0xABE2), 424_242 ether);
+  }
+
+  function _testUserCanCastVotes(address _who, uint256 _voteWeight, uint8 _supportType) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
     assertEq(aToken.balanceOf(_who), _voteWeight, "aToken balance wrong");
@@ -759,22 +762,16 @@ contract VoteTest is AaveAtokenForkTest {
     vm.prank(_who);
     aToken.expressVote(_proposalId, _supportType);
 
-    (
-      uint256 _againstVotesExpressed,
-      uint256 _forVotesExpressed,
-      uint256 _abstainVotesExpressed
-    ) = aToken.proposalVotes(_proposalId);
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      aToken.proposalVotes(_proposalId);
 
     // Vote preferences have been expressed.
     assertEq(_forVotesExpressed, _supportType == uint8(VoteType.For) ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
 
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     // But no actual votes have been cast yet.
     assertEq(_forVotes, 0);
@@ -845,11 +842,7 @@ contract VoteTest is AaveAtokenForkTest {
     aToken.castVote(_proposalId);
   }
 
-  function _tesNoDoubleVoting(
-    address _who,
-    uint256 _voteWeight,
-    uint8 _supportType
-  ) private {
+  function _tesNoDoubleVoting(address _who, uint256 _voteWeight, uint8 _supportType) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
@@ -869,11 +862,9 @@ contract VoteTest is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
   }
 
-  function _testUserCannotCastVotesTwice(
-    address _who,
-    uint256 _voteWeight,
-    uint8 _supportType
-  ) private {
+  function _testUserCannotCastVotesTwice(address _who, uint256 _voteWeight, uint8 _supportType)
+    private
+  {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
@@ -939,12 +930,9 @@ contract VoteTest is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
 
     // The internal proposal vote weight should not reflect the new deposit weight.
-    (
-      uint256 _againstVotesExpressed,
-      uint256 _forVotesExpressed,
-      uint256 _abstainVotesExpressed
-    ) = aToken.proposalVotes(_proposalId);
-    assertEq(_forVotesExpressed,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      aToken.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed, _supportType == uint8(VoteType.For) ? _voteWeightA : 0);
     assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
     assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
 
@@ -952,8 +940,9 @@ contract VoteTest is AaveAtokenForkTest {
     aToken.castVote(_proposalId);
 
     // Votes cast should likewise reflect only the earlier balance.
-    (uint _againstVotes, uint _forVotes, uint _abstainVotes) = governor.proposalVotes(_proposalId);
-    assertEq(_forVotes,     _supportType == uint8(VoteType.For)     ? _voteWeightA : 0);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _supportType == uint8(VoteType.For) ? _voteWeightA : 0);
     assertEq(_againstVotes, _supportType == uint8(VoteType.Against) ? _voteWeightA : 0);
     assertEq(_abstainVotes, _supportType == uint8(VoteType.Abstain) ? _voteWeightA : 0);
   }
@@ -980,17 +969,15 @@ contract VoteTest is AaveAtokenForkTest {
     vm.prank(_userB);
     aToken.expressVote(_proposalId, uint8(VoteType.Abstain));
 
-    (
-      uint256 _againstVotesExpressed,
-      uint256 _forVotesExpressed,
-      uint256 _abstainVotesExpressed
-    ) = aToken.proposalVotes(_proposalId);
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      aToken.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, 0);
     assertEq(_againstVotesExpressed, _voteWeightA);
     assertEq(_abstainVotesExpressed, _voteWeightB);
 
     // The governor should have not recieved any votes yet.
-    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
     assertEq(_forVotes, 0);
     assertEq(_againstVotes, 0);
     assertEq(_abstainVotes, 0);
@@ -1045,9 +1032,7 @@ contract VoteTest is AaveAtokenForkTest {
     uint8 supportTypeB;
   }
 
-  function _testVoteWeightIsScaledBasedOnPoolBalance(
-    VoteWeightIsScaledVars memory _vars
-  ) private {
+  function _testVoteWeightIsScaledBasedOnPoolBalance(VoteWeightIsScaledVars memory _vars) private {
     // This would be a vm.assume if we could do fuzz tests.
     assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
 
@@ -1072,10 +1057,7 @@ contract VoteTest is AaveAtokenForkTest {
       0, // referralCode
       _vars.borrower // onBehalfOf
     );
-    assertLt(
-      govToken.balanceOf(address(aToken)),
-      _initGovBalance
-    );
+    assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
     vm.stopPrank();
 
     // Advance one block so that our votes will be checkpointed by the govToken.
@@ -1103,34 +1085,43 @@ contract VoteTest is AaveAtokenForkTest {
 
     // Vote should be cast as a percentage of the depositer's expressed types, since
     // the actual weight is different from the deposit weight.
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     // These can differ because votes are rounded.
-    assertApproxEqAbs(
-      _againstVotes + _forVotes + _abstainVotes,
-      _expectedVotingWeight,
-      1
-    );
+    assertApproxEqAbs(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
 
     if (_vars.supportTypeA == _vars.supportTypeB) {
-      assertEq(_forVotes,     _vars.supportTypeA == uint8(VoteType.For)     ? _expectedVotingWeight : 0);
-      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
-      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
+      assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
+      assertEq(
+        _againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0
+      );
+      assertEq(
+        _abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0
+      );
     } else {
       uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initGovBalance;
       uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initGovBalance;
 
       // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-      if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-      if (_vars.supportTypeB == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
-      if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-      if (_vars.supportTypeB == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
-      if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-      if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.For)) {
+        assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+      }
+      if (_vars.supportTypeB == uint8(VoteType.For)) {
+        assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
+      }
+      if (_vars.supportTypeA == uint8(VoteType.Against)) {
+        assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+      }
+      if (_vars.supportTypeB == uint8(VoteType.Against)) {
+        assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
+      }
+      if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
+        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+      }
+      if (_vars.supportTypeB == uint8(VoteType.Abstain)) {
+        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
+      }
     }
   }
 
@@ -1171,10 +1162,7 @@ contract VoteTest is AaveAtokenForkTest {
       0, // referralCode
       _vars.borrower // onBehalfOf
     );
-    assertLt(
-      govToken.balanceOf(address(aToken)),
-      _initGovBalance
-    );
+    assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
     vm.stopPrank();
 
     // Advance one block so that our votes will be checkpointed by the govToken.
@@ -1208,20 +1196,15 @@ contract VoteTest is AaveAtokenForkTest {
 
     // Vote should be cast as a percentage of the depositer's expressed types, since
     // the actual weight is different from the deposit weight.
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     uint256 _expectedVotingWeightA = (_vars.voteWeightA * _fullVotingWeight) / _initGovBalance;
     uint256 _expectedVotingWeightB = (_vars.voteWeightB * _fullVotingWeight) / _initGovBalance;
 
     // The pool *could* have voted with this much weight.
     assertApproxEqAbs(
-      _totalPossibleVotingWeight,
-      _expectedVotingWeightA + _expectedVotingWeightB,
-      1
+      _totalPossibleVotingWeight, _expectedVotingWeightA + _expectedVotingWeightB, 1
     );
 
     // Actually, though, the pool did not vote with all of the weight it could have.
@@ -1233,9 +1216,15 @@ contract VoteTest is AaveAtokenForkTest {
     );
 
     // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-    if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-    if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-    if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.For)) {
+      assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+    }
+    if (_vars.supportTypeA == uint8(VoteType.Against)) {
+      assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    }
+    if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
+      assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    }
   }
 
   function _testVotingWeightIsUnaffectedByDepositsAfterProposal(
@@ -1278,11 +1267,8 @@ contract VoteTest is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _voteWeightA);
     if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeightA);
@@ -1324,11 +1310,8 @@ contract VoteTest is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     // Actual voting weight should match the initial deposit.
     if (_supportType == uint8(VoteType.For)) assertEq(_forVotes, _voteWeight);
@@ -1376,11 +1359,8 @@ contract VoteTest is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     uint256 _expectedVoteWeight = _supplyAmount - _withdrawAmount;
     if (_supportType == uint8(VoteType.For)) assertEq(_forVotes, _expectedVoteWeight);
@@ -1388,11 +1368,9 @@ contract VoteTest is AaveAtokenForkTest {
     if (_supportType == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _expectedVoteWeight);
   }
 
-  function _testVotingWeightWorksWithRebasing(
-    address _userA,
-    address _userB,
-    uint256 _supplyAmount
-  ) private {
+  function _testVotingWeightWorksWithRebasing(address _userA, address _userB, uint256 _supplyAmount)
+    private
+  {
     // Someone supplies GOV to Aave.
     _mintGovAndSupplyToAave(_userA, _supplyAmount);
     uint256 _initATokenBalanceA = aToken.balanceOf(_userA);
@@ -1440,18 +1418,11 @@ contract VoteTest is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (
-      uint256 _againstVotes,
-      uint256 _forVotes,
-      uint256 _abstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     // userA's vote should have beaten userB's.
-    assertGt(
-      _forVotes,
-      _againstVotes,
-      "userA did not have more voting power than userB"
-    );
+    assertGt(_forVotes, _againstVotes, "userA did not have more voting power than userB");
   }
 
   // TODO user cannot express vote after votes have been cast
