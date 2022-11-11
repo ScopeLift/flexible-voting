@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.10;
+pragma solidity 0.8.10;
 
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
@@ -13,7 +13,7 @@ import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 
 interface IFractionalGovernor {
   function token() external returns (address);
-  function proposalSnapshot(uint256 proposalId) external returns (uint256);
+  function proposalSnapshot(uint256 proposalId) external view returns (uint256);
   function proposalDeadline(uint256 proposalId) external view returns (uint256);
   function castVoteWithReasonAndParams(
     uint256 proposalId,
@@ -71,7 +71,7 @@ contract ATokenNaive is AToken {
 
   /// @dev Constructor.
   /// @param _pool The address of the Pool contract
-  /// @param _governor The address of the flex-voting-compatable governance contract.
+  /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(IPool _pool, address _governor) AToken(_pool) {
     governor = IFractionalGovernor(_governor);
   }
@@ -122,7 +122,7 @@ contract ATokenNaive is AToken {
   }
 
   /// @notice Causes this contract to cast a vote to the Governor for all the
-  /// tokens it currently holds.  Uses the sum of all depositor voting
+  /// tokens it currently holds. Uses the sum of all depositor voting
   /// expressions to decide how to split its voting weight. Can be called by
   /// anyone, but _must_ be called within `CAST_VOTE_WINDOW` blocks before the
   /// proposal deadline.
@@ -274,7 +274,7 @@ contract ATokenNaive is AToken {
   // This was been copied from OZ's ERC20Votes checkpointing system with minor
   // revisions:
   //   * Replace "Vote" with "Deposit", as deposits are what we need to track
-  //   * Make some variable names longer for readibility
+  //   * Make some variable names longer for readability
   //   * Break lines at 80-characters
   struct Checkpoint {
     uint32 fromBlock;
