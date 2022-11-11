@@ -109,7 +109,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new ATokenNaive(pool, address(governor));
+    AToken _aTokenImplementation = new ATokenNaive(pool, address(governor), 1200);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -802,7 +802,6 @@ contract VoteTest is AaveAtokenForkTest {
     govToken.approve(address(pool), type(uint256).max);
 
     assertEq(govToken.balanceOf(_who), _voteWeight);
-    assertEq(aToken.deposits(_who), 0);
 
     // Advance one block so that our votes will be checkpointed by the govToken;
     vm.roll(block.number + 1);
@@ -901,7 +900,6 @@ contract VoteTest is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
     // Now try to express a voting preference on the proposal.
-    assertEq(aToken.deposits(_who), _voteWeight);
     vm.expectRevert(bytes("no weight"));
     vm.prank(_who);
     aToken.expressVote(_proposalId, _supportType);
@@ -1017,7 +1015,7 @@ contract VoteTest is AaveAtokenForkTest {
     assert(aToken.internalVotingPeriodEnd(_proposalId) > block.number);
 
     // Try to submit votes on behalf of the pool.
-    vm.expectRevert(bytes("cannot castVote yet"));
+    vm.expectRevert(bytes("cannot castVote during internal voting period"));
     aToken.castVote(_proposalId);
   }
 

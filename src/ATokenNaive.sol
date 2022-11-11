@@ -49,16 +49,11 @@ contract ATokenNaive is AToken {
     uint128 abstainVotes;
   }
 
-  /// @notice Must call castVote within this many blocks of the proposal
-  /// deadline, so-as to allow ample time for all depositors to express their
-  /// vote preferences. Corresponds to roughly 4 hours, assuming 12s/block.
-  uint32 public constant CAST_VOTE_WINDOW = 1200;
-
-  /// @notice Map depositor to deposit amount.
-  mapping(address => uint256) public deposits;
-
-  /// @notice Map borrower to total amount borrowed.
-  mapping(address => uint256) public borrowTotal;
+  /// @notice The number of blocks prior to the proposal deadline within which
+  /// `castVote` may be called. Prior to this window, `castVote` will revert so
+  /// as to give users time to call `expressVote` before votes are sent to the
+  /// governor contract.
+  uint32 public immutable CAST_VOTE_WINDOW;
 
   /// @notice Map proposalId to an address to whether they have voted on this proposal.
   mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
@@ -66,14 +61,19 @@ contract ATokenNaive is AToken {
   /// @notice Map proposalId to vote totals expressed on this proposal.
   mapping(uint256 => ProposalVote) public proposalVotes;
 
-  /// @notice The governor contract associated with this governance token.
+  /// @notice The governor contract associated with this governance token. It
+  /// must be one that supports fractional voting, e.g.
+  /// GovernorCountingFractional.
   IFractionalGovernor public immutable governor;
 
   /// @dev Constructor.
   /// @param _pool The address of the Pool contract
   /// @param _governor The address of the flex-voting-compatible governance contract.
-  constructor(IPool _pool, address _governor) AToken(_pool) {
+  /// @param _castVoteWindow The number of blocks that users have to express
+  /// their votes on a proposal before votes can be cast.
+  constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
     governor = IFractionalGovernor(_governor);
+    CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
   // TODO Is there a better way to do this? It cannot be done in the constructor
@@ -85,7 +85,10 @@ contract ATokenNaive is AToken {
 
   /// @notice Method which returns the deadline (as a block number) by which
   /// depositors must express their voting preferences to this Pool contract. It
-  /// will always be before the Governor's corresponding proposal deadline.
+  /// will always be before the Governor's corresponding proposal deadline. The
+  /// dealine is inclusive, meaning: if this returns (say) block 424242, then the
+  /// internal voting period will be over on block 424242. The last block for
+  /// internal voting will be 424241.
   /// @param proposalId The ID of the proposal in question.
   function internalVotingPeriodEnd(uint256 proposalId)
     public
@@ -105,9 +108,9 @@ contract ATokenNaive is AToken {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
-    if (weight == 0) revert("no weight");
+    require(weight > 0, "no weight");
 
-    if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
+    require(!_proposalVotersHasVoted[proposalId][msg.sender], "already voted");
     _proposalVotersHasVoted[proposalId][msg.sender] = true;
 
     if (support == uint8(VoteType.Against)) {
@@ -125,12 +128,16 @@ contract ATokenNaive is AToken {
   /// tokens it currently holds. Uses the sum of all depositor voting
   /// expressions to decide how to split its voting weight. Can be called by
   /// anyone, but _must_ be called within `CAST_VOTE_WINDOW` blocks before the
-  /// proposal deadline.
+  /// proposal deadline. We don't bother to check if the vote has already been
+  /// cast -- GovernorCountingFractional will revert if it has.
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
-    if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
-    uint8 unusedSupportParam = uint8(VoteType.Abstain);
-    ProposalVote memory _proposalVote = proposalVotes[proposalId];
+    require(
+      internalVotingPeriodEnd(proposalId) <= block.number,
+      "cannot castVote during internal voting period"
+    );
+
+    ProposalVote storage _proposalVote = proposalVotes[proposalId];
 
     uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
 
@@ -159,6 +166,10 @@ contract ATokenNaive is AToken {
       (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
     );
 
+    // This param is ignored by the governor when voting with fractional
+    // weights. It makes no difference what vote type this is.
+    uint8 unusedSupportParam = uint8(VoteType.Abstain);
+
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
     governor.castVoteWithReasonAndParams(
@@ -166,12 +177,35 @@ contract ATokenNaive is AToken {
     );
   }
 
+  /// @notice Implements the basic logic to mint a scaled balance token.
+  /// @param caller The address performing the mint
+  /// @param onBehalfOf The address of the user that will receive the scaled tokens
+  /// @param amount The amount of tokens getting minted
+  /// @param index The next liquidity index of the reserve
+  /// @return `true` if the the previous balance of the user was 0
+  function _mintScaledWithCheckpoint(
+    address caller,
+    address onBehalfOf,
+    uint256 amount,
+    uint256 index
+  ) internal returns (bool) {
+    bool _returnVar = _mintScaled(caller, onBehalfOf, amount, index);
+
+    // We increment by `amount` instead of any computed/rebased amounts because
+    // `amount` is what actually gets transferred of the underlying asset. We
+    // need our checkpoints to still match up with the underlying asset balance.
+    _writeCheckpoint(_checkpoints[onBehalfOf], _additionFn, amount);
+    _writeCheckpoint(_totalDepositCheckpoints, _additionFn, amount);
+
+    return _returnVar;
+  }
+
   // forgefmt: disable-start
   //===========================================================================
   // BEGIN: Aave overrides
   //===========================================================================
   /// Note: this has been modified from Aave v3's AToken to call our custom
-  /// mintScaled function.
+  /// mintScaledWithCheckpoint function.
   ///
   /// @inheritdoc IAToken
   function mint(
@@ -180,18 +214,18 @@ contract ATokenNaive is AToken {
     uint256 amount,
     uint256 index
   ) external virtual override onlyPool returns (bool) {
-    return __mintScaled(caller, onBehalfOf, amount, index);
+    return _mintScaledWithCheckpoint(caller, onBehalfOf, amount, index);
   }
 
   /// Note: this has been modified from Aave v3's AToken to call our custom
-  /// mintScaled function.
+  /// mintScaledWithCheckpoint function.
   ///
   /// @inheritdoc IAToken
   function mintToTreasury(uint256 amount, uint256 index) external override onlyPool {
     if (amount == 0) {
       return;
     }
-    __mintScaled(address(POOL), _treasury, amount, index);
+    _mintScaledWithCheckpoint(address(POOL), _treasury, amount, index);
   }
 
   /// Note: this has been modified from Aave v3's AToken to update deposit
@@ -210,7 +244,6 @@ contract ATokenNaive is AToken {
     // We decrement by `amount` instead of any computed/rebased amounts because
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with the underlying asset balance.
-    deposits[from] -= amount;
     _writeCheckpoint(_checkpoints[from], _subtractionFn, amount);
     _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, amount);
     // End modifications.
@@ -219,50 +252,6 @@ contract ATokenNaive is AToken {
     if (receiverOfUnderlying != address(this)) {
       IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
     }
-  }
-
-  /// Note: this has been modified from Aave v3's ScaledBalanceTokenBase
-  /// contract to include balance checkpointing code.
-  /// https://github.com/aave/aave-v3-core/blob/f3e037b3638e3b7c98f0c09c56c5efde54f7c5d2/contracts/protocol/tokenization/base/ScaledBalanceTokenBase.sol#L61-L91
-  /// Modifications are as indicated below.
-  ///
-  /// @notice Implements the basic logic to mint a scaled balance token.
-  /// @param caller The address performing the mint
-  /// @param onBehalfOf The address of the user that will receive the scaled tokens
-  /// @param amount The amount of tokens getting minted
-  /// @param index The next liquidity index of the reserve
-  /// @return `true` if the the previous balance of the user was 0
-  function __mintScaled(
-    address caller,
-    address onBehalfOf,
-    uint256 amount,
-    uint256 index
-  ) internal returns (bool) {
-    uint256 amountScaled = amount.rayDiv(index);
-    require(amountScaled != 0, Errors.INVALID_MINT_AMOUNT);
-
-    uint256 scaledBalance = super.balanceOf(onBehalfOf);
-    uint256 balanceIncrease = scaledBalance.rayMul(index) -
-      scaledBalance.rayMul(_userState[onBehalfOf].additionalData);
-
-    _userState[onBehalfOf].additionalData = index.toUint128();
-
-    _mint(onBehalfOf, amountScaled.toUint128());
-
-    // Begin modifications.
-    // We increment by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
-    // need our checkpoints to still match up with the underlying asset balance.
-    deposits[onBehalfOf] += amount;
-    _writeCheckpoint(_checkpoints[onBehalfOf], _additionFn, amount);
-    _writeCheckpoint(_totalDepositCheckpoints, _additionFn, amount);
-    // End modifications.
-
-    uint256 amountToMint = amount + balanceIncrease;
-    emit Transfer(address(0), onBehalfOf, amountToMint);
-    emit Mint(caller, onBehalfOf, amountToMint, balanceIncrease, index);
-
-    return (scaledBalance == 0);
   }
   //===========================================================================
   // END: Aave overrides
