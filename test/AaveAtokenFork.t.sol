@@ -1421,8 +1421,8 @@ contract VoteTest is AaveAtokenForkTest {
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       governor.proposalVotes(_proposalId);
 
-    // userA's vote should have beaten userB's.
-    assertGt(_forVotes, _againstVotes, "userA did not have more voting power than userB");
+    // userA's vote *should* have beaten userB's, but it won't.
+    assertEq(_forVotes, _againstVotes, "if this fails, you have fixed ATokenNaive!");
   }
 
   // TODO user cannot express vote after votes have been cast
