@@ -1447,8 +1447,7 @@ contract VoteTest is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (uint256 _againstVotes, uint256 _forVotes, uint256 /* _abstainVotes */) =
-
+    (uint256 _againstVotes, uint256 _forVotes, /*uint256 _abstainVotes */) =
       governor.proposalVotes(_proposalId);
 
     // userA's vote *should* have beaten userB's, but it won't.
