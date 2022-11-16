@@ -1447,7 +1447,7 @@ contract VoteTest is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (uint256 _againstVotes, uint256 _forVotes, /*uint256 _abstainVotes */) =
+    (uint256 _againstVotes, uint256 _forVotes, /*uint256 _abstainVotes */ ) =
       governor.proposalVotes(_proposalId);
 
     // userA's vote *should* have beaten userB's, but it won't.
@@ -1486,10 +1486,7 @@ contract VoteTest is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
   }
 
-  function _testCannotCastVoteWithoutVotesExpressed(
-    address _who,
-    uint8 _supportType
-  ) private {
+  function _testCannotCastVoteWithoutVotesExpressed(address _who, uint8 _supportType) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, 1 ether);
 
