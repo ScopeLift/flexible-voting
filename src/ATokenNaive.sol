@@ -27,7 +27,7 @@ interface IVotingToken {
   function transfer(address to, uint256 amount) external returns (bool);
   function transferFrom(address from, address to, uint256 amount) external returns (bool);
   function delegate(address delegatee) external;
-  function getPastVotes(address account, uint256 blockNumber) external returns (uint256);
+  function getPastVotes(address account, uint256 blockNumber) external view returns (uint256);
 }
 
 contract ATokenNaive is AToken {
@@ -86,7 +86,7 @@ contract ATokenNaive is AToken {
   /// @notice Method which returns the deadline (as a block number) by which
   /// depositors must express their voting preferences to this Pool contract. It
   /// will always be before the Governor's corresponding proposal deadline. The
-  /// dealine is inclusive, meaning: if this returns (say) block 424242, then the
+  /// dealine is exclusive, meaning: if this returns (say) block 424242, then the
   /// internal voting period will be over on block 424242. The last block for
   /// internal voting will be 424241.
   /// @param proposalId The ID of the proposal in question.
