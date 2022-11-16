@@ -739,21 +739,31 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_CannotExpressAgainstVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD4242), // who
+      address(0xDAD4242), // userA
+      address(0xDAD1111), // userB
       uint8(VoteType.Against) // supportType
     );
   }
 
   function test_CannotExpressForVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD424242), // who
+      address(0xDAD424242), // userA
+      address(0xDAD111111), // userB
       uint8(VoteType.For) // supportType
     );
   }
 
   function test_CannotExpressAbstainVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD42424242), // who
+      address(0xDAD42424242), // userA
+      address(0xDAD11111111), // userB
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+
+  function test_CannotCastVoteWithoutVotesExpressed() public {
+    _testCannotCastVoteWithoutVotesExpressed(
+      address(0xCA11), // who
       uint8(VoteType.Abstain) // supportType
     );
   }
@@ -1446,6 +1456,38 @@ contract VoteTest is AaveAtokenForkTest {
   }
 
   function _testCannotExpressVoteAfterVotesHaveBeenCast(
+    address _userA,
+    address _userB,
+    uint8 _supportType
+  ) private {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_userA, 1 ether);
+    _mintGovAndSupplyToAave(_userB, 1 ether);
+
+    // Advance one block so that our votes will be checkpointed by the govToken;
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express voting preference on the proposal.
+    vm.prank(_userA);
+    aToken.expressVote(_proposalId, _supportType);
+
+    // Wait until after the voting period
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // submit votes on behalf of the pool
+    aToken.castVote(_proposalId);
+
+    // _userB should not be able to express his/her vote on the proposal since the
+    // vote was cast.
+    vm.expectRevert(bytes("too late to express, votes already cast"));
+    vm.prank(_userB);
+    aToken.expressVote(_proposalId, _supportType);
+  }
+
+  function _testCannotCastVoteWithoutVotesExpressed(
     address _who,
     uint8 _supportType
   ) private {
@@ -1461,16 +1503,15 @@ contract VoteTest is AaveAtokenForkTest {
     // Wait until after the voting period
     vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
 
-    // submit votes on behalf of the pool
+    // Try to submit votes on behalf of the pool. It should fail.
+    vm.expectRevert(bytes("no votes expressed"));
     aToken.castVote(_proposalId);
 
-    // If someone tries to cast again, the protocol reverts.
-    // aToken.castVote(_proposalId);
-
-    // _who should not be able to express his/her vote on the proposal since the
-    // vote was cast.
-    vm.expectRevert(bytes("too late to express, votes already cast"));
+    // Express voting preference on the proposal.
     vm.prank(_who);
     aToken.expressVote(_proposalId, _supportType);
+
+    // Now votes should be castable.
+    aToken.castVote(_proposalId);
   }
 }
