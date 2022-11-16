@@ -110,10 +110,7 @@ contract ATokenNaive is AToken {
   /// @param proposalId The proposalId in the associated Governor
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
-    require(
-      !hasCastVotesOnProposal[proposalId],
-      "too late to express, votes already cast"
-    );
+    require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
     uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
