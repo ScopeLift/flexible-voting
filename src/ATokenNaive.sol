@@ -58,6 +58,9 @@ contract ATokenNaive is AToken {
   /// @notice Map proposalId to an address to whether they have voted on this proposal.
   mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
 
+  /// @notice Map proposalId to whether or not this contract has cast votes on it.
+  mapping(uint256 => bool) public hasCastVotesOnProposal;
+
   /// @notice Map proposalId to vote totals expressed on this proposal.
   mapping(uint256 => ProposalVote) public proposalVotes;
 
@@ -107,6 +110,10 @@ contract ATokenNaive is AToken {
   /// @param proposalId The proposalId in the associated Governor
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
+    require(
+      !hasCastVotesOnProposal[proposalId],
+      "too late to express, votes already cast"
+    );
     uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
@@ -170,6 +177,7 @@ contract ATokenNaive is AToken {
     // weights. It makes no difference what vote type this is.
     uint8 unusedSupportParam = uint8(VoteType.Abstain);
 
+    hasCastVotesOnProposal[proposalId] = true;
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
     governor.castVoteWithReasonAndParams(

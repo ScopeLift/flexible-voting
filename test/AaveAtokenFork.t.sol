@@ -737,6 +737,27 @@ contract VoteTest is AaveAtokenForkTest {
     );
   }
 
+  function test_CannotExpressAgainstVoteAfterVotesHaveBeenCast() public {
+    _testCannotExpressVoteAfterVotesHaveBeenCast(
+      address(0xDAD4242), // who
+      uint8(VoteType.Against) // supportType
+    );
+  }
+
+  function test_CannotExpressForVoteAfterVotesHaveBeenCast() public {
+    _testCannotExpressVoteAfterVotesHaveBeenCast(
+      address(0xDAD424242), // who
+      uint8(VoteType.For) // supportType
+    );
+  }
+
+  function test_CannotExpressAbstainVoteAfterVotesHaveBeenCast() public {
+    _testCannotExpressVoteAfterVotesHaveBeenCast(
+      address(0xDAD42424242), // who
+      uint8(VoteType.Abstain) // supportType
+    );
+  }
+
   function test_VotingWeightWorksWithRebasing() public {
     _testVotingWeightWorksWithRebasing(address(0xABE1), address(0xABE2), 424_242 ether);
   }
@@ -1424,6 +1445,32 @@ contract VoteTest is AaveAtokenForkTest {
     assertEq(_forVotes, _againstVotes, "if this fails, you have fixed ATokenNaive!");
   }
 
-  // TODO user cannot express vote after votes have been cast
-  // TODO do we try to handle voting onbehalf of someone else?
+  function _testCannotExpressVoteAfterVotesHaveBeenCast(
+    address _who,
+    uint8 _supportType
+  ) private {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_who, 1 ether);
+
+    // Advance one block so that our votes will be checkpointed by the govToken;
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Wait until after the voting period
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // submit votes on behalf of the pool
+    aToken.castVote(_proposalId);
+
+    // If someone tries to cast again, the protocol reverts.
+    // aToken.castVote(_proposalId);
+
+    // _who should not be able to express his/her vote on the proposal since the
+    // vote was cast.
+    vm.expectRevert(bytes("too late to express, votes already cast"));
+    vm.prank(_who);
+    aToken.expressVote(_proposalId, _supportType);
+  }
 }
