@@ -145,6 +145,10 @@ contract ATokenNaive is AToken {
     );
 
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
+    require(
+      _proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes > 0,
+      "no votes expressed"
+    );
 
     uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
 
