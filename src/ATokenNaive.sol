@@ -89,7 +89,7 @@ contract ATokenNaive is AToken {
   /// @notice Method which returns the deadline (as a block number) by which
   /// depositors must express their voting preferences to this Pool contract. It
   /// will always be before the Governor's corresponding proposal deadline. The
-  /// dealine is exclusive, meaning: if this returns (say) block 424242, then the
+  /// deadline is exclusive, meaning: if this returns (say) block 424242, then the
   /// internal voting period will be over on block 424242. The last block for
   /// internal voting will be 424241.
   /// @param proposalId The ID of the proposal in question.
