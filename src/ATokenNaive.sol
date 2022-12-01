@@ -10,6 +10,7 @@ import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
+import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
 
 interface IFractionalGovernor {
   function token() external returns (address);
@@ -69,6 +70,12 @@ contract ATokenNaive is AToken {
   /// GovernorCountingFractional.
   IFractionalGovernor public immutable governor;
 
+  /// @notice Mapping from address to deposit checkpoint history.
+  mapping(address => Checkpoints.History) private _depositCheckpoints;
+
+  /// @notice History of total underlying asset balance.
+  Checkpoints.History private _totalDepositCheckpoints;
+
   /// @dev Constructor.
   /// @param _pool The address of the Pool contract
   /// @param _governor The address of the flex-voting-compatible governance contract.
@@ -111,7 +118,10 @@ contract ATokenNaive is AToken {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
-    uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+    uint256 weight = Checkpoints.getAtBlock(
+      _depositCheckpoints[msg.sender],
+      governor.proposalSnapshot(proposalId)
+    );
     require(weight > 0, "no weight");
 
     require(!_proposalVotersHasVoted[proposalId][msg.sender], "already voted");
@@ -152,7 +162,10 @@ contract ATokenNaive is AToken {
     // Use the snapshot of total deposits to determine total voting weight. We cannot
     // use the proposalVote numbers alone, since some people with deposits at the
     // snapshot might not have expressed votes.
-    uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
+    uint256 _totalDepositWeightAtSnapshot = Checkpoints.getAtBlock(
+      _totalDepositCheckpoints,
+      _proposalSnapshotBlockNumber
+    );
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
@@ -200,13 +213,17 @@ contract ATokenNaive is AToken {
   ) internal returns (bool) {
     bool _returnVar = _mintScaled(caller, onBehalfOf, amount, index);
 
-    // We increment by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
+    // We need to read the new balance directly from storage so that we snapshot
+    // the total amount of the underlying asset that has actually been transferred. We
     // need our checkpoints to still match up with the underlying asset balance.
-    _writeCheckpoint(_checkpoints[onBehalfOf], _additionFn, amount);
-    _writeCheckpoint(_totalDepositCheckpoints, _additionFn, amount);
+    Checkpoints.push(_depositCheckpoints[onBehalfOf], _userState[onBehalfOf].balance);
+    Checkpoints.push(_totalDepositCheckpoints, IERC20(_underlyingAsset).balanceOf(address(this)));
 
     return _returnVar;
+  }
+
+  function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
+    return Checkpoints.getAtBlock(_depositCheckpoints[_voter], _blockNumber);
   }
 
   // forgefmt: disable-start
@@ -248,108 +265,22 @@ contract ATokenNaive is AToken {
     uint256 amount,
     uint256 index
   ) external virtual override onlyPool {
-    // Begin modifications.
-    //
-    // We decrement by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
-    // need our checkpoints to still match up with the underlying asset balance.
-    _writeCheckpoint(_checkpoints[from], _subtractionFn, amount);
-    _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, amount);
-    // End modifications.
-
     _burnScaled(from, receiverOfUnderlying, amount, index);
     if (receiverOfUnderlying != address(this)) {
       IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
     }
+
+    // Begin modifications.
+    //
+    // We need to read the new balance directly from storage so that we snapshot
+    // the total amount of the underlying asset that has actually been transferred. We
+    // need our checkpoints to still match up with the underlying asset balance.
+    Checkpoints.push(_depositCheckpoints[from], _userState[from].balance);
+    Checkpoints.push(_totalDepositCheckpoints, IERC20(_underlyingAsset).balanceOf(address(this)));
+    // End modifications.
   }
   //===========================================================================
   // END: Aave overrides
-  //===========================================================================
-
-  //===========================================================================
-  // BEGIN: Checkpointing code.
-  //===========================================================================
-  // This was been copied from OZ's ERC20Votes checkpointing system with minor
-  // revisions:
-  //   * Replace "Vote" with "Deposit", as deposits are what we need to track
-  //   * Make some variable names longer for readability
-  //   * Break lines at 80-characters
-  struct Checkpoint {
-    uint32 fromBlock;
-    uint224 deposits;
-  }
-  mapping(address => Checkpoint[]) private _checkpoints;
-  Checkpoint[] private _totalDepositCheckpoints;
-  function checkpoints(
-    address account,
-    uint32 pos
-  ) public view virtual returns (Checkpoint memory) {
-    return _checkpoints[account][pos];
-  }
-  function getDeposits(address account) public view virtual returns (uint256) {
-    uint256 pos = _checkpoints[account].length;
-    return pos == 0 ? 0 : _checkpoints[account][pos - 1].deposits;
-  }
-  function getPastDeposits(
-    address account,
-    uint256 blockNumber
-  ) public view virtual returns (uint256) {
-    require(blockNumber < block.number, "block not yet mined");
-    return _checkpointsLookup(_checkpoints[account], blockNumber);
-  }
-  function getPastTotalDeposits(
-    uint256 blockNumber
-  ) public view virtual returns (uint256) {
-    require(blockNumber < block.number, "block not yet mined");
-    return _checkpointsLookup(_totalDepositCheckpoints, blockNumber);
-  }
-  function _checkpointsLookup(
-    Checkpoint[] storage ckpts,
-    uint256 blockNumber
-  ) private view returns (uint256) {
-    // We run a binary search to look for the earliest checkpoint taken after
-    // `blockNumber`.
-    uint256 high = ckpts.length;
-    uint256 low = 0;
-    while (low < high) {
-      uint256 mid = Math.average(low, high);
-      if (ckpts[mid].fromBlock > blockNumber) {
-        high = mid;
-      } else {
-        low = mid + 1;
-      }
-    }
-    return high == 0 ? 0 : ckpts[high - 1].deposits;
-  }
-  function _writeCheckpoint(
-    Checkpoint[] storage ckpts,
-    function(uint256, uint256) view returns (uint256) operation,
-    uint256 delta
-  ) private returns (uint256 oldWeight, uint256 newWeight) {
-    uint256 position = ckpts.length;
-    oldWeight = position == 0 ? 0 : ckpts[position - 1].deposits;
-    newWeight = operation(oldWeight, delta);
-
-    if (position > 0 && ckpts[position - 1].fromBlock == block.number) {
-      ckpts[position - 1].deposits = SafeCast.toUint224(newWeight);
-    } else {
-      ckpts.push(
-        Checkpoint({
-          fromBlock: SafeCast.toUint32(block.number),
-          deposits: SafeCast.toUint224(newWeight)
-        })
-      );
-    }
-  }
-  function _additionFn(uint256 a, uint256 b) private pure returns (uint256) {
-    return a + b;
-  }
-
-  function _subtractionFn(uint256 a, uint256 b) private pure returns (uint256) {
-    return a - b;
-  }
-  //===========================================================================
-  // END: Checkpointing code.
   //===========================================================================
   // forgefmt: disable-end
 }
