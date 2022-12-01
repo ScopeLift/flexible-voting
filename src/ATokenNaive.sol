@@ -108,8 +108,6 @@ contract ATokenNaive is AToken {
     _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
   }
 
-  /// TODO how to handle onBehalfOf?
-  /// TODO should this revert if the vote has been cast?
   /// @notice Allow a depositor to express their voting preference for a given
   /// proposal. Their preference is recorded internally but not moved to the
   /// Governor until `castVote` is called. We deliberately do NOT revert if the
@@ -118,10 +116,7 @@ contract ATokenNaive is AToken {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
-    uint256 weight = Checkpoints.getAtBlock(
-      _depositCheckpoints[msg.sender],
-      governor.proposalSnapshot(proposalId)
-    );
+    uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
     require(!_proposalVotersHasVoted[proposalId][msg.sender], "already voted");
@@ -162,10 +157,7 @@ contract ATokenNaive is AToken {
     // Use the snapshot of total deposits to determine total voting weight. We cannot
     // use the proposalVote numbers alone, since some people with deposits at the
     // snapshot might not have expressed votes.
-    uint256 _totalDepositWeightAtSnapshot = Checkpoints.getAtBlock(
-      _totalDepositCheckpoints,
-      _proposalSnapshotBlockNumber
-    );
+    uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
@@ -211,20 +203,30 @@ contract ATokenNaive is AToken {
     uint256 amount,
     uint256 index
   ) internal returns (bool) {
-    bool _returnVar = _mintScaled(caller, onBehalfOf, amount, index);
-
     // We need to read the new balance directly from storage so that we snapshot
     // the total amount of the underlying asset that has actually been transferred. We
     // need our checkpoints to still match up with the underlying asset balance.
-    Checkpoints.push(_depositCheckpoints[onBehalfOf], _userState[onBehalfOf].balance);
-    Checkpoints.push(_totalDepositCheckpoints, IERC20(_underlyingAsset).balanceOf(address(this)));
+    Checkpoints.History storage _depositHistory = _depositCheckpoints[onBehalfOf];
+    Checkpoints.push(
+      _depositHistory,
+      Checkpoints.latest(_depositHistory) + amount
+    );
+    Checkpoints.push(
+      _totalDepositCheckpoints,
+      Checkpoints.latest(_totalDepositCheckpoints) + amount
+    );
 
-    return _returnVar;
+    return _mintScaled(caller, onBehalfOf, amount, index);
   }
 
   function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
     return Checkpoints.getAtBlock(_depositCheckpoints[_voter], _blockNumber);
   }
+
+  function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
+    return Checkpoints.getAtBlock(_totalDepositCheckpoints, _blockNumber);
+  }
+
 
   // forgefmt: disable-start
   //===========================================================================
@@ -265,19 +267,26 @@ contract ATokenNaive is AToken {
     uint256 amount,
     uint256 index
   ) external virtual override onlyPool {
-    _burnScaled(from, receiverOfUnderlying, amount, index);
-    if (receiverOfUnderlying != address(this)) {
-      IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
-    }
-
     // Begin modifications.
     //
     // We need to read the new balance directly from storage so that we snapshot
     // the total amount of the underlying asset that has actually been transferred. We
     // need our checkpoints to still match up with the underlying asset balance.
-    Checkpoints.push(_depositCheckpoints[from], _userState[from].balance);
-    Checkpoints.push(_totalDepositCheckpoints, IERC20(_underlyingAsset).balanceOf(address(this)));
+    Checkpoints.History storage _depositHistory = _depositCheckpoints[from];
+    Checkpoints.push(
+      _depositHistory,
+      Checkpoints.latest(_depositHistory) - amount
+    );
+    Checkpoints.push(
+      _totalDepositCheckpoints,
+      Checkpoints.latest(_totalDepositCheckpoints) - amount
+    );
+
     // End modifications.
+    _burnScaled(from, receiverOfUnderlying, amount, index);
+    if (receiverOfUnderlying != address(this)) {
+      IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
+    }
   }
   //===========================================================================
   // END: Aave overrides
