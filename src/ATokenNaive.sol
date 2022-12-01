@@ -207,13 +207,9 @@ contract ATokenNaive is AToken {
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with underlying asset transactions.
     Checkpoints.History storage _depositHistory = _depositCheckpoints[onBehalfOf];
+    Checkpoints.push(_depositHistory, Checkpoints.latest(_depositHistory) + amount);
     Checkpoints.push(
-      _depositHistory,
-      Checkpoints.latest(_depositHistory) + amount
-    );
-    Checkpoints.push(
-      _totalDepositCheckpoints,
-      Checkpoints.latest(_totalDepositCheckpoints) + amount
+      _totalDepositCheckpoints, Checkpoints.latest(_totalDepositCheckpoints) + amount
     );
 
     return _mintScaled(caller, onBehalfOf, amount, index);
@@ -226,7 +222,6 @@ contract ATokenNaive is AToken {
   function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
     return Checkpoints.getAtBlock(_totalDepositCheckpoints, _blockNumber);
   }
-
 
   // forgefmt: disable-start
   //===========================================================================
