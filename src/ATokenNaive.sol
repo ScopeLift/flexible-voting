@@ -203,9 +203,9 @@ contract ATokenNaive is AToken {
     uint256 amount,
     uint256 index
   ) internal returns (bool) {
-    // We need to read the new balance directly from storage so that we snapshot
-    // the total amount of the underlying asset that has actually been transferred. We
-    // need our checkpoints to still match up with the underlying asset balance.
+    // We increment by `amount` instead of any computed/rebased amounts because
+    // `amount` is what actually gets transferred of the underlying asset. We
+    // need our checkpoints to still match up with underlying asset transactions.
     Checkpoints.History storage _depositHistory = _depositCheckpoints[onBehalfOf];
     Checkpoints.push(
       _depositHistory,
@@ -269,9 +269,9 @@ contract ATokenNaive is AToken {
   ) external virtual override onlyPool {
     // Begin modifications.
     //
-    // We need to read the new balance directly from storage so that we snapshot
-    // the total amount of the underlying asset that has actually been transferred. We
-    // need our checkpoints to still match up with the underlying asset balance.
+    // We decrement by `amount` instead of any computed/rebased amounts because
+    // `amount` is what actually gets transferred of the underlying asset. We
+    // need our checkpoints to still match up with underlying asset transactions.
     Checkpoints.History storage _depositHistory = _depositCheckpoints[from];
     Checkpoints.push(
       _depositHistory,
