@@ -57,7 +57,7 @@ contract ATokenNaive is AToken {
   uint32 public immutable CAST_VOTE_WINDOW;
 
   /// @notice Map proposalId to an address to whether they have voted on this proposal.
-  mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
+  mapping(uint256 => mapping(address => bool)) private proposalVotersHasVoted;
 
   /// @notice Map proposalId to whether or not this contract has cast votes on it.
   mapping(uint256 => bool) public hasCastVotesOnProposal;
@@ -71,10 +71,10 @@ contract ATokenNaive is AToken {
   IFractionalGovernor public immutable governor;
 
   /// @notice Mapping from address to deposit checkpoint history.
-  mapping(address => Checkpoints.History) private _depositCheckpoints;
+  mapping(address => Checkpoints.History) private depositCheckpoints;
 
   /// @notice History of total underlying asset balance.
-  Checkpoints.History private _totalDepositCheckpoints;
+  Checkpoints.History private totalDepositCheckpoints;
 
   /// @dev Constructor.
   /// @param _pool The address of the Pool contract
@@ -119,8 +119,8 @@ contract ATokenNaive is AToken {
     uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
-    require(!_proposalVotersHasVoted[proposalId][msg.sender], "already voted");
-    _proposalVotersHasVoted[proposalId][msg.sender] = true;
+    require(!proposalVotersHasVoted[proposalId][msg.sender], "already voted");
+    proposalVotersHasVoted[proposalId][msg.sender] = true;
 
     if (support == uint8(VoteType.Against)) {
       proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
@@ -206,21 +206,19 @@ contract ATokenNaive is AToken {
     // We increment by `amount` instead of any computed/rebased amounts because
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with underlying asset transactions.
-    Checkpoints.History storage _depositHistory = _depositCheckpoints[onBehalfOf];
+    Checkpoints.History storage _depositHistory = depositCheckpoints[onBehalfOf];
     Checkpoints.push(_depositHistory, Checkpoints.latest(_depositHistory) + amount);
-    Checkpoints.push(
-      _totalDepositCheckpoints, Checkpoints.latest(_totalDepositCheckpoints) + amount
-    );
+    Checkpoints.push(totalDepositCheckpoints, Checkpoints.latest(totalDepositCheckpoints) + amount);
 
     return _mintScaled(caller, onBehalfOf, amount, index);
   }
 
   function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
-    return Checkpoints.getAtBlock(_depositCheckpoints[_voter], _blockNumber);
+    return Checkpoints.getAtBlock(depositCheckpoints[_voter], _blockNumber);
   }
 
   function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
-    return Checkpoints.getAtBlock(_totalDepositCheckpoints, _blockNumber);
+    return Checkpoints.getAtBlock(totalDepositCheckpoints, _blockNumber);
   }
 
   // forgefmt: disable-start
@@ -267,14 +265,14 @@ contract ATokenNaive is AToken {
     // We decrement by `amount` instead of any computed/rebased amounts because
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with underlying asset transactions.
-    Checkpoints.History storage _depositHistory = _depositCheckpoints[from];
+    Checkpoints.History storage _depositHistory = depositCheckpoints[from];
     Checkpoints.push(
       _depositHistory,
       Checkpoints.latest(_depositHistory) - amount
     );
     Checkpoints.push(
-      _totalDepositCheckpoints,
-      Checkpoints.latest(_totalDepositCheckpoints) - amount
+      totalDepositCheckpoints,
+      Checkpoints.latest(totalDepositCheckpoints) - amount
     );
 
     // End modifications.
