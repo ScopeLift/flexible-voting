@@ -35,6 +35,7 @@ contract ATokenNaive is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
   using GPv2SafeERC20 for IERC20;
+  using Checkpoints for Checkpoints.History;
 
   /// @notice The voting options corresponding to those used in the Governor.
   enum VoteType {
@@ -207,18 +208,18 @@ contract ATokenNaive is AToken {
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with underlying asset transactions.
     Checkpoints.History storage _depositHistory = depositCheckpoints[onBehalfOf];
-    Checkpoints.push(_depositHistory, Checkpoints.latest(_depositHistory) + amount);
-    Checkpoints.push(totalDepositCheckpoints, Checkpoints.latest(totalDepositCheckpoints) + amount);
+    _depositHistory.push(_depositHistory.latest() + amount);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
 
     return _mintScaled(caller, onBehalfOf, amount, index);
   }
 
   function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
-    return Checkpoints.getAtBlock(depositCheckpoints[_voter], _blockNumber);
+    return depositCheckpoints[_voter].getAtBlock(_blockNumber);
   }
 
   function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
-    return Checkpoints.getAtBlock(totalDepositCheckpoints, _blockNumber);
+    return totalDepositCheckpoints.getAtBlock(_blockNumber);
   }
 
   // forgefmt: disable-start
@@ -266,14 +267,8 @@ contract ATokenNaive is AToken {
     // `amount` is what actually gets transferred of the underlying asset. We
     // need our checkpoints to still match up with underlying asset transactions.
     Checkpoints.History storage _depositHistory = depositCheckpoints[from];
-    Checkpoints.push(
-      _depositHistory,
-      Checkpoints.latest(_depositHistory) - amount
-    );
-    Checkpoints.push(
-      totalDepositCheckpoints,
-      Checkpoints.latest(totalDepositCheckpoints) - amount
-    );
+    _depositHistory.push(_depositHistory.latest() - amount);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
 
     // End modifications.
     _burnScaled(from, receiverOfUnderlying, amount, index);
