@@ -130,14 +130,17 @@ contract Deposit is FractionalPoolTest {
     _amountA = bound(_amountA, 1, type(uint128).max);
     _amountB = bound(_amountB, 1, type(uint128).max);
 
+    // Deposit some gov.
     _mintGovAndDepositIntoPool(_holder, _amountA);
-    assertEq(token.balanceOf(_holder), 0); // they've all been deposited
-    assert(token.balanceOf(address(pool)) > token.balanceOf(_holder));
 
     vm.roll(block.number + 42); // advance so that we can look at checkpoints
 
     // We can still retrieve the user's balance at the given time.
-    assertEq(pool.getPastDeposits(_holder, block.number - 1), _amountA);
+    assertEq(
+      pool.getPastDeposits(_holder, block.number - 1),
+      _amountA,
+      "user's first deposit was not properly checkpointed"
+    );
 
     uint256 newBlockNum = block.number + _depositDelay;
     vm.roll(newBlockNum);
@@ -146,7 +149,11 @@ contract Deposit is FractionalPoolTest {
     _mintGovAndDepositIntoPool(_holder, _amountB);
 
     vm.roll(block.number + 42); // advance so that we can look at checkpoints
-    assertEq(pool.getPastDeposits(_holder, block.number - 1), _amountA + _amountB);
+    assertEq(
+      pool.getPastDeposits(_holder, block.number - 1),
+      _amountA + _amountB,
+      "user's second deposit was not properly checkpointed"
+    );
   }
 }
 
