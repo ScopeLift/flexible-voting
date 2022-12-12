@@ -31,7 +31,7 @@ interface IVotingToken {
   function getPastVotes(address account, uint256 blockNumber) external view returns (uint256);
 }
 
-contract ATokenNaive is AToken {
+contract ATokenReserveCache is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
   using GPv2SafeERC20 for IERC20;
@@ -85,6 +85,13 @@ contract ATokenNaive is AToken {
   constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
     governor = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
+  }
+
+  // Get the rebased balance of a user at a given block number.
+  function balanceOfAtBlock(
+    address user,
+    uint256 block
+  ) public view returns(uint256) {
   }
 
   // TODO Is there a better way to do this? It cannot be done in the constructor

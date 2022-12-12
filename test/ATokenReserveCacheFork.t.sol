@@ -15,7 +15,7 @@ import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
 
-import { ATokenNaive } from "src/ATokenNaive.sol";
+import { ATokenReserveCache } from "src/ATokenReserveCache.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
@@ -29,7 +29,7 @@ import { GovToken } from "test/GovToken.sol";
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
-  ATokenNaive aToken;
+  ATokenReserveCache aToken;
   GovToken govToken;
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
@@ -109,7 +109,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new ATokenNaive(pool, address(governor), 1200);
+    AToken _aTokenImplementation = new ATokenReserveCache(pool, address(governor), 1200);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -171,7 +171,7 @@ contract AaveAtokenForkTest is Test {
         //   address variableDebtToken,
         //   address interestRateStrategyAddress
         // );
-        aToken = ATokenNaive(address(uint160(uint256(_event.topics[2]))));
+        aToken = ATokenReserveCache(address(uint160(uint256(_event.topics[2]))));
         vm.label(address(aToken), "aToken");
       }
     }
@@ -1450,8 +1450,8 @@ contract VoteTest is AaveAtokenForkTest {
     (uint256 _againstVotes, uint256 _forVotes, /*uint256 _abstainVotes */ ) =
       governor.proposalVotes(_proposalId);
 
-    // userA's vote *should* have beaten userB's, but it won't.
-    assertEq(_forVotes, _againstVotes, "if this fails, you have fixed ATokenNaive!");
+    // userA's vote *should* have beaten userB's.
+    assertGt(_forVotes, _againstVotes, "rebasing isn't reflected in vote weight");
   }
 
   function _testCannotExpressVoteAfterVotesHaveBeenCast(
@@ -1509,5 +1509,106 @@ contract VoteTest is AaveAtokenForkTest {
 
     // Now votes should be castable.
     aToken.castVote(_proposalId);
+  }
+}
+
+// TODO
+// write function to get rebasedBalanceAtBlock(address)
+// test that the latest checkpointed value matches aToken.balanceOf(address)
+contract BalanceOfTest is AaveAtokenForkTest {
+  function test_CheckpointingBalanceMatchesRebasedBalance() public {
+    address _who = address(0xBEEF);
+    uint256 _amountA = 42 ether;
+    uint256 _amountB = 3 ether;
+
+    uint256[] memory _rebasedBalances = new uint256[](3);
+
+    // Advance the clock so that checkpoints become meaningful.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_who, _amountA);
+    _rebasedBalances[0] = aToken.balanceOf(_who);
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number),
+      aToken.balanceOf(_who)
+    );
+
+    // Borrow some Gov for aGOV to start rebasing.
+    deal(weth, address(this), 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, address(this), 0);
+    pool.borrow(
+      address(govToken),
+      12 ether, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+
+    // Advance the clock.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+
+    // Rebasing should have occurred.
+    assertGt(aToken.balanceOf(_who), _rebasedBalances[0]);
+    _rebasedBalances[1] = aToken.balanceOf(_who);
+    // balanceOfAtBlock should match the new rebased balance.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number),
+      aToken.balanceOf(_who)
+    );
+    // balanceOfAtBlock should match the initial balance.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 42),
+      _rebasedBalances[0]
+    );
+    // balanceOfAtBlock should be able to give us the rebased balance at an
+    // intermediate point.
+    assertGt(
+      aToken.balanceOfAtBlock(_who, block.number - 21),
+      _rebasedBalances[0]
+    );
+    assertLt(
+      aToken.balanceOfAtBlock(_who, block.number - 21),
+      aToken.balanceOfAtBlock(_who, block.number)
+    );
+
+    // Deposit again to make things more complicated.
+    _mintGovAndSupplyToAave(_who, _amountB);
+
+    // Advance the clock.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // Rebasing should have occurred.
+    assertGt(aToken.balanceOf(_who), _rebasedBalances[0]);
+    assertGt(aToken.balanceOf(_who), _rebasedBalances[1]);
+    _rebasedBalances[2] = aToken.balanceOf(_who);
+    // balanceOfAtBlock should match the new rebased balance.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number),
+      aToken.balanceOf(_who)
+    );
+    // balanceOfAtBlock should match historical balances.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 142),
+      _rebasedBalances[0]
+    );
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 100),
+      _rebasedBalances[1]
+    );
+    // balanceOfAtBlock should be able to give us the rebased balance at an
+    // intermediate point.
+    assertGt(
+      aToken.balanceOfAtBlock(_who, block.number - 33),
+      _rebasedBalances[1]
+    );
+    assertLt(
+      aToken.balanceOfAtBlock(_who, block.number - 33),
+      aToken.balanceOfAtBlock(_who, block.number)
+    );
   }
 }
