@@ -15,7 +15,7 @@ import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
 
-import { ATokenReserveCache } from "src/ATokenReserveCache.sol";
+import { MockATokenReserveCache } from "test/MockATokenReserveCache.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
@@ -29,7 +29,7 @@ import { GovToken } from "test/GovToken.sol";
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
-  ATokenReserveCache aToken;
+  MockATokenReserveCache aToken;
   GovToken govToken;
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
@@ -89,7 +89,7 @@ contract AaveAtokenForkTest is Test {
     //   0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress
     //   address(
     //     new DefaultReserveInterestRateStrategy(
-    //       These values were taken from Optimism scan for the etched address.
+    //       // These values were taken from Optimism scan for the etched address.
     //       IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb), // provider
     //       800000000000000000000000000, // optimalUsageRatio
     //       0, // baseVariableBorrowRate
@@ -109,7 +109,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new ATokenReserveCache(pool, address(governor), 1200);
+    AToken _aTokenImplementation = new MockATokenReserveCache(pool, address(governor), 1200);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -171,7 +171,7 @@ contract AaveAtokenForkTest is Test {
         //   address variableDebtToken,
         //   address interestRateStrategyAddress
         // );
-        aToken = ATokenReserveCache(address(uint160(uint256(_event.topics[2]))));
+        aToken = MockATokenReserveCache(address(uint160(uint256(_event.topics[2]))));
         vm.label(address(aToken), "aToken");
       }
     }
@@ -1512,7 +1512,7 @@ contract VoteTest is AaveAtokenForkTest {
   }
 }
 
-contract GetPastStoredBalanceTest is AaveAtokenForkTest {
+contract AaveAtokenBalanceOfForkTest is AaveAtokenForkTest {
   function _initiateRebasing() internal {
     uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
 
@@ -1543,7 +1543,102 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     );
   }
 
+}
+
+contract GetPastStoredBalanceTest is AaveAtokenBalanceOfForkTest {
   function test_GetPastStoredBalanceCorrectlyReadsCheckpoints() public {
+    _initiateRebasing();
+
+    address _who = address(0xBEEF);
+    uint256 _amountA = 42 ether;
+    uint256 _amountB = 3 ether;
+
+    uint256[] memory _rawBalances = new uint256[](3);
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_who, _amountA);
+    _rawBalances[0] = aToken.exposedRawBalanceOf(_who);
+
+    // It's important that this be greater than a ray, since Aave uses this
+    // index when determining the raw stored balance. If it were a ray, the
+    // stored balance would just equal the supplied amount and this test would
+    // be less meaningful.
+    assertGt(
+      pool.getReserveData(address(govToken)).liquidityIndex,
+      1e27,
+      "liquidityIndex has not changed, is rebasing occuring?"
+    );
+
+    // The supplied amount should be less than the raw balance, which was
+    // scaled down by the reserve liquidity index.
+    assertLt(_rawBalances[0], _amountA, "supply wasn't reduced by liquidityIndex");
+
+    // Advance the clock.
+    uint256 _blocksJumped = 42;
+    vm.roll(block.number + _blocksJumped);
+    vm.warp(block.timestamp + 42 days);
+
+    // Rebasing should not affect the raw balance.
+    assertEq(
+      aToken.exposedRawBalanceOf(_who),
+      _rawBalances[0],
+      "raw balance shouldn't be affected by rebasing"
+    );
+
+    // getPastStoredBalance should match the initial raw balance.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumped + 1),
+      _rawBalances[0],
+      "getPastStoredBalance does not match the initial raw balance"
+    );
+
+    // getPastStoredBalance should be able to give us the rebased balance at an
+    // intermediate point.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - (_blocksJumped / 3)),
+      _rawBalances[0]
+    );
+
+    // Deposit again to make things more complicated.
+    _mintGovAndSupplyToAave(_who, _amountB);
+    _rawBalances[1] = aToken.exposedRawBalanceOf(_who);
+
+    // Advance the clock.
+    uint256 _blocksJumpedSecondTime = 100;
+    vm.roll(block.number + _blocksJumpedSecondTime);
+    vm.warp(block.timestamp + 100 days);
+
+    // Rebasing should not affect the raw balance.
+    assertEq(aToken.exposedRawBalanceOf(_who), _rawBalances[1]);
+    assertGt(_rawBalances[1], _rawBalances[0], "raw balance did not increase");
+
+    // getPastStoredBalance should match historical balances.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumped - _blocksJumpedSecondTime + 1),
+      _rawBalances[0],
+      "getPastStoredBalance did not match original raw balance"
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime + 1),
+      _rawBalances[1],
+      "getPastStoredBalance did not match raw balance after second supply"
+    );
+    // getPastStoredBalance should be able to give us the raw balance at intermediate points.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3),
+      _rawBalances[1]
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3),
+      aToken.getPastStoredBalance(_who, block.number - 1)
+    );
+  }
+
+  // TODO test with withdrawals also
+}
+
+contract BalanceOfTest is AaveAtokenBalanceOfForkTest {
+  function test_BalanceOfAtBlockCorrectlyReadsCheckpoints() public {
     _initiateRebasing();
 
     address _who = address(0xBEEF);
@@ -1555,12 +1650,6 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     // Deposit.
     _mintGovAndSupplyToAave(_who, _amountA);
     _rebasedBalances[0] = aToken.balanceOf(_who);
-
-    // It's important that this be greater than a ray, since Aave uses this
-    // index when determining the raw stored balance. If it were a ray, the
-    // stored balance would just equal the supplied amount and this test would
-    // be less meaningful.
-    assertGt(pool.getReserveData(address(govToken)).liquidityIndex, 1e27);
 
     // Advance the clock.
     vm.roll(block.number + 42);
@@ -1623,104 +1712,6 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     assertEq(
       aToken.balanceOfAtBlock(_who, block.number - 1),
       _rebasedBalances[2]
-    );
-  }
-}
-
-contract BalanceOfTest is AaveAtokenForkTest {
-  function test_CheckpointingBalanceMatchesRebasedBalance() public {
-    address _who = address(0xBEEF);
-    uint256 _amountA = 42 ether;
-    uint256 _amountB = 3 ether;
-
-    uint256[] memory _rebasedBalances = new uint256[](3);
-
-    // Advance the clock so that checkpoints become meaningful.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-
-    // Deposit.
-    _mintGovAndSupplyToAave(_who, _amountA);
-    _rebasedBalances[0] = aToken.balanceOf(_who);
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number),
-      aToken.balanceOf(_who)
-    );
-
-    // Borrow some Gov for aGOV to start rebasing.
-    deal(weth, address(this), 100 ether);
-    ERC20(weth).approve(address(pool), type(uint256).max);
-    pool.supply(weth, 100 ether, address(this), 0);
-    pool.borrow(
-      address(govToken),
-      12 ether, // amount of GOV to borrow
-      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-      0, // referralCode
-      address(this) // onBehalfOf
-    );
-
-    // Advance the clock.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-
-    // Rebasing should have occurred.
-    assertGt(aToken.balanceOf(_who), _rebasedBalances[0]);
-    _rebasedBalances[1] = aToken.balanceOf(_who);
-    // balanceOfAtBlock should match the new rebased balance.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number),
-      aToken.balanceOf(_who)
-    );
-    // balanceOfAtBlock should match the initial balance.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 42),
-      _rebasedBalances[0]
-    );
-    // balanceOfAtBlock should be able to give us the rebased balance at an
-    // intermediate point.
-    assertGt(
-      aToken.balanceOfAtBlock(_who, block.number - 21),
-      _rebasedBalances[0]
-    );
-    assertLt(
-      aToken.balanceOfAtBlock(_who, block.number - 21),
-      aToken.balanceOfAtBlock(_who, block.number)
-    );
-
-    // Deposit again to make things more complicated.
-    _mintGovAndSupplyToAave(_who, _amountB);
-
-    // Advance the clock.
-    vm.roll(block.number + 100);
-    vm.warp(block.timestamp + 100 days);
-
-    // Rebasing should have occurred.
-    assertGt(aToken.balanceOf(_who), _rebasedBalances[0]);
-    assertGt(aToken.balanceOf(_who), _rebasedBalances[1]);
-    _rebasedBalances[2] = aToken.balanceOf(_who);
-    // balanceOfAtBlock should match the new rebased balance.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number),
-      aToken.balanceOf(_who)
-    );
-    // balanceOfAtBlock should match historical balances.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 142),
-      _rebasedBalances[0]
-    );
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 100),
-      _rebasedBalances[1]
-    );
-    // balanceOfAtBlock should be able to give us the rebased balance at an
-    // intermediate point.
-    assertGt(
-      aToken.balanceOfAtBlock(_who, block.number - 33),
-      _rebasedBalances[1]
-    );
-    assertLt(
-      aToken.balanceOfAtBlock(_who, block.number - 33),
-      aToken.balanceOfAtBlock(_who, block.number)
     );
   }
 }

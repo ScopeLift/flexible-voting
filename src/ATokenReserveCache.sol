@@ -74,6 +74,9 @@ contract ATokenReserveCache is AToken {
   /// @notice Mapping from address to deposit checkpoint history.
   mapping(address => Checkpoints.History) private depositCheckpoints;
 
+  /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
+  mapping(address => Checkpoints.History) private balanceCheckpoints;
+
   /// @notice History of total underlying asset balance.
   Checkpoints.History private totalDepositCheckpoints;
 
@@ -218,7 +221,18 @@ contract ATokenReserveCache is AToken {
     _depositHistory.push(_depositHistory.latest() + amount);
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
 
-    return _mintScaled(caller, onBehalfOf, amount, index);
+    bool _mintScaledReturn = _mintScaled(caller, onBehalfOf, amount, index);
+    _checkpointRawBalanceOf(onBehalfOf);
+    return _mintScaledReturn;
+  }
+
+  function _checkpointRawBalanceOf(address _user) internal {
+    balanceCheckpoints[_user].push(_userState[_user].balance);
+  }
+
+  // Returns the raw (i.e. unrebased) balanceOf the _user at the _blockNumber.
+  function getPastStoredBalance(address _user, uint256 _blockNumber) public returns (uint256) {
+    return balanceCheckpoints[_user].getAtBlock(_blockNumber);
   }
 
   function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
