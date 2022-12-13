@@ -1512,9 +1512,121 @@ contract VoteTest is AaveAtokenForkTest {
   }
 }
 
-// TODO
-// write function to get rebasedBalanceAtBlock(address)
-// test that the latest checkpointed value matches aToken.balanceOf(address)
+contract GetPastStoredBalanceTest is AaveAtokenForkTest {
+  function _initiateRebasing() internal {
+    uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
+
+    // Have someone mint and deposit some gov.
+    _mintGovAndSupplyToAave(address(0xBA5EBA11), 1000 ether);
+
+    // Have someone else borrow some gov.
+    deal(weth, address(this), 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, address(this), 0);
+    pool.borrow(
+      address(govToken),
+      42 ether, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+
+    // Advance the clock so that checkpoints become meaningful.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+
+    // We should be rebasing at this point.
+    assertGt(
+      pool.getReserveData(address(govToken)).currentLiquidityRate,
+      _initLiquidityRate,
+      "If the liquidity rate has not changed, the following tests won't be meaningful"
+    );
+  }
+
+  function test_GetPastStoredBalanceCorrectlyReadsCheckpoints() public {
+    _initiateRebasing();
+
+    address _who = address(0xBEEF);
+    uint256 _amountA = 4.2 ether;
+    uint256 _amountB = 30 ether;
+
+    uint256[] memory _rebasedBalances = new uint256[](3);
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_who, _amountA);
+    _rebasedBalances[0] = aToken.balanceOf(_who);
+
+    // It's important that this be greater than a ray, since Aave uses this
+    // index when determining the raw stored balance. If it were a ray, the
+    // stored balance would just equal the supplied amount and this test would
+    // be less meaningful.
+    assertGt(pool.getReserveData(address(govToken)).liquidityIndex, 1e27);
+
+    // Advance the clock.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+    _rebasedBalances[1] = aToken.balanceOf(_who);
+
+    // Rebasing should have occurred.
+    assertGt(_rebasedBalances[1], _rebasedBalances[0]);
+
+    // balanceOfAtBlock should match the initial balance.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 42),
+      _rebasedBalances[0]
+    );
+
+    // balanceOfAtBlock should be able to give us the rebased balance at an
+    // intermediate point.
+    assertGt(
+      aToken.balanceOfAtBlock(_who, block.number - 21),
+      _rebasedBalances[0]
+    );
+
+    // Deposit again to make things more complicated.
+    _mintGovAndSupplyToAave(_who, _amountB);
+
+    // Advance the clock.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+    _rebasedBalances[2] = aToken.balanceOf(_who);
+
+    // Rebasing should have occurred.
+    assertGt(_rebasedBalances[2], _rebasedBalances[1]);
+
+    // balanceOfAtBlock should match historical balances.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 142),
+      _rebasedBalances[0]
+    );
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 100),
+      _rebasedBalances[1]
+    );
+    // balanceOfAtBlock should be able to give us the rebased balance at
+    // intermediate points.
+    uint256 _randomNumOfBlocksSinceLastRoll = 33;
+    assertGt(
+      aToken.balanceOfAtBlock(_who, block.number - _randomNumOfBlocksSinceLastRoll),
+      _rebasedBalances[1]
+    );
+    assertLt(
+      aToken.balanceOfAtBlock(_who, block.number - _randomNumOfBlocksSinceLastRoll),
+      aToken.balanceOfAtBlock(_who, block.number - 1)
+    );
+
+    // Advance the clock to check one final datapoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    // balanceOfAtBlock should match the most recent rebased balance.
+    assertEq(
+      aToken.balanceOfAtBlock(_who, block.number - 1),
+      _rebasedBalances[2]
+    );
+  }
+}
+
 contract BalanceOfTest is AaveAtokenForkTest {
   function test_CheckpointingBalanceMatchesRebasedBalance() public {
     address _who = address(0xBEEF);
