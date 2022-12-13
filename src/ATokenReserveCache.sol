@@ -71,9 +71,6 @@ contract ATokenReserveCache is AToken {
   /// GovernorCountingFractional.
   IFractionalGovernor public immutable governor;
 
-  /// @notice Mapping from address to deposit checkpoint history.
-  mapping(address => Checkpoints.History) private depositCheckpoints;
-
   /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
   mapping(address => Checkpoints.History) private balanceCheckpoints;
 
@@ -88,13 +85,6 @@ contract ATokenReserveCache is AToken {
   constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
     governor = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
-  }
-
-  // Get the rebased balance of a user at a given block number.
-  function balanceOfAtBlock(
-    address user,
-    uint256 block
-  ) public view returns(uint256) {
   }
 
   // TODO Is there a better way to do this? It cannot be done in the constructor
@@ -127,7 +117,7 @@ contract ATokenReserveCache is AToken {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
-    uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+    uint256 weight = getPastStoredBalance(msg.sender, governor.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
     require(!proposalVotersHasVoted[proposalId][msg.sender], "already voted");
@@ -214,29 +204,34 @@ contract ATokenReserveCache is AToken {
     uint256 amount,
     uint256 index
   ) internal returns (bool) {
-    // We increment by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
-    // need our checkpoints to still match up with underlying asset transactions.
-    Checkpoints.History storage _depositHistory = depositCheckpoints[onBehalfOf];
-    _depositHistory.push(_depositHistory.latest() + amount);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
-
     bool _mintScaledReturn = _mintScaled(caller, onBehalfOf, amount, index);
-    _checkpointRawBalanceOf(onBehalfOf);
+
+    (uint256 _preMintRawBalance, uint256 _postMintRawBalance) = _checkpointRawBalanceOf(onBehalfOf);
+    totalDepositCheckpoints.push(
+      totalDepositCheckpoints.latest() + (_postMintRawBalance - _preMintRawBalance)
+    );
+
     return _mintScaledReturn;
   }
 
-  function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(_userState[_user].balance);
+  function _rawBalanceOf(address _user) internal returns (uint256) {
+    return _userState[_user].balance;
+  }
+
+  function _checkpointRawBalanceOf(
+    address _user
+  ) internal returns (
+    uint256 _previousBalance,
+    uint256 _currentBalance
+  )
+  {
+    (_previousBalance, _currentBalance) = balanceCheckpoints[_user].push(_rawBalanceOf(_user));
   }
 
   // Returns the raw (i.e. unrebased) balanceOf the _user at the _blockNumber.
   function getPastStoredBalance(address _user, uint256 _blockNumber) public returns (uint256) {
+    // TODO could we use getAtProbablyRecentBlock instead?
     return balanceCheckpoints[_user].getAtBlock(_blockNumber);
-  }
-
-  function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
-    return depositCheckpoints[_voter].getAtBlock(_blockNumber);
   }
 
   function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
@@ -282,17 +277,13 @@ contract ATokenReserveCache is AToken {
     uint256 amount,
     uint256 index
   ) external virtual override onlyPool {
-    // Begin modifications.
-    //
-    // We decrement by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
-    // need our checkpoints to still match up with underlying asset transactions.
-    Checkpoints.History storage _depositHistory = depositCheckpoints[from];
-    _depositHistory.push(_depositHistory.latest() - amount);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
-
     _burnScaled(from, receiverOfUnderlying, amount, index);
-    _checkpointRawBalanceOf(from);
+
+    // Begin modifications.
+    (uint256 _preBurnRawBalance, uint256 _postBurnRawBalance) = _checkpointRawBalanceOf(from);
+    totalDepositCheckpoints.push(
+      totalDepositCheckpoints.latest() - (_preBurnRawBalance - _postBurnRawBalance)
+    );
     // End modifications.
 
     if (receiverOfUnderlying != address(this)) {

@@ -413,42 +413,6 @@ contract Setup is AaveAtokenForkTest {
   }
 }
 
-contract Supply is AaveAtokenForkTest {
-  function test_DepositsAreCheckpointed() public {
-    address _who = address(0xBEEF);
-
-    // TODO randomize?
-    uint256 _amountA = 42 ether;
-    uint256 _amountB = 3 ether;
-
-    // There are no initial deposits.
-    uint256[] memory _checkpoints = new uint256[](3);
-    _checkpoints[0] = block.number;
-
-    // Advance the clock so that checkpoints become meaningful.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-    _checkpoints[1] = block.number;
-    _mintGovAndSupplyToAave(_who, _amountA);
-
-    // Advance the clock and supply again.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-    _checkpoints[2] = block.number;
-    _mintGovAndSupplyToAave(_who, _amountB);
-
-    // One more time, so that checkpoint 2 is in the past.
-    vm.roll(block.number + 1);
-
-    // We can still retrieve the user's balance at the given blocks.
-    assertEq(aToken.getPastDeposits(_who, _checkpoints[0]), 0);
-    assertEq(aToken.getPastDeposits(_who, _checkpoints[1]), _amountA);
-    assertEq(aToken.getPastDeposits(_who, _checkpoints[2]), _amountA + _amountB);
-    // TODO why isn't this rebasing?
-    assertEq(aToken.balanceOf(_who), _amountA + _amountB);
-  }
-}
-
 // TODO Why can't I just do `contract Vote is...` here?
 contract VoteTest is AaveAtokenForkTest {
   function test_UserCanCastAgainstVotes() public {
@@ -1659,81 +1623,8 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   }
 }
 
-contract BalanceOfTest is AaveAtokenForkTest {
-  function test_BalanceOfAtBlockCorrectlyReadsCheckpoints() public {
-    _initiateRebasing();
-
-    address _who = address(0xBEEF);
-    uint256 _amountA = 4.2 ether;
-    uint256 _amountB = 30 ether;
-
-    uint256[] memory _rebasedBalances = new uint256[](3);
-
-    // Deposit.
-    _mintGovAndSupplyToAave(_who, _amountA);
-    _rebasedBalances[0] = aToken.balanceOf(_who);
-
-    // Advance the clock.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-    _rebasedBalances[1] = aToken.balanceOf(_who);
-
-    // Rebasing should have occurred.
-    assertGt(_rebasedBalances[1], _rebasedBalances[0]);
-
-    // balanceOfAtBlock should match the initial balance.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 42),
-      _rebasedBalances[0]
-    );
-
-    // balanceOfAtBlock should be able to give us the rebased balance at an
-    // intermediate point.
-    assertGt(
-      aToken.balanceOfAtBlock(_who, block.number - 21),
-      _rebasedBalances[0]
-    );
-
-    // Deposit again to make things more complicated.
-    _mintGovAndSupplyToAave(_who, _amountB);
-
-    // Advance the clock.
-    vm.roll(block.number + 100);
-    vm.warp(block.timestamp + 100 days);
-    _rebasedBalances[2] = aToken.balanceOf(_who);
-
-    // Rebasing should have occurred.
-    assertGt(_rebasedBalances[2], _rebasedBalances[1]);
-
-    // balanceOfAtBlock should match historical balances.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 142),
-      _rebasedBalances[0]
-    );
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 100),
-      _rebasedBalances[1]
-    );
-    // balanceOfAtBlock should be able to give us the rebased balance at
-    // intermediate points.
-    uint256 _randomNumOfBlocksSinceLastRoll = 33;
-    assertGt(
-      aToken.balanceOfAtBlock(_who, block.number - _randomNumOfBlocksSinceLastRoll),
-      _rebasedBalances[1]
-    );
-    assertLt(
-      aToken.balanceOfAtBlock(_who, block.number - _randomNumOfBlocksSinceLastRoll),
-      aToken.balanceOfAtBlock(_who, block.number - 1)
-    );
-
-    // Advance the clock to check one final datapoint.
-    vm.roll(block.number + 1);
-    vm.warp(block.timestamp + 1 days);
-
-    // balanceOfAtBlock should match the most recent rebased balance.
-    assertEq(
-      aToken.balanceOfAtBlock(_who, block.number - 1),
-      _rebasedBalances[2]
-    );
-  }
-}
+// TODO confirm that after rebasing occurs, if all funds are withdrawn from
+// Aave, that the pool's totalDepositCheckpoint would end up 0
+// TODO write a more robust expressVote/castVote integration test in which
+// rebasing is going on, checking exact values based on current atoken.balanceOf
+// for multiple users depositing at different times
