@@ -255,6 +255,36 @@ contract AaveAtokenForkTest is Test {
     vm.roll(governor.proposalSnapshot(proposalId) + 1);
     assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Active));
   }
+
+  function _initiateRebasing() internal {
+    uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
+
+    // Have someone mint and deposit some gov.
+    _mintGovAndSupplyToAave(address(0xBA5EBA11), 1000 ether);
+
+    // Have someone else borrow some gov.
+    deal(weth, address(this), 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, address(this), 0);
+    pool.borrow(
+      address(govToken),
+      42 ether, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+
+    // Advance the clock so that checkpoints become meaningful.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+
+    // We should be rebasing at this point.
+    assertGt(
+      pool.getReserveData(address(govToken)).currentLiquidityRate,
+      _initLiquidityRate,
+      "If the liquidity rate has not changed, rebasing isn't happening."
+    );
+  }
 }
 
 contract Setup is AaveAtokenForkTest {
@@ -1512,40 +1542,7 @@ contract VoteTest is AaveAtokenForkTest {
   }
 }
 
-contract AaveAtokenBalanceOfForkTest is AaveAtokenForkTest {
-  function _initiateRebasing() internal {
-    uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
-
-    // Have someone mint and deposit some gov.
-    _mintGovAndSupplyToAave(address(0xBA5EBA11), 1000 ether);
-
-    // Have someone else borrow some gov.
-    deal(weth, address(this), 100 ether);
-    ERC20(weth).approve(address(pool), type(uint256).max);
-    pool.supply(weth, 100 ether, address(this), 0);
-    pool.borrow(
-      address(govToken),
-      42 ether, // amount of GOV to borrow
-      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-      0, // referralCode
-      address(this) // onBehalfOf
-    );
-
-    // Advance the clock so that checkpoints become meaningful.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-
-    // We should be rebasing at this point.
-    assertGt(
-      pool.getReserveData(address(govToken)).currentLiquidityRate,
-      _initLiquidityRate,
-      "If the liquidity rate has not changed, the following tests won't be meaningful"
-    );
-  }
-
-}
-
-contract GetPastStoredBalanceTest is AaveAtokenBalanceOfForkTest {
+contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   function test_GetPastStoredBalanceCorrectlyReadsCheckpoints() public {
     _initiateRebasing();
 
@@ -1632,12 +1629,37 @@ contract GetPastStoredBalanceTest is AaveAtokenBalanceOfForkTest {
       aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3),
       aToken.getPastStoredBalance(_who, block.number - 1)
     );
-  }
 
-  // TODO test with withdrawals also
+    // Withdrawals should be reflected in getPastStoredBalance.
+    vm.startPrank(_who);
+    pool.withdraw(
+      address(govToken),
+      aToken.balanceOf(_who) / 3, // Withdraw 1/3rd of balance.
+      _who
+    );
+    vm.stopPrank();
+
+    // Advance the clock
+    uint256 _blocksJumpedThirdTime = 10;
+    vm.roll(block.number + _blocksJumpedThirdTime);
+    vm.warp(block.timestamp + 10 days);
+
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime),
+      aToken.exposedRawBalanceOf(_who)
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - 1),
+      aToken.exposedRawBalanceOf(_who)
+    );
+    assertGt(
+      _rawBalances[1], // The raw balance pre-withdrawal.
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime)
+    );
+  }
 }
 
-contract BalanceOfTest is AaveAtokenBalanceOfForkTest {
+contract BalanceOfTest is AaveAtokenForkTest {
   function test_BalanceOfAtBlockCorrectlyReadsCheckpoints() public {
     _initiateRebasing();
 

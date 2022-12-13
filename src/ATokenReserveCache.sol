@@ -291,8 +291,10 @@ contract ATokenReserveCache is AToken {
     _depositHistory.push(_depositHistory.latest() - amount);
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
 
-    // End modifications.
     _burnScaled(from, receiverOfUnderlying, amount, index);
+    _checkpointRawBalanceOf(from);
+    // End modifications.
+
     if (receiverOfUnderlying != address(this)) {
       IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
     }
