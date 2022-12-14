@@ -31,7 +31,7 @@ interface IVotingToken {
   function getPastVotes(address account, uint256 blockNumber) external view returns (uint256);
 }
 
-contract ATokenReserveCache is AToken {
+contract ATokenCheckpointed is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
   using GPv2SafeERC20 for IERC20;

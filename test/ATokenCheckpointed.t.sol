@@ -15,7 +15,7 @@ import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
 
-import { MockATokenReserveCache } from "test/MockATokenReserveCache.sol";
+import { MockATokenCheckpointed } from "test/MockATokenCheckpointed.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
@@ -25,11 +25,13 @@ import { GovToken } from "test/GovToken.sol";
 // import { DefaultReserveInterestRateStrategy } from 'aave-v3-core/contracts/protocol/pool/DefaultReserveInterestRateStrategy.sol';
 // import { IPoolAddressesProvider } from 'aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol';
 // forgefmt: disable-end
+//
+import "forge-std/console2.sol";
 
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
-  MockATokenReserveCache aToken;
+  MockATokenCheckpointed aToken;
   GovToken govToken;
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
@@ -109,7 +111,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new MockATokenReserveCache(pool, address(governor), 1200);
+    AToken _aTokenImplementation = new MockATokenCheckpointed(pool, address(governor), 1200);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -171,7 +173,7 @@ contract AaveAtokenForkTest is Test {
         //   address variableDebtToken,
         //   address interestRateStrategyAddress
         // );
-        aToken = MockATokenReserveCache(address(uint160(uint256(_event.topics[2]))));
+        aToken = MockATokenCheckpointed(address(uint160(uint256(_event.topics[2]))));
         vm.label(address(aToken), "aToken");
       }
     }
@@ -1792,6 +1794,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   }
 }
 
+// TODO confirm that users who receive aToken transfers can call express vote
 // TODO confirm that after rebasing occurs, if all funds are withdrawn from
 // Aave, that the pool's totalDepositCheckpoint would end up 0
 // TODO write a more robust expressVote/castVote integration test in which
