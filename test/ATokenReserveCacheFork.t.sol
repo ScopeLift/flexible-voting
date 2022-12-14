@@ -1621,6 +1621,48 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
       aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime)
     );
   }
+
+  function test_GetPastStoredBalanceHandlesTransfers() public {
+    _initiateRebasing();
+
+    address _userA = address(0xBABE);
+    address _userB = address(0xBEEF);
+    uint256 _amount = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amount);
+    uint256 _initRawBalanceUserA = aToken.exposedRawBalanceOf(_userA);
+    uint256 _initRawBalanceUserB = aToken.exposedRawBalanceOf(_userB);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // Get the rebased balance for userA.
+    uint256 _initBalanceUserA = aToken.balanceOf(_userA);
+    uint256 _initBalanceUserB = aToken.balanceOf(_userB);
+    assertEq(_initBalanceUserB, 0);
+
+    // Transfer aTokens to userB.
+    vm.prank(_userA);
+    aToken.transfer(_userB, _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userB), _initBalanceUserA / 3);
+
+    // Advance the clock so that we checkpoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    // Confirm voting weight has shifted.
+    assertEq(
+      aToken.getPastStoredBalance(_userA, block.number - 1),
+      2 * _initRawBalanceUserA / 3
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_userB, block.number - 1),
+      _initRawBalanceUserA / 3
+    );
+  }
 }
 
 // TODO confirm that after rebasing occurs, if all funds are withdrawn from
