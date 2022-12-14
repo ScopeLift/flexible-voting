@@ -413,8 +413,7 @@ contract Setup is AaveAtokenForkTest {
   }
 }
 
-// TODO Why can't I just do `contract Vote is...` here?
-contract VoteTest is AaveAtokenForkTest {
+contract CastVote is AaveAtokenForkTest {
   function test_UserCanCastAgainstVotes() public {
     _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Against));
   }
@@ -764,6 +763,87 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_VotingWeightWorksWithRebasing() public {
     _testVotingWeightWorksWithRebasing(address(0xABE1), address(0xABE2), 424_242 ether);
+  }
+
+  function test_CastForVoteWithFullyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B1), // userA
+      address(0xB0B2), // userB
+      1 ether, // weight
+      1 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_CastAgainstVoteWithFullyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B11), // userA
+      address(0xB0B22), // userB
+      42 ether, // weight
+      42 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.Against) // supportTypeB
+    );
+  }
+
+  function test_CastAbstainVoteWithFullyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B111), // userA
+      address(0xB0B222), // userB
+      0.42 ether, // weight
+      0.42 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.Abstain) // supportTypeB
+    );
+  }
+
+  function test_CastSameVoteWithBarelyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B1111), // userA
+      address(0xB0B2222), // userB
+      // Transfer less than half.
+      1 ether, // weight
+      0.33 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_CastDifferentVoteWithBarelyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B1111), // userA
+      address(0xB0B2222), // userB
+      // Transfer less than half.
+      1 ether, // weight
+      0.33 ether, // transferAmount
+      uint8(VoteType.Abstain), // supportTypeA
+      uint8(VoteType.Against) // supportTypeB
+    );
+  }
+
+  function test_CastSameVoteWithMostlyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B1111), // userA
+      address(0xB0B2222), // userB
+      // Transfer almost all of it.
+      42 ether, // weight
+      41 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_CastDifferentVoteWithMostlyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      address(0xB0B1111), // userA
+      address(0xB0B2222), // userB
+      // Transfer almost all of it.
+      42 ether, // weight
+      41 ether, // transferAmount
+      uint8(VoteType.Against), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
   }
 
   function _testUserCanCastVotes(address _who, uint256 _voteWeight, uint8 _supportType) private {
@@ -1394,21 +1474,11 @@ contract VoteTest is AaveAtokenForkTest {
   function _testVotingWeightWorksWithRebasing(address _userA, address _userB, uint256 _supplyAmount)
     private
   {
+    _initiateRebasing();
+
     // Someone supplies GOV to Aave.
     _mintGovAndSupplyToAave(_userA, _supplyAmount);
     uint256 _initATokenBalanceA = aToken.balanceOf(_userA);
-
-    // Borrow some Gov for aGOV to start rebasing.
-    deal(weth, address(this), _supplyAmount);
-    ERC20(weth).approve(address(pool), type(uint256).max);
-    pool.supply(weth, _supplyAmount, address(this), 0);
-    pool.borrow(
-      address(govToken),
-      _supplyAmount / 10, // amount of GOV to borrow
-      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-      0, // referralCode
-      address(this) // onBehalfOf
-    );
 
     // Let those aGovTokens rebase \o/.
     vm.roll(block.number + 365 * 24 * 60 * 12); // 12 blocks per min for a year.
@@ -1503,6 +1573,61 @@ contract VoteTest is AaveAtokenForkTest {
 
     // Now votes should be castable.
     aToken.castVote(_proposalId);
+  }
+
+  function _testCastVoteWithTransferredATokens(
+    address _userA,
+    address _userB,
+    uint256 _weight,
+    uint256 _transferAmount,
+    uint8 _supportTypeA,
+    uint8 _supportTypeB
+  ) private {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_userA, _weight);
+    assertEq(aToken.balanceOf(_userA), _weight);
+    assertEq(aToken.balanceOf(_userB), 0);
+
+    // Transfer all aTokens from userA to userB.
+    vm.prank(_userA);
+    aToken.transfer(_userB, _transferAmount);
+    assertEq(aToken.balanceOf(_userA), _weight - _transferAmount);
+    assertEq(aToken.balanceOf(_userB), _transferAmount);
+
+    // Advance one block so that our votes will be checkpointed by the govToken;
+    vm.roll(block.number + 1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express voting preferences.
+    if (aToken.balanceOf(_userA) == 0) vm.expectRevert(bytes("no weight"));
+    vm.prank(_userA);
+    aToken.expressVote(_proposalId, _supportTypeA);
+    vm.prank(_userB);
+    aToken.expressVote(_proposalId, _supportTypeB);
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes ) =
+      governor.proposalVotes(_proposalId);
+
+    if (_supportTypeA == _supportTypeB) {
+      if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight);
+      if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
+      if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
+    } else {
+      if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight - _transferAmount);
+      if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight - _transferAmount);
+      if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight - _transferAmount);
+      if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _transferAmount);
+      if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _transferAmount);
+      if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _transferAmount);
+    }
   }
 }
 
