@@ -1646,21 +1646,23 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     // Transfer aTokens to userB.
     vm.prank(_userA);
     aToken.transfer(_userB, _initBalanceUserA / 3);
-    assertEq(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3);
-    assertEq(aToken.balanceOf(_userB), _initBalanceUserA / 3);
+    assertApproxEqAbs(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3, 1);
+    assertApproxEqAbs(aToken.balanceOf(_userB), _initBalanceUserA / 3, 1);
 
     // Advance the clock so that we checkpoint.
     vm.roll(block.number + 1);
     vm.warp(block.timestamp + 1 days);
 
     // Confirm voting weight has shifted.
-    assertEq(
+    assertApproxEqAbs(
       aToken.getPastStoredBalance(_userA, block.number - 1),
-      2 * _initRawBalanceUserA / 3
+      2 * _initRawBalanceUserA / 3,
+      1 // In case of rounding.
     );
-    assertEq(
+    assertApproxEqAbs(
       aToken.getPastStoredBalance(_userB, block.number - 1),
-      _initRawBalanceUserA / 3
+      _initRawBalanceUserA / 3,
+      1 // In case of rounding.
     );
   }
 }

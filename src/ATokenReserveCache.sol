@@ -266,8 +266,8 @@ contract ATokenReserveCache is AToken {
     _mintScaledWithCheckpoint(address(POOL), _treasury, amount, index);
   }
 
-  /// Note: this has been modified from Aave v3's AToken to update deposit
-  /// balance accordingly. We cannot just call `super` here because the function
+  /// Note: this has been modified from Aave v3's AToken to checkpoint raw
+  /// balances accordingly. We cannot just call `super` here because the function
   /// is external.
   ///
   /// @inheritdoc IAToken
@@ -290,6 +290,20 @@ contract ATokenReserveCache is AToken {
       IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
     }
   }
+
+  /// Note: this has been modified from Aave v3's IncentivizedERC20 contract to
+  /// checkpoint raw balances accordingly.
+  /// @inheritdoc IERC20
+  function transfer(address recipient, uint256 amount) external virtual override returns (bool) {
+    uint128 castAmount = amount.toUint128();
+    _transfer(_msgSender(), recipient, castAmount);
+    // Begin modifications.
+    _checkpointRawBalanceOf(_msgSender());
+    _checkpointRawBalanceOf(recipient);
+    // End modifications.
+    return true;
+  }
+
   //===========================================================================
   // END: Aave overrides
   //===========================================================================
