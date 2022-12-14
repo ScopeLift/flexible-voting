@@ -88,7 +88,7 @@ contract ATokenCheckpointed is AToken {
   }
 
   // TODO Is there a better way to do this? It cannot be done in the constructor
-  // because the AToken is just used a proxy -- it won't share an address with
+  // because the AToken is just a proxy -- it won't share an address with
   // the implementation (i.e. this code).
   function selfDelegate() public {
     IVotingToken(governor.token()).delegate(address(this));
@@ -267,8 +267,7 @@ contract ATokenCheckpointed is AToken {
   }
 
   /// Note: this has been modified from Aave v3's AToken to checkpoint raw
-  /// balances accordingly. We cannot just call `super` here because the function
-  /// is external.
+  /// balances. We cannot just call `super` here because the function is external.
   ///
   /// @inheritdoc IAToken
   function burn(
@@ -293,6 +292,7 @@ contract ATokenCheckpointed is AToken {
 
   /// Note: this has been modified from Aave v3's IncentivizedERC20 contract to
   /// checkpoint raw balances accordingly.
+  ///
   /// @inheritdoc IERC20
   function transfer(address recipient, uint256 amount) external virtual override returns (bool) {
     uint128 castAmount = amount.toUint128();

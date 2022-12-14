@@ -41,6 +41,8 @@ contract AaveAtokenForkTest is Test {
   address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
   address weth = 0x4200000000000000000000000000000000000006;
 
+  uint256 constant INITIAL_REBASING_DEPOSIT = 1000 ether;
+
   enum ProposalState {
     Pending,
     Active,
@@ -262,7 +264,7 @@ contract AaveAtokenForkTest is Test {
     uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
 
     // Have someone mint and deposit some gov.
-    _mintGovAndSupplyToAave(address(0xBA5EBA11), 1000 ether);
+    _mintGovAndSupplyToAave(address(0xBA5EBA11), INITIAL_REBASING_DEPOSIT);
 
     // Have someone else borrow some gov.
     deal(weth, address(this), 100 ether);
@@ -1794,9 +1796,96 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   }
 }
 
-// TODO confirm that users who receive aToken transfers can call express vote
-// TODO confirm that after rebasing occurs, if all funds are withdrawn from
-// Aave, that the pool's totalDepositCheckpoint would end up 0
+contract GetPastTotalDepositsTest is AaveAtokenForkTest {
+  function test_GetPastTotalDepositsIncreasesOnDeposit() public {
+    _initiateRebasing();
+    uint256 _initTotalDeposits = INITIAL_REBASING_DEPOSIT;
+    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT);
+
+    address _userA = address(0xBEEF);
+    address _userB = address(0xFEED);
+    uint256 _amountA = 4242 ether;
+    uint256 _amountB = 123 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amountA);
+    uint256 _rawBalanceA = aToken.exposedRawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(aToken.getPastTotalDeposits(block.number - 101), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalDeposits(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalDeposits(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+
+    // Another user deposits.
+    _mintGovAndSupplyToAave(_userB, _amountB);
+    uint256 _rawBalanceB = aToken.exposedRawBalanceOf(_userB);
+
+    // Advance the clock to checkpoint + rebase.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(aToken.getPastTotalDeposits(block.number - 201), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalDeposits(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalDeposits(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+  }
+
+  function test_GetPastTotalDepositsDecreasesOnWithdraw() public {
+    _initiateRebasing();
+
+    address _userA = address(0xBEEF);
+    uint256 _amountA = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amountA);
+    uint256 _rawBalanceA = aToken.exposedRawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalDeposits(block.number - 1),
+      INITIAL_REBASING_DEPOSIT + _rawBalanceA
+    );
+
+    vm.startPrank(_userA);
+    uint256 _withdrawAmount = aToken.balanceOf(_userA) / 3;
+    pool.withdraw(
+      address(govToken),
+      _withdrawAmount,
+      _userA
+    );
+    vm.stopPrank();
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    uint256 _rawBalanceDelta = _rawBalanceA - aToken.exposedRawBalanceOf(_userA);
+
+    assertEq(
+      aToken.getPastTotalDeposits(block.number - 1),
+      INITIAL_REBASING_DEPOSIT + aToken.exposedRawBalanceOf(_userA)
+    );
+
+    assertGt(
+      aToken.getPastTotalDeposits(block.number - 101),
+      aToken.getPastTotalDeposits(block.number - 1)
+    );
+  }
+
+  // TODO do each of the tests below with and without rebasing
+  // TODO confirm that the totalDeposits doesn't change on transfer
+  // TODO confirm that the totalDeposits doesn't change on borrow
+  // TODO confirm that after rebasing occurs, if all funds are withdrawn from
+  // Aave, that the pool's totalDepositCheckpoint would end up 0
+}
+
 // TODO write a more robust expressVote/castVote integration test in which
 // rebasing is going on, checking exact values based on current atoken.balanceOf
 // for multiple users depositing at different times
