@@ -1879,9 +1879,56 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     );
   }
 
+  function test_GetPastTotalDepositsIsUnaffectedByTransfer() public {
+    _initiateRebasing();
+
+    address _userA = address(0xBEEF);
+    address _userB = address(0xBAD1E);
+    uint256 _amountA = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amountA);
+    uint256 _rawBalanceA = aToken.exposedRawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    uint256 _totalDeposits = aToken.getPastTotalDeposits(block.number - 1);
+
+    vm.startPrank(_userA);
+    aToken.transfer(_userB, aToken.balanceOf(_userA) / 2);
+    vm.stopPrank();
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalDeposits(block.number - 1),
+      _totalDeposits // No change because of the transfer;
+    );
+
+    // Repeat.
+    vm.startPrank(_userA);
+    aToken.transfer(_userB, aToken.balanceOf(_userA));
+    vm.stopPrank();
+
+    assertEq(aToken.balanceOf(_userA), 0);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalDeposits(block.number - 1),
+      _totalDeposits // Still no change caused by transfer.
+    );
+  }
+
   // TODO do each of the tests below with and without rebasing
-  // TODO confirm that the totalDeposits doesn't change on transfer
   // TODO confirm that the totalDeposits doesn't change on borrow
+  // TODO confirm that the totalDeposits doesn't change on transferUnderlying
   // TODO confirm that after rebasing occurs, if all funds are withdrawn from
   // Aave, that the pool's totalDepositCheckpoint would end up 0
 }
