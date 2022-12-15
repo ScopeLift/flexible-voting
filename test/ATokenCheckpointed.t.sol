@@ -42,6 +42,7 @@ contract AaveAtokenForkTest is Test {
   address weth = 0x4200000000000000000000000000000000000006;
 
   uint256 constant INITIAL_REBASING_DEPOSIT = 1000 ether;
+  address constant INITIAL_SUPPLIER = address(0xBA5EBA11);
 
   enum ProposalState {
     Pending,
@@ -264,7 +265,7 @@ contract AaveAtokenForkTest is Test {
     uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
 
     // Have someone mint and deposit some gov.
-    _mintGovAndSupplyToAave(address(0xBA5EBA11), INITIAL_REBASING_DEPOSIT);
+    _mintGovAndSupplyToAave(INITIAL_SUPPLIER, INITIAL_REBASING_DEPOSIT);
 
     // Have someone else borrow some gov.
     deal(weth, address(this), 100 ether);
@@ -1926,13 +1927,71 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     );
   }
 
-  // TODO do each of the tests below with and without rebasing
-  // TODO confirm that the totalDeposits doesn't change on borrow
-  // TODO confirm that the totalDeposits doesn't change on transferUnderlying
-  // TODO confirm that after rebasing occurs, if all funds are withdrawn from
-  // Aave, that the pool's totalDepositCheckpoint would end up 0
-}
+  function test_GetPastTotalDepositsIsUnaffectedByBorrow() public {
+    _initiateRebasing();
 
-// TODO write a more robust expressVote/castVote integration test in which
-// rebasing is going on, checking exact values based on current atoken.balanceOf
-// for multiple users depositing at different times
+    address _userA = address(0xBEEF);
+    uint256 _totalDeposits = aToken.getPastTotalDeposits(block.number - 1);
+
+    // Borrow gov.
+    vm.startPrank(_userA);
+    deal(weth, _userA, 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, _userA, 0);
+    pool.borrow(
+      address(govToken),
+      42 ether, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      _userA // onBehalfOf
+    );
+    assertEq(govToken.balanceOf(_userA), 42 ether);
+    vm.stopPrank();
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalDeposits(block.number - 1),
+      _totalDeposits
+    );
+  }
+
+  function test_GetPastTotalDepositsZerosOutIfAllPositionsAreUnwound() public {
+    _initiateRebasing();
+
+    uint256 _totalDeposits = aToken.getPastTotalDeposits(block.number - 1);
+    assertGt(_totalDeposits, 0);
+    assertGt(govToken.balanceOf(address(aToken)), 0);
+
+    // Repay the borrow that kicked off rebasing.
+    ERC20(govToken).approve(address(pool), type(uint256).max);
+    // Give the user some more gov to pay the interest on the borrow.
+    govToken.exposed_mint(address(this), 10 ether);
+    pool.repay(
+      address(govToken),
+      type(uint256).max, // pay entire debt.
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      address(this)
+    );
+
+    // Withdraw the only balance.
+    vm.startPrank(INITIAL_SUPPLIER);
+    pool.withdraw(
+      address(govToken),
+      type(uint256).max, // Withdraw it all.
+      INITIAL_SUPPLIER
+    );
+
+    // Advance the clock so that we checkpoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    assertEq(
+      aToken.getPastTotalDeposits(block.number - 1),
+      0,
+      "getPastTotalDeposits accounting is wrong"
+    );
+  }
+}
