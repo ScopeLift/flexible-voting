@@ -100,7 +100,7 @@ contract Deployment is FractionalPoolTest {
     assertEq(token.name(), "Governance Token");
     assertEq(token.symbol(), "GOV");
 
-    assertEq(address(pool.token()), address(token));
+    assertEq(address(pool.TOKEN()), address(token));
     assertEq(token.delegates(address(pool)), address(pool));
 
     assertEq(governor.name(), "Governor");

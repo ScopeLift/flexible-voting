@@ -53,10 +53,10 @@ contract FractionalPool {
   uint32 public constant CAST_VOTE_WINDOW = 1200; // In blocks; 4 hours assuming 12 second blocks.
 
   /// @notice The governance token held and lent by this pool.
-  IVotingToken public immutable token;
+  IVotingToken public immutable TOKEN;
 
   /// @notice The governor contract associated with this governance token.
-  IFractionalGovernor public immutable governor;
+  IFractionalGovernor public immutable GOVERNOR;
 
   /// @notice Map depositor to deposit amount.
   mapping(address => uint256) public deposits;
@@ -73,8 +73,8 @@ contract FractionalPool {
   /// @param _token The governance token held and lent by this pool.
   /// @param _governor The governor contract associated with this governance token.
   constructor(IVotingToken _token, IFractionalGovernor _governor) {
-    token = _token;
-    governor = _governor;
+    TOKEN = _token;
+    GOVERNOR = _governor;
     _token.delegate(address(this));
   }
 
@@ -86,7 +86,7 @@ contract FractionalPool {
     _writeCheckpoint(_checkpoints[msg.sender], _additionFn, _amount);
     _writeCheckpoint(_totalDepositCheckpoints, _additionFn, _amount);
 
-    token.transferFrom(msg.sender, address(this), _amount); // Assumes revert on failure.
+    TOKEN.transferFrom(msg.sender, address(this), _amount); // Assumes revert on failure.
   }
 
   /// @notice Allow a depositor to withdraw funds previously deposited to the pool.
@@ -98,7 +98,7 @@ contract FractionalPool {
     _writeCheckpoint(_checkpoints[msg.sender], _subtractionFn, _amount);
     _writeCheckpoint(_totalDepositCheckpoints, _subtractionFn, _amount);
 
-    token.transfer(msg.sender, _amount); // Assumes revert on failure.
+    TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
   }
 
   /// @notice Arbitrarily remove tokens from the pool. This is to simulate a borrower, hence the
@@ -106,7 +106,7 @@ contract FractionalPool {
   /// @param _amount The amount to "borrow."
   function borrow(uint256 _amount) public {
     borrowTotal[msg.sender] += _amount;
-    token.transfer(msg.sender, _amount);
+    TOKEN.transfer(msg.sender, _amount);
   }
 
   /// @notice Allow a depositor to express their voting preference for a given proposal. Their
@@ -114,7 +114,7 @@ contract FractionalPool {
   /// @param proposalId The proposalId in the associated Governor
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
-    uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+    uint256 weight = getPastDeposits(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
     if (weight == 0) revert("no weight");
 
     if (_proposalVotersHasVoted[proposalId][msg.sender]) revert("already voted");
@@ -141,7 +141,7 @@ contract FractionalPool {
     uint8 unusedSupportParam = uint8(VoteType.Abstain);
     ProposalVote memory _proposalVote = proposalVotes[proposalId];
 
-    uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
+    uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
     // Use the snapshot of total deposits to determine total voting weight. We cannot
     // use the proposalVote numbers alone, since some people with deposits at the
@@ -150,7 +150,7 @@ contract FractionalPool {
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot =
-      token.getPastVotes(address(this), _proposalSnapshotBlockNumber);
+      TOKEN.getPastVotes(address(this), _proposalSnapshotBlockNumber);
 
     //      forVotesRaw          forVotesScaled
     // --------------------- = ---------------------
@@ -169,7 +169,7 @@ contract FractionalPool {
 
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
-    governor.castVoteWithReasonAndParams(
+    GOVERNOR.castVoteWithReasonAndParams(
       proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
     );
   }
@@ -182,7 +182,7 @@ contract FractionalPool {
     view
     returns (uint256 _lastVotingBlock)
   {
-    _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
+    _lastVotingBlock = GOVERNOR.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
   }
 
   /// ===========================================================================

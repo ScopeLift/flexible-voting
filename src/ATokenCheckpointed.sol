@@ -67,9 +67,8 @@ contract ATokenCheckpointed is AToken {
   mapping(uint256 => ProposalVote) public proposalVotes;
 
   /// @notice The governor contract associated with this governance token. It
-  /// must be one that supports fractional voting, e.g.
-  /// GovernorCountingFractional.
-  IFractionalGovernor public immutable governor;
+  /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
+  IFractionalGovernor public immutable GOVERNOR;
 
   /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
   mapping(address => Checkpoints.History) private balanceCheckpoints;
@@ -83,7 +82,7 @@ contract ATokenCheckpointed is AToken {
   /// @param _castVoteWindow The number of blocks that users have to express
   /// their votes on a proposal before votes can be cast.
   constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
-    governor = IFractionalGovernor(_governor);
+    GOVERNOR = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
@@ -91,7 +90,7 @@ contract ATokenCheckpointed is AToken {
   // because the AToken is just a proxy -- it won't share an address with
   // the implementation (i.e. this code).
   function selfDelegate() public {
-    IVotingToken(governor.token()).delegate(address(this));
+    IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
 
   /// @notice Method which returns the deadline (as a block number) by which
@@ -106,7 +105,7 @@ contract ATokenCheckpointed is AToken {
     view
     returns (uint256 _lastVotingBlock)
   {
-    _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
+    _lastVotingBlock = GOVERNOR.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
   }
 
   /// @notice Allow a depositor to express their voting preference for a given
@@ -117,7 +116,7 @@ contract ATokenCheckpointed is AToken {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
-    uint256 weight = getPastStoredBalance(msg.sender, governor.proposalSnapshot(proposalId));
+    uint256 weight = getPastStoredBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
     require(!proposalVotersHasVoted[proposalId][msg.sender], "already voted");
@@ -153,7 +152,7 @@ contract ATokenCheckpointed is AToken {
       "no votes expressed"
     );
 
-    uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
+    uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
     // Use the snapshot of total deposits to determine total voting weight. We cannot
     // use the proposalVote numbers alone, since some people with deposits at the
@@ -187,7 +186,7 @@ contract ATokenCheckpointed is AToken {
     hasCastVotesOnProposal[proposalId] = true;
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
-    governor.castVoteWithReasonAndParams(
+    GOVERNOR.castVoteWithReasonAndParams(
       proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
     );
   }
