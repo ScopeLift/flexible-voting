@@ -1199,38 +1199,24 @@ contract CastVote is AaveAtokenForkTest {
     // These can differ because votes are rounded.
     assertApproxEqAbs(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
 
+    // forgefmt: disable-start
     if (_vars.supportTypeA == _vars.supportTypeB) {
       assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
-      assertEq(
-        _againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0
-      );
-      assertEq(
-        _abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0
-      );
+      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
+      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
     } else {
       uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initGovBalance;
       uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initGovBalance;
 
       // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-      if (_vars.supportTypeA == uint8(VoteType.For)) {
-        assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-      }
-      if (_vars.supportTypeB == uint8(VoteType.For)) {
-        assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
-      }
-      if (_vars.supportTypeA == uint8(VoteType.Against)) {
-        assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-      }
-      if (_vars.supportTypeB == uint8(VoteType.Against)) {
-        assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
-      }
-      if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
-        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-      }
-      if (_vars.supportTypeB == uint8(VoteType.Abstain)) {
-        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
-      }
+      if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
     }
+    // forgefmt: disable-end
   }
 
   struct VotingWeightIsAbandonedVars {
@@ -1323,16 +1309,12 @@ contract CastVote is AaveAtokenForkTest {
       1
     );
 
+    // forgefmt: disable-start
     // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-    if (_vars.supportTypeA == uint8(VoteType.For)) {
-      assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-    }
-    if (_vars.supportTypeA == uint8(VoteType.Against)) {
-      assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-    }
-    if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
-      assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-    }
+    if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    // forgefmt: disable-end
   }
 
   function _testVotingWeightIsUnaffectedByDepositsAfterProposal(
@@ -1618,7 +1600,7 @@ contract CastVote is AaveAtokenForkTest {
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
-    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes ) =
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       governor.proposalVotes(_proposalId);
 
     if (_supportTypeA == _supportTypeB) {
@@ -1626,12 +1608,14 @@ contract CastVote is AaveAtokenForkTest {
       if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
       if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
     } else {
+      // forgefmt: disable-start
       if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight - _transferAmount);
       if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight - _transferAmount);
       if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight - _transferAmount);
       if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _transferAmount);
       if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _transferAmount);
       if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _transferAmount);
+      // forgefmt: disable-end
     }
   }
 }
@@ -1686,7 +1670,10 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     // getPastStoredBalance should be able to give us the rebased balance at an
     // intermediate point.
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - (_blocksJumped / 3)),
+      aToken.getPastStoredBalance(
+        _who,
+        block.number - (_blocksJumped / 3) // 1/3 is just an arbitrary point.
+      ),
       _rawBalances[0]
     );
 
@@ -1716,7 +1703,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     );
     // getPastStoredBalance should be able to give us the raw balance at intermediate points.
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3),
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3), // random point
       _rawBalances[1]
     );
     assertEq(
@@ -1742,10 +1729,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
       aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime),
       aToken.exposedRawBalanceOf(_who)
     );
-    assertEq(
-      aToken.getPastStoredBalance(_who, block.number - 1),
-      aToken.exposedRawBalanceOf(_who)
-    );
+    assertEq(aToken.getPastStoredBalance(_who, block.number - 1), aToken.exposedRawBalanceOf(_who));
     assertGt(
       _rawBalances[1], // The raw balance pre-withdrawal.
       aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime)
@@ -1816,10 +1800,12 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
+    // forgefmt: disable-start
     assertEq(aToken.getPastTotalDeposits(block.number - 101), INITIAL_REBASING_DEPOSIT);
     assertEq(aToken.getPastTotalDeposits(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
     assertEq(aToken.getPastTotalDeposits(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
     assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    // forgefmt: disable-end
 
     // Another user deposits.
     _mintGovAndSupplyToAave(_userB, _amountB);
@@ -1829,10 +1815,12 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
+    // forgefmt: disable-start
     assertEq(aToken.getPastTotalDeposits(block.number - 201), INITIAL_REBASING_DEPOSIT);
     assertEq(aToken.getPastTotalDeposits(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
     assertEq(aToken.getPastTotalDeposits(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
     assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    // forgefmt: disable-end
   }
 
   function test_GetPastTotalDepositsDecreasesOnWithdraw() public {
@@ -1849,18 +1837,11 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    assertEq(
-      aToken.getPastTotalDeposits(block.number - 1),
-      INITIAL_REBASING_DEPOSIT + _rawBalanceA
-    );
+    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
 
     vm.startPrank(_userA);
     uint256 _withdrawAmount = aToken.balanceOf(_userA) / 3;
-    pool.withdraw(
-      address(govToken),
-      _withdrawAmount,
-      _userA
-    );
+    pool.withdraw(address(govToken), _withdrawAmount, _userA);
     vm.stopPrank();
 
     // Advance the clock so that we checkpoint and let some rebasing happen.
@@ -1875,8 +1856,7 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     );
 
     assertGt(
-      aToken.getPastTotalDeposits(block.number - 101),
-      aToken.getPastTotalDeposits(block.number - 1)
+      aToken.getPastTotalDeposits(block.number - 101), aToken.getPastTotalDeposits(block.number - 1)
     );
   }
 
@@ -1952,10 +1932,7 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    assertEq(
-      aToken.getPastTotalDeposits(block.number - 1),
-      _totalDeposits
-    );
+    assertEq(aToken.getPastTotalDeposits(block.number - 1), _totalDeposits);
   }
 
   function test_GetPastTotalDepositsZerosOutIfAllPositionsAreUnwound() public {
@@ -1990,7 +1967,7 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
 
     assertEq(
       aToken.getPastTotalDeposits(block.number - 1),
-      0,
+      0, // Total deposits should now be zero; any remaining supply belongs to the reserve.
       "getPastTotalDeposits accounting is wrong"
     );
   }

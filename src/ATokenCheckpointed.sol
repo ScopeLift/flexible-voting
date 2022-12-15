@@ -218,12 +218,9 @@ contract ATokenCheckpointed is AToken {
     return _userState[_user].balance;
   }
 
-  function _checkpointRawBalanceOf(
-    address _user
-  ) internal returns (
-    uint256 _previousBalance,
-    uint256 _currentBalance
-  )
+  function _checkpointRawBalanceOf(address _user)
+    internal
+    returns (uint256 _previousBalance, uint256 _currentBalance)
   {
     (_previousBalance, _currentBalance) = balanceCheckpoints[_user].push(_rawBalanceOf(_user));
   }
