@@ -223,10 +223,12 @@ contract ATokenCheckpointed is AToken {
     return _mintScaledReturn;
   }
 
+  /// @notice Returns the _user's current balance in storage.
   function _rawBalanceOf(address _user) internal view returns (uint256) {
     return _userState[_user].balance;
   }
 
+  /// @notice Checkpoints the _user's current raw balance.
   function _checkpointRawBalanceOf(address _user)
     internal
     returns (uint256 _previousBalance, uint256 _currentBalance)
