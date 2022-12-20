@@ -931,9 +931,6 @@ contract CastVote is AaveAtokenForkTest {
     assertEq(aToken.balanceOf(_who), _voteWeight, "aToken balance wrong");
     assertEq(govToken.balanceOf(address(aToken)), _voteWeight, "govToken balance wrong");
 
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
     assertEq(
@@ -987,9 +984,6 @@ contract CastVote is AaveAtokenForkTest {
 
     assertEq(govToken.balanceOf(_who), _voteWeight);
 
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1006,9 +1000,6 @@ contract CastVote is AaveAtokenForkTest {
   ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1029,9 +1020,6 @@ contract CastVote is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1050,9 +1038,6 @@ contract CastVote is AaveAtokenForkTest {
   {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1098,9 +1083,6 @@ contract CastVote is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeightA);
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1138,9 +1120,6 @@ contract CastVote is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_userA, _voteWeightA);
     _mintGovAndSupplyToAave(_userB, _voteWeightB);
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1185,9 +1164,6 @@ contract CastVote is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1223,9 +1199,6 @@ contract CastVote is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
     uint256 _initGovBalance = govToken.balanceOf(address(aToken));
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Borrow GOV from the pool, decreasing its token balance.
     deal(weth, _vars.borrower, _vars.borrowerAssets);
     vm.startPrank(_vars.borrower);
@@ -1241,9 +1214,6 @@ contract CastVote is AaveAtokenForkTest {
     );
     assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
     vm.stopPrank();
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1314,9 +1284,6 @@ contract CastVote is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
     uint256 _initGovBalance = govToken.balanceOf(address(aToken));
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Borrow GOV from the pool, decreasing its token balance.
     deal(weth, _vars.borrower, _vars.borrowerAssets);
     vm.startPrank(_vars.borrower);
@@ -1332,9 +1299,6 @@ contract CastVote is AaveAtokenForkTest {
     );
     assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
     vm.stopPrank();
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1405,9 +1369,6 @@ contract CastVote is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_voterA, _voteWeightA);
     uint256 _initGovBalance = govToken.balanceOf(address(aToken));
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1458,9 +1419,6 @@ contract CastVote is AaveAtokenForkTest {
       _who // onBehalfOf
     );
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1504,9 +1462,6 @@ contract CastVote is AaveAtokenForkTest {
       // our accounting is handling the change in internal deposit balances.
       _mintGovAndSupplyToAave(address(this), _withdrawAmount);
     }
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1588,9 +1543,6 @@ contract CastVote is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_userA, 1 ether);
     _mintGovAndSupplyToAave(_userB, 1 ether);
 
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1614,9 +1566,6 @@ contract CastVote is AaveAtokenForkTest {
   function _testCannotCastVoteWithoutVotesExpressed(address _who, uint8 _supportType) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, 1 ether);
-
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1654,9 +1603,6 @@ contract CastVote is AaveAtokenForkTest {
     aToken.transfer(_userB, _transferAmount);
     assertEq(aToken.balanceOf(_userA), _weight - _transferAmount);
     assertEq(aToken.balanceOf(_userB), _transferAmount);
-
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
