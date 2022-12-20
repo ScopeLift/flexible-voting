@@ -41,7 +41,7 @@ contract AaveAtokenForkTest is Test {
   address weth = 0x4200000000000000000000000000000000000006;
 
   uint256 constant INITIAL_REBASING_DEPOSIT = 1000 ether;
-  address constant INITIAL_SUPPLIER = makeAddr("InitialSupplier");
+  address initialSupplier;
 
   enum ProposalState {
     Pending,
@@ -66,6 +66,8 @@ contract AaveAtokenForkTest is Test {
     // This was the optimism block number at the time this test was written.
     uint256 optimismForkBlock = 26_332_308;
     forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
+
+    initialSupplier = makeAddr("InitialSupplier");
 
     // Deploy the GOV token.
     govToken = new GovToken();
@@ -264,7 +266,7 @@ contract AaveAtokenForkTest is Test {
     uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
 
     // Have someone mint and deposit some gov.
-    _mintGovAndSupplyToAave(INITIAL_SUPPLIER, INITIAL_REBASING_DEPOSIT);
+    _mintGovAndSupplyToAave(initialSupplier, INITIAL_REBASING_DEPOSIT);
 
     // Have someone else borrow some gov.
     deal(weth, address(this), 100 ether);
@@ -1631,7 +1633,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     // Deposit.
     _mintGovAndSupplyToAave(_who, _amountA);
-    _rawBalances[0] = aToken.exposedRawBalanceOf(_who);
+    _rawBalances[0] = aToken.exposed_RawBalanceOf(_who);
 
     // It's important that this be greater than a ray, since Aave uses this
     // index when determining the raw stored balance. If it were a ray, the
@@ -1654,7 +1656,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     // Rebasing should not affect the raw balance.
     assertEq(
-      aToken.exposedRawBalanceOf(_who),
+      aToken.exposed_RawBalanceOf(_who),
       _rawBalances[0],
       "raw balance shouldn't be affected by rebasing"
     );
@@ -1678,7 +1680,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     // Deposit again to make things more complicated.
     _mintGovAndSupplyToAave(_who, _amountB);
-    _rawBalances[1] = aToken.exposedRawBalanceOf(_who);
+    _rawBalances[1] = aToken.exposed_RawBalanceOf(_who);
 
     // Advance the clock.
     uint256 _blocksJumpedSecondTime = 100;
@@ -1686,7 +1688,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     // Rebasing should not affect the raw balance.
-    assertEq(aToken.exposedRawBalanceOf(_who), _rawBalances[1]);
+    assertEq(aToken.exposed_RawBalanceOf(_who), _rawBalances[1]);
     assertGt(_rawBalances[1], _rawBalances[0], "raw balance did not increase");
 
     // getPastStoredBalance should match historical balances.
@@ -1726,9 +1728,9 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     assertEq(
       aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime),
-      aToken.exposedRawBalanceOf(_who)
+      aToken.exposed_RawBalanceOf(_who)
     );
-    assertEq(aToken.getPastStoredBalance(_who, block.number - 1), aToken.exposedRawBalanceOf(_who));
+    assertEq(aToken.getPastStoredBalance(_who, block.number - 1), aToken.exposed_RawBalanceOf(_who));
     assertGt(
       _rawBalances[1], // The raw balance pre-withdrawal.
       aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime)
@@ -1744,8 +1746,8 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     // Deposit.
     _mintGovAndSupplyToAave(_userA, _amount);
-    uint256 _initRawBalanceUserA = aToken.exposedRawBalanceOf(_userA);
-    uint256 _initRawBalanceUserB = aToken.exposedRawBalanceOf(_userB);
+    uint256 _initRawBalanceUserA = aToken.exposed_RawBalanceOf(_userA);
+    uint256 _initRawBalanceUserB = aToken.exposed_RawBalanceOf(_userB);
 
     // Advance the clock so that we checkpoint and let some rebasing happen.
     vm.roll(block.number + 100);
@@ -1780,11 +1782,11 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   }
 }
 
-contract GetPastTotalDepositsTest is AaveAtokenForkTest {
-  function test_GetPastTotalDepositsIncreasesOnDeposit() public {
+contract GetPastTotalBalancesTest is AaveAtokenForkTest {
+  function test_GetPastTotalBalancesIncreasesOnDeposit() public {
     _initiateRebasing();
-    uint256 _initTotalDeposits = INITIAL_REBASING_DEPOSIT;
-    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT);
+    uint256 _initTotalBalances = INITIAL_REBASING_DEPOSIT;
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT);
 
     address _userA = address(0xBEEF);
     address _userB = address(0xFEED);
@@ -1793,36 +1795,36 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
 
     // Deposit.
     _mintGovAndSupplyToAave(_userA, _amountA);
-    uint256 _rawBalanceA = aToken.exposedRawBalanceOf(_userA);
+    uint256 _rawBalanceA = aToken.exposed_RawBalanceOf(_userA);
 
     // Advance the clock so that we checkpoint and let some rebasing happen.
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
     // forgefmt: disable-start
-    assertEq(aToken.getPastTotalDeposits(block.number - 101), INITIAL_REBASING_DEPOSIT);
-    assertEq(aToken.getPastTotalDeposits(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
-    assertEq(aToken.getPastTotalDeposits(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
-    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 101), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalances(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
     // forgefmt: disable-end
 
     // Another user deposits.
     _mintGovAndSupplyToAave(_userB, _amountB);
-    uint256 _rawBalanceB = aToken.exposedRawBalanceOf(_userB);
+    uint256 _rawBalanceB = aToken.exposed_RawBalanceOf(_userB);
 
     // Advance the clock to checkpoint + rebase.
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
     // forgefmt: disable-start
-    assertEq(aToken.getPastTotalDeposits(block.number - 201), INITIAL_REBASING_DEPOSIT);
-    assertEq(aToken.getPastTotalDeposits(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
-    assertEq(aToken.getPastTotalDeposits(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
-    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    assertEq(aToken.getPastTotalBalances(block.number - 201), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalances(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
     // forgefmt: disable-end
   }
 
-  function test_GetPastTotalDepositsDecreasesOnWithdraw() public {
+  function test_GetPastTotalBalancesDecreasesOnWithdraw() public {
     _initiateRebasing();
 
     address _userA = address(0xBEEF);
@@ -1830,13 +1832,13 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
 
     // Deposit.
     _mintGovAndSupplyToAave(_userA, _amountA);
-    uint256 _rawBalanceA = aToken.exposedRawBalanceOf(_userA);
+    uint256 _rawBalanceA = aToken.exposed_RawBalanceOf(_userA);
 
     // Advance the clock so that we checkpoint and let some rebasing happen.
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    assertEq(aToken.getPastTotalDeposits(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
 
     vm.startPrank(_userA);
     uint256 _withdrawAmount = aToken.balanceOf(_userA) / 3;
@@ -1847,19 +1849,19 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    uint256 _rawBalanceDelta = _rawBalanceA - aToken.exposedRawBalanceOf(_userA);
+    uint256 _rawBalanceDelta = _rawBalanceA - aToken.exposed_RawBalanceOf(_userA);
 
     assertEq(
-      aToken.getPastTotalDeposits(block.number - 1),
-      INITIAL_REBASING_DEPOSIT + aToken.exposedRawBalanceOf(_userA)
+      aToken.getPastTotalBalances(block.number - 1),
+      INITIAL_REBASING_DEPOSIT + aToken.exposed_RawBalanceOf(_userA)
     );
 
     assertGt(
-      aToken.getPastTotalDeposits(block.number - 101), aToken.getPastTotalDeposits(block.number - 1)
+      aToken.getPastTotalBalances(block.number - 101), aToken.getPastTotalBalances(block.number - 1)
     );
   }
 
-  function test_GetPastTotalDepositsIsUnaffectedByTransfer() public {
+  function test_GetPastTotalBalancesIsUnaffectedByTransfer() public {
     _initiateRebasing();
 
     address _userA = address(0xBEEF);
@@ -1868,13 +1870,13 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
 
     // Deposit.
     _mintGovAndSupplyToAave(_userA, _amountA);
-    uint256 _rawBalanceA = aToken.exposedRawBalanceOf(_userA);
+    uint256 _rawBalanceA = aToken.exposed_RawBalanceOf(_userA);
 
     // Advance the clock so that we checkpoint and let some rebasing happen.
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    uint256 _totalDeposits = aToken.getPastTotalDeposits(block.number - 1);
+    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
 
     vm.startPrank(_userA);
     aToken.transfer(_userB, aToken.balanceOf(_userA) / 2);
@@ -1885,7 +1887,7 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     assertEq(
-      aToken.getPastTotalDeposits(block.number - 1),
+      aToken.getPastTotalBalances(block.number - 1),
       _totalDeposits // No change because of the transfer;
     );
 
@@ -1901,16 +1903,16 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     assertEq(
-      aToken.getPastTotalDeposits(block.number - 1),
+      aToken.getPastTotalBalances(block.number - 1),
       _totalDeposits // Still no change caused by transfer.
     );
   }
 
-  function test_GetPastTotalDepositsIsUnaffectedByBorrow() public {
+  function test_GetPastTotalBalancesIsUnaffectedByBorrow() public {
     _initiateRebasing();
 
     address _userA = address(0xBEEF);
-    uint256 _totalDeposits = aToken.getPastTotalDeposits(block.number - 1);
+    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
 
     // Borrow gov.
     vm.startPrank(_userA);
@@ -1931,13 +1933,13 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    assertEq(aToken.getPastTotalDeposits(block.number - 1), _totalDeposits);
+    assertEq(aToken.getPastTotalBalances(block.number - 1), _totalDeposits);
   }
 
-  function test_GetPastTotalDepositsZerosOutIfAllPositionsAreUnwound() public {
+  function test_GetPastTotalBalancesZerosOutIfAllPositionsAreUnwound() public {
     _initiateRebasing();
 
-    uint256 _totalDeposits = aToken.getPastTotalDeposits(block.number - 1);
+    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
     assertGt(_totalDeposits, 0);
     assertGt(govToken.balanceOf(address(aToken)), 0);
 
@@ -1953,11 +1955,11 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     );
 
     // Withdraw the only balance.
-    vm.startPrank(INITIAL_SUPPLIER);
+    vm.startPrank(initialSupplier);
     pool.withdraw(
       address(govToken),
       type(uint256).max, // Withdraw it all.
-      INITIAL_SUPPLIER
+      initialSupplier
     );
 
     // Advance the clock so that we checkpoint.
@@ -1965,9 +1967,9 @@ contract GetPastTotalDepositsTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 1 days);
 
     assertEq(
-      aToken.getPastTotalDeposits(block.number - 1),
-      0, // Total deposits should now be zero; any remaining supply belongs to the reserve.
-      "getPastTotalDeposits accounting is wrong"
+      aToken.getPastTotalBalances(block.number - 1),
+      0, // Total balances should now be zero; any remaining supply belongs to the reserve.
+      "getPastTotalBalances accounting is wrong"
     );
   }
 }

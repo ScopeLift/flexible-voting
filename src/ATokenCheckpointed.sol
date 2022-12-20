@@ -86,9 +86,14 @@ contract ATokenCheckpointed is AToken {
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
-  // TODO Is there a better way to do this? It cannot be done in the constructor
-  // because the AToken is just a proxy -- it won't share an address with
-  // the implementation (i.e. this code).
+  // TODO Override the aToken `initialize` function to add self-delegation.
+  // https://github.com/ScopeLift/flexible-voting/issues/16
+  //
+  // Self-delegation cannot be done in the constructor because the aToken is
+  // just a proxy -- it won't share an address with the implementation (i.e.
+  // this code). Initialization is a better place to do this, but it still won't
+  // handle already-initialized aTokens. For those, we'll need to self-delegate
+  // during the upgrade process. More details in the issue linked above.
   function selfDelegate() public {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
@@ -154,29 +159,31 @@ contract ATokenCheckpointed is AToken {
 
     uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
-    // Use the snapshot of total deposits to determine total voting weight. We cannot
-    // use the proposalVote numbers alone, since some people with deposits at the
-    // snapshot might not have expressed votes.
-    uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
+    // Use the snapshot of total raw balances to determine total voting weight.
+    // We cannot use the proposalVote numbers alone, since some people with
+    // balances at the snapshot might not have expressed votes. We don't want to
+    // make it possible for aToken holders to *increase* their voting power when
+    // other people don't express their votes. That'd be a terrible incentive.
+    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalances(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
       address(this), _proposalSnapshotBlockNumber
     );
 
-    //      forVotesRaw          forVotesScaled
-    // --------------------- = ---------------------
-    //     totalDeposits        deposits (@snapshot)
+    //      forVotesRaw          forVoteWeight
+    // --------------------- = ------------------
+    //     totalRawBalance      totalVoteWeight
     //
-    // forVotesScaled = forVotesRaw * deposits@snapshot / totalDeposits
+    // forVoteWeight = forVotesRaw * totalVoteWeight / totalRawBalance
     uint128 _forVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalDepositWeightAtSnapshot
+      (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalRawBalanceAtSnapshot
     );
     uint128 _againstVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
+      (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalRawBalanceAtSnapshot
     );
     uint128 _abstainVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
+      (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalRawBalanceAtSnapshot
     );
 
     // This param is ignored by the governor when voting with fractional
@@ -187,7 +194,10 @@ contract ATokenCheckpointed is AToken {
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(
-      proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
+      proposalId,
+      unusedSupportParam,
+      "rolled-up vote from aToken holders", // Reason string.
+      fractionalizedVotes
     );
   }
 
@@ -225,12 +235,11 @@ contract ATokenCheckpointed is AToken {
   }
 
   // Returns the raw (i.e. unrebased) balanceOf the _user at the _blockNumber.
-  function getPastStoredBalance(address _user, uint256 _blockNumber) public returns (uint256) {
-    // TODO could we use getAtProbablyRecentBlock instead?
-    return balanceCheckpoints[_user].getAtBlock(_blockNumber);
+  function getPastStoredBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
+    return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
   }
 
-  function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
+  function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 

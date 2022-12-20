@@ -60,7 +60,7 @@ contract AaveAtokenForkTest is Test {
     // We need to use optimism for Aave V3 because it's not (yet?) on mainnet.
     // https://docs.aave.com/developers/deployed-contracts/v3-mainnet
     // This was the optimism block number at the time this test was written.
-    uint256 optimismForkBlock = 26_332_308;
+    uint256 optimismForkBlock = 50_542_924;
     forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
 
     // Deploy the GOV token.
