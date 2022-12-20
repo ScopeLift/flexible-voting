@@ -1844,6 +1844,50 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
       1 // In case of rounding.
     );
   }
+
+  function test_GetPastStoredBalanceHandlesTransferFrom() public {
+    _initiateRebasing();
+
+    address _userA = makeAddr("GetPastStoredBalanceHandlesTransfers _userA");
+    address _userB = makeAddr("GetPastStoredBalanceHandlesTransfers _userB");
+    uint256 _amount = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amount);
+    uint256 _initRawBalanceUserA = aToken.exposed_RawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // Get the rebased balance for userA.
+    uint256 _initBalanceUserA = aToken.balanceOf(_userA);
+    uint256 _initBalanceUserB = aToken.balanceOf(_userB);
+    assertEq(_initBalanceUserB, 0);
+
+    // Transfer aTokens to userB.
+    vm.prank(_userA);
+    aToken.approve(address(this), type(uint256).max);
+    aToken.transferFrom(_userA, _userB, _initBalanceUserA / 3);
+    assertApproxEqAbs(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3, 1);
+    assertApproxEqAbs(aToken.balanceOf(_userB), _initBalanceUserA / 3, 1);
+
+    // Advance the clock so that we checkpoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    // Confirm voting weight has shifted.
+    assertApproxEqAbs(
+      aToken.getPastStoredBalance(_userA, block.number - 1),
+      2 * _initRawBalanceUserA / 3,
+      1 // In case of rounding.
+    );
+    assertApproxEqAbs(
+      aToken.getPastStoredBalance(_userB, block.number - 1),
+      _initRawBalanceUserA / 3,
+      1 // In case of rounding.
+    );
+  }
 }
 
 contract GetPastTotalBalancesTest is AaveAtokenForkTest {
