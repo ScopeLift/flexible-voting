@@ -301,18 +301,19 @@ contract ATokenCheckpointed is AToken {
     }
   }
 
-  /// Note: this has been modified from Aave v3's IncentivizedERC20 contract to
+  /// Note: this has been modified from Aave v3's AToken contract to
   /// checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc IERC20
-  function transfer(address recipient, uint256 amount) external virtual override returns (bool) {
-    uint128 castAmount = amount.toUint128();
-    _transfer(_msgSender(), recipient, castAmount);
-    // Begin modifications.
-    _checkpointRawBalanceOf(_msgSender());
-    _checkpointRawBalanceOf(recipient);
-    // End modifications.
-    return true;
+  /// @inheritdoc AToken
+  function _transfer(
+    address from,
+    address to,
+    uint256 amount,
+    bool validate
+  ) internal virtual override {
+    super._transfer(from, to, amount, validate);
+    _checkpointRawBalanceOf(from);
+    _checkpointRawBalanceOf(to);
   }
 
   //===========================================================================
