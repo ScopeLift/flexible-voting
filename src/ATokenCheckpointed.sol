@@ -223,7 +223,7 @@ contract ATokenCheckpointed is AToken {
     return _mintScaledReturn;
   }
 
-  function _rawBalanceOf(address _user) internal returns (uint256) {
+  function _rawBalanceOf(address _user) internal view returns (uint256) {
     return _userState[_user].balance;
   }
 
@@ -234,11 +234,15 @@ contract ATokenCheckpointed is AToken {
     (_previousBalance, _currentBalance) = balanceCheckpoints[_user].push(_rawBalanceOf(_user));
   }
 
-  // Returns the raw (i.e. unrebased) balanceOf the _user at the _blockNumber.
+  /// @notice Returns the _user's balance in storage at the _blockNumber.
+  /// @param _user The account that's historical balance will be looked up.
+  /// @param _blockNumber The block at which to lookup the _user's balance.
   function getPastStoredBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
     return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
   }
 
+  /// @notice Returns the total stored balance of all users at _blockNumber.
+  /// @param _blockNumber The block at which to lookup the total stored balance.
   function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }

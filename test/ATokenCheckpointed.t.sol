@@ -26,7 +26,6 @@ import { GovToken } from "test/GovToken.sol";
 // import { IPoolAddressesProvider } from 'aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol';
 // forgefmt: disable-end
 //
-
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
@@ -366,7 +365,7 @@ contract Setup is AaveAtokenForkTest {
 
   function testFork_SetupCanBorrowGovAndBeLiquidated() public {
     // Someone else supplies GOV -- necessary so we can borrow it
-    address _bob = address(0xBEEF);
+    address _bob = makeAddr("testFork_SetupCanBorrowGovAndBeLiquidated address");
     govToken.exposed_mint(_bob, 1100e18);
     vm.startPrank(_bob);
     govToken.approve(address(pool), type(uint256).max);
@@ -421,129 +420,199 @@ contract Setup is AaveAtokenForkTest {
 
 contract CastVote is AaveAtokenForkTest {
   function test_UserCanCastAgainstVotes() public {
-    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Against));
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastAgainstVotes address"), 4242 ether, uint8(VoteType.Against)
+    );
   }
 
   function test_UserCanCastForVotes() public {
-    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.For));
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastForVotes address"), 4242 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCanCastAbstainVotes() public {
-    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Abstain));
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastAbstainVotes address"), 4242 ether, uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotExpressAgainstVotesWithoutWeight() public {
-    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Against));
+    _testUserCannotExpressVotesWithoutATokens(
+      makeAddr("test_UserCannotExpressAgainstVotesWithoutWeight address"),
+      0.42 ether,
+      uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotExpressForVotesWithoutWeight() public {
-    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.For));
+    _testUserCannotExpressVotesWithoutATokens(
+      makeAddr("test_UserCannotExpressForVotesWithoutWeight address"),
+      0.42 ether,
+      uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotExpressAbstainVotesWithoutWeight() public {
-    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Abstain));
+    _testUserCannotExpressVotesWithoutATokens(
+      makeAddr("test_UserCannotExpressAbstainVotesWithoutWeight address"),
+      0.42 ether,
+      uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotCastAfterVotingPeriodAgainst() public {
-    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Against));
+    _testUserCannotCastAfterVotingPeriod(
+      makeAddr("test_UserCannotCastAfterVotingPeriodAbstain address"),
+      4.2 ether,
+      uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotCastAfterVotingPeriodFor() public {
-    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.For));
+    _testUserCannotCastAfterVotingPeriod(
+      makeAddr("test_UserCannotCastAfterVotingPeriodAbstain address"),
+      4.2 ether,
+      uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotCastAfterVotingPeriodAbstain() public {
-    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Abstain));
+    _testUserCannotCastAfterVotingPeriod(
+      makeAddr("test_UserCannotCastAfterVotingPeriodAbstain address"),
+      4.2 ether,
+      uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotDoubleVoteAfterVotingAgainst() public {
-    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Against));
+    _tesNoDoubleVoting(
+      makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotDoubleVoteAfterVotingFor() public {
-    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.For));
+    _tesNoDoubleVoting(
+      makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotDoubleVoteAfterVotingAbstain() public {
-    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Abstain));
+    _tesNoDoubleVoting(
+      makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotCastVotesTwiceAfterVotingAgainst() public {
-    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Against));
+    _testUserCannotCastVotesTwice(
+      makeAddr("test_UserCannotCastVotesTwiceAfterVoting address"),
+      1.42 ether,
+      uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotCastVotesTwiceAfterVotingFor() public {
-    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.For));
+    _testUserCannotCastVotesTwice(
+      makeAddr("test_UserCannotCastVotesTwiceAfterVoting address"), 1.42 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotCastVotesTwiceAfterVotingAbstain() public {
-    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Abstain));
+    _testUserCannotCastVotesTwice(
+      makeAddr("test_UserCannotCastVotesTwiceAfterVoting address"),
+      1.42 ether,
+      uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotExpressAgainstVotesPriorToDepositing() public {
     _testUserCannotExpressVotesPriorToDepositing(
-      address(0xC0DE), 4.242 ether, uint8(VoteType.Against)
+      makeAddr("UserCannotExpressVotesPriorToDepositing address"),
+      4.242 ether,
+      uint8(VoteType.Against)
     );
   }
 
   function test_UserCannotExpressForVotesPriorToDepositing() public {
-    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.For));
+    _testUserCannotExpressVotesPriorToDepositing(
+      makeAddr("UserCannotExpressVotesPriorToDepositing address"), 4.242 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotExpressAbstainVotesPriorToDepositing() public {
     _testUserCannotExpressVotesPriorToDepositing(
-      address(0xC0DE), 4.242 ether, uint8(VoteType.Abstain)
+      makeAddr("UserCannotExpressVotesPriorToDepositing address"),
+      4.242 ether,
+      uint8(VoteType.Abstain)
     );
   }
 
   function test_UserAgainstVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.Against)
+      makeAddr("UserVotingWeightIsSnapshotDependent address"),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.Against)
     );
   }
 
   function test_UserForVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.For)
+      makeAddr("UserVotingWeightIsSnapshotDependent address"),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.For)
     );
   }
 
   function test_UserAbstainVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.Abstain)
+      makeAddr("UserVotingWeightIsSnapshotDependent address"),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.Abstain)
     );
   }
 
   function test_MultipleUsersCanCastVotes() public {
     _testMultipleUsersCanCastVotes(
-      address(0xD00D), address(0xF00D), 0.42424242 ether, 0.00000042 ether
+      makeAddr("MultipleUsersCanCastVotes address 1"),
+      makeAddr("MultipleUsersCanCastVotes address 2"),
+      0.42424242 ether,
+      0.00000042 ether
     );
   }
 
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAgainst() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF), 0.000001 ether, uint8(VoteType.Against)
+      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
+      0.000001 ether,
+      uint8(VoteType.Against)
     );
   }
 
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingFor() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF), 0.000001 ether, uint8(VoteType.For)
+      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
+      0.000001 ether,
+      uint8(VoteType.For)
     );
   }
 
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAbstain() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF), 0.000001 ether, uint8(VoteType.Abstain)
+      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
+      0.000001 ether,
+      uint8(VoteType.Abstain)
     );
   }
 
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstFor() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xFADE), // voterA
-        address(0xDEED), // voterB
-        address(0xB0D), // borrower
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterA #1"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterB #1"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance borrower #1"),
         12 ether, // voteWeightA
         4 ether, // voteWeightB
         7 ether, // borrowerAssets
@@ -556,9 +625,9 @@ contract CastVote is AaveAtokenForkTest {
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstAbstain() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xFEED), // voterA
-        address(0xADE), // voterB
-        address(0xD0E), // borrower
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterA #2"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterB #2"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance borrower #2"),
         2 ether, // voteWeightA
         7 ether, // voteWeightB
         4 ether, // borrowerAssets
@@ -571,9 +640,9 @@ contract CastVote is AaveAtokenForkTest {
   function test_VoteWeightIsScaledBasedOnPoolBalanceForAbstain() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xED), // voterA
-        address(0xABE), // voterB
-        address(0xBED), // borrower
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterA #3"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterB #3"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance borrower #3"),
         1 ether, // voteWeightA
         1 ether, // voteWeightB
         1 ether, // borrowerAssets
@@ -586,9 +655,9 @@ contract CastVote is AaveAtokenForkTest {
   function test_AgainstVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0x111), // voterA
-        address(0x222), // voterB
-        address(0x333), // borrower
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterA #1"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterB #1"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress borrower #1"),
         1 ether, // voteWeightA
         1 ether, // voteWeightB
         1 ether, // borrowerAssets
@@ -600,9 +669,9 @@ contract CastVote is AaveAtokenForkTest {
   function test_ForVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0xAAA), // voterA
-        address(0xBBB), // voterB
-        address(0xCCC), // borrower
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterA #2"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterB #2"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress borrower #2"),
         42 ether, // voteWeightA
         24 ether, // voteWeightB
         11 ether, // borrowerAssets
@@ -614,9 +683,9 @@ contract CastVote is AaveAtokenForkTest {
   function test_AbstainVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0x123), // voterA
-        address(0x456), // voterB
-        address(0x789), // borrower
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterA #3"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterB #3"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress borrower #3"),
         24 ether, // voteWeightA
         42 ether, // voteWeightB
         100 ether, // borrowerAssets
@@ -627,8 +696,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xAAAA), // voterA
-      address(0xBBBB), // voterB
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterA #1"),
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterB #1"),
       1 ether, // voteWeightA
       2 ether, // voteWeightB
       uint8(VoteType.Against) // supportTypeA
@@ -637,8 +706,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_ForVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xCCCC), // voterA
-      address(0xDDDD), // voterB
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterA #2"),
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterB #2"),
       0.42 ether, // voteWeightA
       0.042 ether, // voteWeightB
       uint8(VoteType.For) // supportTypeA
@@ -647,8 +716,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xEEEE), // voterA
-      address(0xFFFF), // voterB
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterA #3"),
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterB #3"),
       10 ether, // voteWeightA
       20 ether, // voteWeightB
       uint8(VoteType.Abstain) // supportTypeA
@@ -657,7 +726,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightDoesNotGoDownWhenUsersBorrow() public {
     _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xC0D),
+      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 1"),
       4.242 ether, // GOV deposit amount
       1 ether, // DAI borrow amount
       uint8(VoteType.Against) // supportType
@@ -666,7 +735,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_ForVotingWeightDoesNotGoDownWhenUsersBorrow() public {
     _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xD0C),
+      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 2"),
       424.2 ether, // GOV deposit amount
       4 ether, // DAI borrow amount
       uint8(VoteType.For) // supportType
@@ -675,7 +744,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightDoesNotGoDownWhenUsersBorrow() public {
     _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xCAD),
+      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 3"),
       0.4242 ether, // GOV deposit amount
       0.0424 ether, // DAI borrow amount
       uint8(VoteType.Abstain) // supportType
@@ -684,7 +753,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xC0D3),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #1"),
       42 ether, // supplyAmount
       type(uint256).max, // withdrawAmount
       uint8(VoteType.Against) // supportType
@@ -693,7 +762,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_ForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xD0C3),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #2"),
       42 ether, // supplyAmount
       type(uint256).max, // withdrawAmount
       uint8(VoteType.For) // supportType
@@ -702,7 +771,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xCAD3),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #3"),
       42 ether, // supplyAmount
       type(uint256).max, // withdrawAmount
       uint8(VoteType.Abstain) // supportType
@@ -711,7 +780,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xC0D4),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #4"),
       42 ether, // supplyAmount
       2 ether, // withdrawAmount
       uint8(VoteType.Against) // supportType
@@ -720,7 +789,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_ForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xD0C4),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #5"),
       42 ether, // supplyAmount
       3 ether, // withdrawAmount
       uint8(VoteType.For) // supportType
@@ -729,7 +798,7 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xCAD4),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #6"),
       42 ether, // supplyAmount
       10 ether, // withdrawAmount
       uint8(VoteType.Abstain) // supportType
@@ -738,43 +807,47 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CannotExpressAgainstVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD4242), // userA
-      address(0xDAD1111), // userB
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #1"),
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #1"),
       uint8(VoteType.Against) // supportType
     );
   }
 
   function test_CannotExpressForVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD424242), // userA
-      address(0xDAD111111), // userB
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #2"),
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #2"),
       uint8(VoteType.For) // supportType
     );
   }
 
   function test_CannotExpressAbstainVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD42424242), // userA
-      address(0xDAD11111111), // userB
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #3"),
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #3"),
       uint8(VoteType.Abstain) // supportType
     );
   }
 
   function test_CannotCastVoteWithoutVotesExpressed() public {
     _testCannotCastVoteWithoutVotesExpressed(
-      address(0xCA11), // who
+      makeAddr("CannotCastVoteWithoutVotesExpressed who"),
       uint8(VoteType.Abstain) // supportType
     );
   }
 
   function test_VotingWeightWorksWithRebasing() public {
-    _testVotingWeightWorksWithRebasing(address(0xABE1), address(0xABE2), 424_242 ether);
+    _testVotingWeightWorksWithRebasing(
+      makeAddr("VotingWeightWorksWithRebasing userA"),
+      makeAddr("VotingWeightWorksWithRebasing userB"),
+      424_242 ether
+    );
   }
 
   function test_CastForVoteWithFullyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B1), // userA
-      address(0xB0B2), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #1"),
+      makeAddr("CastVoteWithTransferredATokens userB #1"),
       1 ether, // weight
       1 ether, // transferAmount
       uint8(VoteType.For), // supportTypeA
@@ -784,8 +857,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CastAgainstVoteWithFullyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B11), // userA
-      address(0xB0B22), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #2"),
+      makeAddr("CastVoteWithTransferredATokens userB #2"),
       42 ether, // weight
       42 ether, // transferAmount
       uint8(VoteType.For), // supportTypeA
@@ -795,8 +868,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CastAbstainVoteWithFullyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B111), // userA
-      address(0xB0B222), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #3"),
+      makeAddr("CastVoteWithTransferredATokens userB #3"),
       0.42 ether, // weight
       0.42 ether, // transferAmount
       uint8(VoteType.For), // supportTypeA
@@ -806,8 +879,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CastSameVoteWithBarelyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B1111), // userA
-      address(0xB0B2222), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #4"),
+      makeAddr("CastVoteWithTransferredATokens userB #4"),
       // Transfer less than half.
       1 ether, // weight
       0.33 ether, // transferAmount
@@ -818,8 +891,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CastDifferentVoteWithBarelyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B1111), // userA
-      address(0xB0B2222), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #5"),
+      makeAddr("CastVoteWithTransferredATokens userB #5"),
       // Transfer less than half.
       1 ether, // weight
       0.33 ether, // transferAmount
@@ -830,8 +903,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CastSameVoteWithMostlyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B1111), // userA
-      address(0xB0B2222), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #6"),
+      makeAddr("CastVoteWithTransferredATokens userB #6"),
       // Transfer almost all of it.
       42 ether, // weight
       41 ether, // transferAmount
@@ -842,8 +915,8 @@ contract CastVote is AaveAtokenForkTest {
 
   function test_CastDifferentVoteWithMostlyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
-      address(0xB0B1111), // userA
-      address(0xB0B2222), // userB
+      makeAddr("CastVoteWithTransferredATokens userA #7"),
+      makeAddr("CastVoteWithTransferredATokens userB #7"),
       // Transfer almost all of it.
       42 ether, // weight
       41 ether, // transferAmount
@@ -1625,7 +1698,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   function test_GetPastStoredBalanceCorrectlyReadsCheckpoints() public {
     _initiateRebasing();
 
-    address _who = address(0xBEEF);
+    address _who = makeAddr("GetPastStoredBalanceCorrectlyReadsCheckpoints _who");
     uint256 _amountA = 42 ether;
     uint256 _amountB = 3 ether;
 
@@ -1740,8 +1813,8 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   function test_GetPastStoredBalanceHandlesTransfers() public {
     _initiateRebasing();
 
-    address _userA = address(0xBABE);
-    address _userB = address(0xBEEF);
+    address _userA = makeAddr("GetPastStoredBalanceHandlesTransfers _userA");
+    address _userB = makeAddr("GetPastStoredBalanceHandlesTransfers _userB");
     uint256 _amount = 4242 ether;
 
     // Deposit.
@@ -1788,8 +1861,8 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     uint256 _initTotalBalances = INITIAL_REBASING_DEPOSIT;
     assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT);
 
-    address _userA = address(0xBEEF);
-    address _userB = address(0xFEED);
+    address _userA = makeAddr("GetPastTotalBalancesIncreasesOnDeposit _userA");
+    address _userB = makeAddr("GetPastTotalBalancesIncreasesOnDeposit _userB");
     uint256 _amountA = 4242 ether;
     uint256 _amountB = 123 ether;
 
@@ -1827,7 +1900,7 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
   function test_GetPastTotalBalancesDecreasesOnWithdraw() public {
     _initiateRebasing();
 
-    address _userA = address(0xBEEF);
+    address _userA = makeAddr("GetPastTotalBalancesDecreasesOnWithdraw _userA");
     uint256 _amountA = 4242 ether;
 
     // Deposit.
@@ -1864,8 +1937,8 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
   function test_GetPastTotalBalancesIsUnaffectedByTransfer() public {
     _initiateRebasing();
 
-    address _userA = address(0xBEEF);
-    address _userB = address(0xBAD1E);
+    address _userA = makeAddr("GetPastTotalBalancesIsUnaffectedByTransfer _userA");
+    address _userB = makeAddr("GetPastTotalBalancesIsUnaffectedByTransfer _userB");
     uint256 _amountA = 4242 ether;
 
     // Deposit.
@@ -1911,7 +1984,7 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
   function test_GetPastTotalBalancesIsUnaffectedByBorrow() public {
     _initiateRebasing();
 
-    address _userA = address(0xBEEF);
+    address _userA = makeAddr("GetPastTotalBalancesIsUnaffectedByBorrow _userA");
     uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
 
     // Borrow gov.
