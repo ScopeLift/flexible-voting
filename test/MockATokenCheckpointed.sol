@@ -9,7 +9,7 @@ contract MockATokenCheckpointed is ATokenCheckpointed {
     ATokenCheckpointed(_pool, _governor, _castVoteWindow)
   {}
 
-  function exposedRawBalanceOf(address _user) public returns (uint256) {
+  function exposed_RawBalanceOf(address _user) public returns (uint256) {
     return _userState[_user].balance;
   }
 }

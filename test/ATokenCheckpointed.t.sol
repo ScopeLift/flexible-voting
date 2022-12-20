@@ -26,7 +26,6 @@ import { GovToken } from "test/GovToken.sol";
 // import { IPoolAddressesProvider } from 'aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol';
 // forgefmt: disable-end
 //
-import "forge-std/console2.sol";
 
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
@@ -42,7 +41,7 @@ contract AaveAtokenForkTest is Test {
   address weth = 0x4200000000000000000000000000000000000006;
 
   uint256 constant INITIAL_REBASING_DEPOSIT = 1000 ether;
-  address constant INITIAL_SUPPLIER = address(0xBA5EBA11);
+  address constant INITIAL_SUPPLIER = makeAddr("InitialSupplier");
 
   enum ProposalState {
     Pending,
@@ -1667,7 +1666,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
       "getPastStoredBalance does not match the initial raw balance"
     );
 
-    // getPastStoredBalance should be able to give us the rebased balance at an
+    // getPastStoredBalance should be able to give us the raw balance at an
     // intermediate point.
     assertEq(
       aToken.getPastStoredBalance(

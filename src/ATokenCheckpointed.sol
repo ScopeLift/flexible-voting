@@ -231,7 +231,7 @@ contract ATokenCheckpointed is AToken {
   }
 
   function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
-    return totalDepositCheckpoints.getAtBlock(_blockNumber);
+    return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 
   // forgefmt: disable-start
