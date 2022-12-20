@@ -213,11 +213,11 @@ contract ATokenNaive is AToken {
     return _mintScaled(caller, onBehalfOf, amount, index);
   }
 
-  function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
+  function getPastDeposits(address _voter, uint256 _blockNumber) public view returns (uint256) {
     return depositCheckpoints[_voter].getAtBlock(_blockNumber);
   }
 
-  function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
+  function getPastTotalDeposits(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtBlock(_blockNumber);
   }
 
