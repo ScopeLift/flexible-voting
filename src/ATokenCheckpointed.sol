@@ -2,6 +2,7 @@
 pragma solidity 0.8.10;
 
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
+import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
 import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
 import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
@@ -277,28 +278,17 @@ contract ATokenCheckpointed is AToken {
     _mintScaledWithCheckpoint(address(POOL), _treasury, amount, index);
   }
 
-  /// Note: this has been modified from Aave v3's AToken to checkpoint raw
-  /// balances. We cannot just call `super` here because the function is external.
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc IAToken
-  function burn(
-    address from,
-    address receiverOfUnderlying,
-    uint256 amount,
-    uint256 index
-  ) external virtual override onlyPool {
-    _burnScaled(from, receiverOfUnderlying, amount, index);
+  /// @inheritdoc MintableIncentivizedERC20
+  function _burn(address account, uint128 amount) internal override {
+    super._burn(account, amount);
 
     // Begin modifications.
-    (uint256 _preBurnRawBalance, uint256 _postBurnRawBalance) = _checkpointRawBalanceOf(from);
-    totalDepositCheckpoints.push(
-      totalDepositCheckpoints.latest() - (_preBurnRawBalance - _postBurnRawBalance)
-    );
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
     // End modifications.
-
-    if (receiverOfUnderlying != address(this)) {
-      IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
-    }
   }
 
   /// Note: this has been modified from Aave v3's AToken contract to
