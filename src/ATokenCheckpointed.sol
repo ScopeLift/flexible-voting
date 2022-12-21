@@ -88,14 +88,12 @@ contract ATokenCheckpointed is AToken {
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
-  // TODO Override the aToken `initialize` function to add self-delegation.
-  // https://github.com/ScopeLift/flexible-voting/issues/16
-  //
   // Self-delegation cannot be done in the constructor because the aToken is
   // just a proxy -- it won't share an address with the implementation (i.e.
-  // this code). Initialization is a better place to do this, but it still won't
+  // this code). Instead we do it at the end of `initialize`. But even that won't
   // handle already-initialized aTokens. For those, we'll need to self-delegate
-  // during the upgrade process. More details in the issue linked above.
+  // during the upgrade process. More details in this issue:
+  // https://github.com/ScopeLift/flexible-voting/issues/16
   function selfDelegate() public {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
@@ -295,7 +293,6 @@ contract ATokenCheckpointed is AToken {
     _checkpointRawBalanceOf(from);
     _checkpointRawBalanceOf(to);
   }
-
   //===========================================================================
   // END: Aave overrides
   //===========================================================================
