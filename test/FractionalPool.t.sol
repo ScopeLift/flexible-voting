@@ -80,12 +80,17 @@ contract FractionalPoolTest is Test {
     assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Active));
   }
 
-  function _commonFuzzerAssumptions(address _address, uint256 _voteWeight) public returns (uint256) {
+  function _commonFuzzerAssumptions(address _address, uint256 _voteWeight)
+    public
+    view
+    returns (uint256)
+  {
     return _commonFuzzerAssumptions(_address, _voteWeight, uint8(VoteType.Against));
   }
 
   function _commonFuzzerAssumptions(address _address, uint256 _voteWeight, uint8 _supportType)
     public
+    view
     returns (uint256)
   {
     vm.assume(_address != address(pool));
