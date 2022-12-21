@@ -203,28 +203,6 @@ contract ATokenCheckpointed is AToken {
     );
   }
 
-  /// @notice Implements the basic logic to mint a scaled balance token.
-  /// @param caller The address performing the mint
-  /// @param onBehalfOf The address of the user that will receive the scaled tokens
-  /// @param amount The amount of tokens getting minted
-  /// @param index The next liquidity index of the reserve
-  /// @return `true` if the the previous balance of the user was 0
-  function _mintScaledWithCheckpoint(
-    address caller,
-    address onBehalfOf,
-    uint256 amount,
-    uint256 index
-  ) internal returns (bool) {
-    bool _mintScaledReturn = _mintScaled(caller, onBehalfOf, amount, index);
-
-    (uint256 _preMintRawBalance, uint256 _postMintRawBalance) = _checkpointRawBalanceOf(onBehalfOf);
-    totalDepositCheckpoints.push(
-      totalDepositCheckpoints.latest() + (_postMintRawBalance - _preMintRawBalance)
-    );
-
-    return _mintScaledReturn;
-  }
-
   /// @notice Returns the _user's current balance in storage.
   function _rawBalanceOf(address _user) internal view returns (uint256) {
     return _userState[_user].balance;
@@ -255,41 +233,6 @@ contract ATokenCheckpointed is AToken {
   //===========================================================================
   // BEGIN: Aave overrides
   //===========================================================================
-  /// Note: this has been modified from Aave v3's AToken to call our custom
-  /// mintScaledWithCheckpoint function.
-  ///
-  /// @inheritdoc IAToken
-  function mint(
-    address caller,
-    address onBehalfOf,
-    uint256 amount,
-    uint256 index
-  ) external virtual override onlyPool returns (bool) {
-    return _mintScaledWithCheckpoint(caller, onBehalfOf, amount, index);
-  }
-
-  /// Note: this has been modified from Aave v3's AToken to call our custom
-  /// mintScaledWithCheckpoint function.
-  ///
-  /// @inheritdoc IAToken
-  function mintToTreasury(uint256 amount, uint256 index) external override onlyPool {
-    if (amount == 0) {
-      return;
-    }
-    _mintScaledWithCheckpoint(address(POOL), _treasury, amount, index);
-  }
-
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc MintableIncentivizedERC20
-  function _burn(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._burn(account, amount);
-
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
-  }
-
   /// Note: this has been modified from Aave v3's AToken to delegate voting
   /// power to itself during initialization.
   ///
@@ -316,6 +259,26 @@ contract ATokenCheckpointed is AToken {
     );
 
     selfDelegate();
+  }
+
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _burn(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._burn(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
+  }
+
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _mint(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._mint(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
   }
 
   /// Note: this has been modified from Aave v3's AToken contract to
