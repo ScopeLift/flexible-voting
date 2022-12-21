@@ -1509,9 +1509,6 @@ contract CastVote is AaveAtokenForkTest {
       "userA does not have more aTokens than userB"
     );
 
-    // Advance one block so that weight will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
