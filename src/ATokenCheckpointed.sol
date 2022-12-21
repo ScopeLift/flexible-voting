@@ -6,6 +6,7 @@ import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokeniz
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
 import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
 import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
+import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
 import {IERC20} from "aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
@@ -285,10 +286,36 @@ contract ATokenCheckpointed is AToken {
   function _burn(address account, uint128 amount) internal override {
     super._burn(account, amount);
 
-    // Begin modifications.
     _checkpointRawBalanceOf(account);
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
-    // End modifications.
+  }
+
+  /// Note: this has been modified from Aave v3's AToken to delegate voting
+  /// power to itself during initialization.
+  ///
+  /// @inheritdoc AToken
+  function initialize(
+    IPool initializingPool,
+    address treasury,
+    address underlyingAsset,
+    IAaveIncentivesController incentivesController,
+    uint8 aTokenDecimals,
+    string calldata aTokenName,
+    string calldata aTokenSymbol,
+    bytes calldata params
+  ) public override initializer {
+    super.initialize(
+      initializingPool,
+      treasury,
+      underlyingAsset,
+      incentivesController,
+      aTokenDecimals,
+      aTokenName,
+      aTokenSymbol,
+      params
+    );
+
+    selfDelegate();
   }
 
   /// Note: this has been modified from Aave v3's AToken contract to

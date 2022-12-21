@@ -221,10 +221,6 @@ contract AaveAtokenForkTest is Test {
       // Aave only seems to use USD-based oracles, so we will do the same.
       abi.encode(1e8) // 1 GOV == $1 USD
     );
-
-    // We need to call this selfDelegate function so that the aToken will give
-    // its voting power to itself.
-    aToken.selfDelegate();
   }
 
   // ------------------
