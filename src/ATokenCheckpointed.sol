@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.10;
 
+// forgefmt: disable-start
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
 import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
@@ -13,6 +14,7 @@ import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayM
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
+// forgefmt: disable-end
 
 interface IFractionalGovernor {
   function token() external returns (address);
