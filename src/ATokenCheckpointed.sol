@@ -284,7 +284,7 @@ contract ATokenCheckpointed is AToken {
   ///
   /// @inheritdoc MintableIncentivizedERC20
   function _burn(address account, uint128 amount) internal override {
-    super._burn(account, amount);
+    MintableIncentivizedERC20._burn(account, amount);
 
     _checkpointRawBalanceOf(account);
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
@@ -304,7 +304,7 @@ contract ATokenCheckpointed is AToken {
     string calldata aTokenSymbol,
     bytes calldata params
   ) public override initializer {
-    super.initialize(
+    AToken.initialize(
       initializingPool,
       treasury,
       underlyingAsset,
@@ -328,7 +328,7 @@ contract ATokenCheckpointed is AToken {
     uint256 amount,
     bool validate
   ) internal virtual override {
-    super._transfer(from, to, amount, validate);
+    AToken._transfer(from, to, amount, validate);
     _checkpointRawBalanceOf(from);
     _checkpointRawBalanceOf(to);
   }
