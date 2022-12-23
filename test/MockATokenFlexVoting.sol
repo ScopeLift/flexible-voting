@@ -32,6 +32,10 @@ contract MockATokenFlexVoting is ATokenFlexVoting {
     // backwards compatibility.
   }
 
+  function exposed_Treasury() public view returns (address) {
+    return _treasury;
+  }
+
   function exposed_RawBalanceOf(address _user) public view returns (uint256) {
     return _userState[_user].balance;
   }

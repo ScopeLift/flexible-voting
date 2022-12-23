@@ -209,6 +209,10 @@ contract AaveAtokenForkTest is Test {
     vm.prank(_aaveAdmin);
     _poolConfigurator.setReserveStableRateBorrowing(address(govToken), true);
 
+    // Allow the Aave reserve to collect fees on our transactions.
+    vm.prank(_aaveAdmin);
+    _poolConfigurator.setReserveFactor(address(govToken), 1000);
+
     // Sometimes Aave uses oracles to get price information, e.g. when
     // determining the value of collateral relative to loan value. Since GOV
     // isn't a real thing and doesn't have a real price, we need to mock these
@@ -1826,6 +1830,40 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
       _initRawBalanceUserA / 3,
       1 // In case of rounding.
     );
+  }
+
+  function test_MintToTreasuryIsCheckpointed() public {
+    _initiateRebasing();
+
+    // Advance the clock so that the treasury earns some interest.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    address _treasury = aToken.exposed_Treasury();
+    uint256 _initTreasuryBalance = aToken.balanceOf(_treasury);
+
+    // Repay the borrow and give the treasury more interest.
+    ERC20(govToken).approve(address(pool), type(uint256).max);
+    // Give the user some more gov to pay the interest on the borrow.
+    govToken.exposed_mint(address(this), 10 ether);
+    pool.repay(
+      address(govToken),
+      type(uint256).max, // pay entire debt.
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      address(this)
+    );
+
+    address[] memory _assetsForMintToTreasury = new address[](1);
+    _assetsForMintToTreasury[0] = address(govToken);
+    pool.mintToTreasury(_assetsForMintToTreasury);
+
+    // Advance the block so that we can query checkpoints.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    assertGt(aToken.balanceOf(_treasury), _initTreasuryBalance);
+
+    assertGt(aToken.getPastStoredBalance(_treasury, block.number - 1), 0);
   }
 }
 
