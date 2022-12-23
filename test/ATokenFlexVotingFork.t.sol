@@ -15,7 +15,7 @@ import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
 
-import { MockATokenCheckpointed } from "test/MockATokenCheckpointed.sol";
+import { MockATokenFlexVoting } from "test/MockATokenFlexVoting.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
@@ -29,7 +29,7 @@ import { GovToken } from "test/GovToken.sol";
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
-  MockATokenCheckpointed aToken;
+  MockATokenFlexVoting aToken;
   GovToken govToken;
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
@@ -114,7 +114,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new MockATokenCheckpointed(pool, address(governor), 1200);
+    AToken _aTokenImplementation = new MockATokenFlexVoting(pool, address(governor), 1200);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -176,7 +176,7 @@ contract AaveAtokenForkTest is Test {
         //   address variableDebtToken,
         //   address interestRateStrategyAddress
         // );
-        aToken = MockATokenCheckpointed(address(uint160(uint256(_event.topics[2]))));
+        aToken = MockATokenFlexVoting(address(uint160(uint256(_event.topics[2]))));
         vm.label(address(aToken), "aToken");
       }
     }
