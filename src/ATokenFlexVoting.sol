@@ -94,7 +94,8 @@ contract ATokenFlexVoting is AToken {
   // just a proxy -- it won't share an address with the implementation (i.e.
   // this code). Instead we do it at the end of `initialize`. But even that won't
   // handle already-initialized aTokens. For those, we'll need to self-delegate
-  // during the upgrade process. More details in this issue:
+  // during the upgrade process. More details in these issues:
+  // https://github.com/aave/aave-v3-core/pull/774
   // https://github.com/ScopeLift/flexible-voting/issues/16
   function selfDelegate() public {
     IVotingToken(GOVERNOR.token()).delegate(address(this));

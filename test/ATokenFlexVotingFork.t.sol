@@ -1760,7 +1760,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    // Get the rebased balance for userA.
+    // Get the rebased balances.
     uint256 _initBalanceUserA = aToken.balanceOf(_userA);
     uint256 _initBalanceUserB = aToken.balanceOf(_userB);
     assertEq(_initBalanceUserB, 0);
@@ -1803,7 +1803,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    // Get the rebased balance for userA.
+    // Get the rebased balances.
     uint256 _initBalanceUserA = aToken.balanceOf(_userA);
     uint256 _initBalanceUserB = aToken.balanceOf(_userB);
     assertEq(_initBalanceUserB, 0);

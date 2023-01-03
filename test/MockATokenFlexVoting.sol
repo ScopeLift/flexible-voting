@@ -26,8 +26,8 @@ contract MockATokenFlexVoting is ATokenFlexVoting {
     //
     //   https://github.com/aave/aave-v3-core/issues/742
     //
-    // We expect that the on-chain AToken implementation will be upgraded to
-    // AToken.handleRepayment/3 at some point in the future. If/when that happens, we should remove
+    // We expect that the on-chain AToken implementation will be upgraded to the 3-argument version
+    // of AToken.handleRepayment at some point in the future. If/when that happens, we should remove
     // this. But for now we need our aToken to have this function in our fork tests to maintain
     // backwards compatibility.
   }
