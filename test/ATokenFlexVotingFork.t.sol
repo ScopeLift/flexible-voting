@@ -15,7 +15,7 @@ import { IAToken } from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import { IPool } from 'aave-v3-core/contracts/interfaces/IPool.sol';
 import { PoolConfigurator } from 'aave-v3-core/contracts/protocol/pool/PoolConfigurator.sol';
 
-import { ATokenNaive } from "src/ATokenNaive.sol";
+import { MockATokenFlexVoting } from "test/MockATokenFlexVoting.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
@@ -25,11 +25,11 @@ import { GovToken } from "test/GovToken.sol";
 // import { DefaultReserveInterestRateStrategy } from 'aave-v3-core/contracts/protocol/pool/DefaultReserveInterestRateStrategy.sol';
 // import { IPoolAddressesProvider } from 'aave-v3-core/contracts/interfaces/IPoolAddressesProvider.sol';
 // forgefmt: disable-end
-
+//
 contract AaveAtokenForkTest is Test {
   uint256 forkId;
 
-  ATokenNaive aToken;
+  MockATokenFlexVoting aToken;
   GovToken govToken;
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
@@ -38,6 +38,9 @@ contract AaveAtokenForkTest is Test {
   // These are addresses on Optimism.
   address dai = 0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1;
   address weth = 0x4200000000000000000000000000000000000006;
+
+  uint256 constant INITIAL_REBASING_DEPOSIT = 1000 ether;
+  address initialSupplier;
 
   enum ProposalState {
     Pending,
@@ -62,6 +65,8 @@ contract AaveAtokenForkTest is Test {
     // This was the optimism block number at the time this test was written.
     uint256 optimismForkBlock = 26_332_308;
     forkId = vm.createSelectFork(vm.rpcUrl("optimism"), optimismForkBlock);
+
+    initialSupplier = makeAddr("InitialSupplier");
 
     // Deploy the GOV token.
     govToken = new GovToken();
@@ -89,7 +94,7 @@ contract AaveAtokenForkTest is Test {
     //   0x4aa694e6c06D6162d95BE98a2Df6a521d5A7b521, // interestRateStrategyAddress
     //   address(
     //     new DefaultReserveInterestRateStrategy(
-    //       These values were taken from Optimism scan for the etched address.
+    //       // These values were taken from Optimism scan for the etched address.
     //       IPoolAddressesProvider(0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb), // provider
     //       800000000000000000000000000, // optimalUsageRatio
     //       0, // baseVariableBorrowRate
@@ -109,7 +114,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new ATokenNaive(pool, address(governor), 1200);
+    AToken _aTokenImplementation = new MockATokenFlexVoting(pool, address(governor), 1200);
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -171,7 +176,7 @@ contract AaveAtokenForkTest is Test {
         //   address variableDebtToken,
         //   address interestRateStrategyAddress
         // );
-        aToken = ATokenNaive(address(uint160(uint256(_event.topics[2]))));
+        aToken = MockATokenFlexVoting(address(uint160(uint256(_event.topics[2]))));
         vm.label(address(aToken), "aToken");
       }
     }
@@ -204,6 +209,10 @@ contract AaveAtokenForkTest is Test {
     vm.prank(_aaveAdmin);
     _poolConfigurator.setReserveStableRateBorrowing(address(govToken), true);
 
+    // Allow the Aave reserve to collect fees on our transactions.
+    vm.prank(_aaveAdmin);
+    _poolConfigurator.setReserveFactor(address(govToken), 1000);
+
     // Sometimes Aave uses oracles to get price information, e.g. when
     // determining the value of collateral relative to loan value. Since GOV
     // isn't a real thing and doesn't have a real price, we need to mock these
@@ -216,10 +225,6 @@ contract AaveAtokenForkTest is Test {
       // Aave only seems to use USD-based oracles, so we will do the same.
       abi.encode(1e8) // 1 GOV == $1 USD
     );
-
-    // We need to call this selfDelegate function so that the aToken will give
-    // its voting power to itself.
-    aToken.selfDelegate();
   }
 
   // ------------------
@@ -254,6 +259,36 @@ contract AaveAtokenForkTest is Test {
     // advance proposal to active state
     vm.roll(governor.proposalSnapshot(proposalId) + 1);
     assertEq(uint256(governor.state(proposalId)), uint256(ProposalState.Active));
+  }
+
+  function _initiateRebasing() internal {
+    uint256 _initLiquidityRate = pool.getReserveData(address(govToken)).currentLiquidityRate;
+
+    // Have someone mint and deposit some gov.
+    _mintGovAndSupplyToAave(initialSupplier, INITIAL_REBASING_DEPOSIT);
+
+    // Have someone else borrow some gov.
+    deal(weth, address(this), 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, address(this), 0);
+    pool.borrow(
+      address(govToken),
+      42 ether, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      address(this) // onBehalfOf
+    );
+
+    // Advance the clock so that checkpoints become meaningful.
+    vm.roll(block.number + 42);
+    vm.warp(block.timestamp + 42 days);
+
+    // We should be rebasing at this point.
+    assertGt(
+      pool.getReserveData(address(govToken)).currentLiquidityRate,
+      _initLiquidityRate,
+      "If the liquidity rate has not changed, rebasing isn't happening."
+    );
   }
 }
 
@@ -330,7 +365,7 @@ contract Setup is AaveAtokenForkTest {
 
   function testFork_SetupCanBorrowGovAndBeLiquidated() public {
     // Someone else supplies GOV -- necessary so we can borrow it
-    address _bob = address(0xBEEF);
+    address _bob = makeAddr("testFork_SetupCanBorrowGovAndBeLiquidated address");
     govToken.exposed_mint(_bob, 1100e18);
     vm.startPrank(_bob);
     govToken.approve(address(pool), type(uint256).max);
@@ -383,168 +418,201 @@ contract Setup is AaveAtokenForkTest {
   }
 }
 
-contract Supply is AaveAtokenForkTest {
-  function test_DepositsAreCheckpointed() public {
-    address _who = address(0xBEEF);
-
-    // TODO randomize?
-    uint256 _amountA = 42 ether;
-    uint256 _amountB = 3 ether;
-
-    // There are no initial deposits.
-    uint256[] memory _checkpoints = new uint256[](3);
-    _checkpoints[0] = block.number;
-
-    // Advance the clock so that checkpoints become meaningful.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-    _checkpoints[1] = block.number;
-    _mintGovAndSupplyToAave(_who, _amountA);
-
-    // Advance the clock and supply again.
-    vm.roll(block.number + 42);
-    vm.warp(block.timestamp + 42 days);
-    _checkpoints[2] = block.number;
-    _mintGovAndSupplyToAave(_who, _amountB);
-
-    // One more time, so that checkpoint 2 is in the past.
-    vm.roll(block.number + 1);
-
-    // We can still retrieve the user's balance at the given blocks.
-    assertEq(aToken.getPastDeposits(_who, _checkpoints[0]), 0);
-    assertEq(aToken.getPastDeposits(_who, _checkpoints[1]), _amountA);
-    assertEq(aToken.getPastDeposits(_who, _checkpoints[2]), _amountA + _amountB);
-    // TODO why isn't this rebasing?
-    assertEq(aToken.balanceOf(_who), _amountA + _amountB);
-  }
-}
-
-// TODO Why can't I just do `contract Vote is...` here?
-contract VoteTest is AaveAtokenForkTest {
+contract CastVote is AaveAtokenForkTest {
   function test_UserCanCastAgainstVotes() public {
-    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Against));
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastAgainstVotes address"), 4242 ether, uint8(VoteType.Against)
+    );
   }
 
   function test_UserCanCastForVotes() public {
-    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.For));
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastForVotes address"), 4242 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCanCastAbstainVotes() public {
-    _testUserCanCastVotes(address(0xC0FFEE), 4242 ether, uint8(VoteType.Abstain));
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastAbstainVotes address"), 4242 ether, uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotExpressAgainstVotesWithoutWeight() public {
-    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Against));
+    _testUserCannotExpressVotesWithoutATokens(
+      makeAddr("test_UserCannotExpressAgainstVotesWithoutWeight address"),
+      0.42 ether,
+      uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotExpressForVotesWithoutWeight() public {
-    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.For));
+    _testUserCannotExpressVotesWithoutATokens(
+      makeAddr("test_UserCannotExpressForVotesWithoutWeight address"),
+      0.42 ether,
+      uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotExpressAbstainVotesWithoutWeight() public {
-    _testUserCannotExpressVotesWithoutATokens(address(0xBEEF), 0.42 ether, uint8(VoteType.Abstain));
+    _testUserCannotExpressVotesWithoutATokens(
+      makeAddr("test_UserCannotExpressAbstainVotesWithoutWeight address"),
+      0.42 ether,
+      uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotCastAfterVotingPeriodAgainst() public {
-    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Against));
+    _testUserCannotCastAfterVotingPeriod(
+      makeAddr("test_UserCannotCastAfterVotingPeriodAbstain address"),
+      4.2 ether,
+      uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotCastAfterVotingPeriodFor() public {
-    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.For));
+    _testUserCannotCastAfterVotingPeriod(
+      makeAddr("test_UserCannotCastAfterVotingPeriodAbstain address"),
+      4.2 ether,
+      uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotCastAfterVotingPeriodAbstain() public {
-    _testUserCannotCastAfterVotingPeriod(address(0xBABE), 4.2 ether, uint8(VoteType.Abstain));
+    _testUserCannotCastAfterVotingPeriod(
+      makeAddr("test_UserCannotCastAfterVotingPeriodAbstain address"),
+      4.2 ether,
+      uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotDoubleVoteAfterVotingAgainst() public {
-    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Against));
+    _tesNoDoubleVoting(
+      makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotDoubleVoteAfterVotingFor() public {
-    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.For));
+    _tesNoDoubleVoting(
+      makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotDoubleVoteAfterVotingAbstain() public {
-    _tesNoDoubleVoting(address(0xBA5EBA11), 0.042 ether, uint8(VoteType.Abstain));
+    _tesNoDoubleVoting(
+      makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotCastVotesTwiceAfterVotingAgainst() public {
-    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Against));
+    _testUserCannotCastVotesTwice(
+      makeAddr("test_UserCannotCastVotesTwiceAfterVoting address"),
+      1.42 ether,
+      uint8(VoteType.Against)
+    );
   }
 
   function test_UserCannotCastVotesTwiceAfterVotingFor() public {
-    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.For));
+    _testUserCannotCastVotesTwice(
+      makeAddr("test_UserCannotCastVotesTwiceAfterVoting address"), 1.42 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotCastVotesTwiceAfterVotingAbstain() public {
-    _testUserCannotCastVotesTwice(address(0x0DD), 1.42 ether, uint8(VoteType.Abstain));
+    _testUserCannotCastVotesTwice(
+      makeAddr("test_UserCannotCastVotesTwiceAfterVoting address"),
+      1.42 ether,
+      uint8(VoteType.Abstain)
+    );
   }
 
   function test_UserCannotExpressAgainstVotesPriorToDepositing() public {
     _testUserCannotExpressVotesPriorToDepositing(
-      address(0xC0DE), 4.242 ether, uint8(VoteType.Against)
+      makeAddr("UserCannotExpressVotesPriorToDepositing address"),
+      4.242 ether,
+      uint8(VoteType.Against)
     );
   }
 
   function test_UserCannotExpressForVotesPriorToDepositing() public {
-    _testUserCannotExpressVotesPriorToDepositing(address(0xC0DE), 4.242 ether, uint8(VoteType.For));
+    _testUserCannotExpressVotesPriorToDepositing(
+      makeAddr("UserCannotExpressVotesPriorToDepositing address"), 4.242 ether, uint8(VoteType.For)
+    );
   }
 
   function test_UserCannotExpressAbstainVotesPriorToDepositing() public {
     _testUserCannotExpressVotesPriorToDepositing(
-      address(0xC0DE), 4.242 ether, uint8(VoteType.Abstain)
+      makeAddr("UserCannotExpressVotesPriorToDepositing address"),
+      4.242 ether,
+      uint8(VoteType.Abstain)
     );
   }
 
   function test_UserAgainstVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.Against)
+      makeAddr("UserVotingWeightIsSnapshotDependent address"),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.Against)
     );
   }
 
   function test_UserForVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.For)
+      makeAddr("UserVotingWeightIsSnapshotDependent address"),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.For)
     );
   }
 
   function test_UserAbstainVotingWeightIsSnapshotDependent() public {
     _testUserVotingWeightIsSnapshotDependent(
-      address(0xDAD), 0.00042 ether, 0.042 ether, uint8(VoteType.Abstain)
+      makeAddr("UserVotingWeightIsSnapshotDependent address"),
+      0.00042 ether,
+      0.042 ether,
+      uint8(VoteType.Abstain)
     );
   }
 
   function test_MultipleUsersCanCastVotes() public {
     _testMultipleUsersCanCastVotes(
-      address(0xD00D), address(0xF00D), 0.42424242 ether, 0.00000042 ether
+      makeAddr("MultipleUsersCanCastVotes address 1"),
+      makeAddr("MultipleUsersCanCastVotes address 2"),
+      0.42424242 ether,
+      0.00000042 ether
     );
   }
 
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAgainst() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF), 0.000001 ether, uint8(VoteType.Against)
+      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
+      0.000001 ether,
+      uint8(VoteType.Against)
     );
   }
 
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingFor() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF), 0.000001 ether, uint8(VoteType.For)
+      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
+      0.000001 ether,
+      uint8(VoteType.For)
     );
   }
 
   function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAbstain() public {
     _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      address(0xDEAF), 0.000001 ether, uint8(VoteType.Abstain)
+      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
+      0.000001 ether,
+      uint8(VoteType.Abstain)
     );
   }
 
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstFor() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xFADE), // voterA
-        address(0xDEED), // voterB
-        address(0xB0D), // borrower
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterA #1"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterB #1"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance borrower #1"),
         12 ether, // voteWeightA
         4 ether, // voteWeightB
         7 ether, // borrowerAssets
@@ -557,9 +625,9 @@ contract VoteTest is AaveAtokenForkTest {
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstAbstain() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xFEED), // voterA
-        address(0xADE), // voterB
-        address(0xD0E), // borrower
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterA #2"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterB #2"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance borrower #2"),
         2 ether, // voteWeightA
         7 ether, // voteWeightB
         4 ether, // borrowerAssets
@@ -572,9 +640,9 @@ contract VoteTest is AaveAtokenForkTest {
   function test_VoteWeightIsScaledBasedOnPoolBalanceForAbstain() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
-        address(0xED), // voterA
-        address(0xABE), // voterB
-        address(0xBED), // borrower
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterA #3"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance voterB #3"),
+        makeAddr("VoteWeightIsScaledBasedOnPoolBalance borrower #3"),
         1 ether, // voteWeightA
         1 ether, // voteWeightB
         1 ether, // borrowerAssets
@@ -587,9 +655,9 @@ contract VoteTest is AaveAtokenForkTest {
   function test_AgainstVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0x111), // voterA
-        address(0x222), // voterB
-        address(0x333), // borrower
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterA #1"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterB #1"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress borrower #1"),
         1 ether, // voteWeightA
         1 ether, // voteWeightB
         1 ether, // borrowerAssets
@@ -601,9 +669,9 @@ contract VoteTest is AaveAtokenForkTest {
   function test_ForVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0xAAA), // voterA
-        address(0xBBB), // voterB
-        address(0xCCC), // borrower
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterA #2"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterB #2"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress borrower #2"),
         42 ether, // voteWeightA
         24 ether, // voteWeightB
         11 ether, // borrowerAssets
@@ -615,9 +683,9 @@ contract VoteTest is AaveAtokenForkTest {
   function test_AbstainVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
     _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
       VotingWeightIsAbandonedVars(
-        address(0x123), // voterA
-        address(0x456), // voterB
-        address(0x789), // borrower
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterA #3"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress voterB #3"),
+        makeAddr("VotingWeightIsAbandonedIfSomeoneDoesntExpress borrower #3"),
         24 ether, // voteWeightA
         42 ether, // voteWeightB
         100 ether, // borrowerAssets
@@ -628,8 +696,8 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xAAAA), // voterA
-      address(0xBBBB), // voterB
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterA #1"),
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterB #1"),
       1 ether, // voteWeightA
       2 ether, // voteWeightB
       uint8(VoteType.Against) // supportTypeA
@@ -638,8 +706,8 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_ForVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xCCCC), // voterA
-      address(0xDDDD), // voterB
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterA #2"),
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterB #2"),
       0.42 ether, // voteWeightA
       0.042 ether, // voteWeightB
       uint8(VoteType.For) // supportTypeA
@@ -648,8 +716,8 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightIsUnaffectedByDepositsAfterProposal() public {
     _testVotingWeightIsUnaffectedByDepositsAfterProposal(
-      address(0xEEEE), // voterA
-      address(0xFFFF), // voterB
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterA #3"),
+      makeAddr("VotingWeightIsUnaffectedByDepositsAfterProposal voterB #3"),
       10 ether, // voteWeightA
       20 ether, // voteWeightB
       uint8(VoteType.Abstain) // supportTypeA
@@ -658,7 +726,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightDoesNotGoDownWhenUsersBorrow() public {
     _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xC0D),
+      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 1"),
       4.242 ether, // GOV deposit amount
       1 ether, // DAI borrow amount
       uint8(VoteType.Against) // supportType
@@ -667,7 +735,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_ForVotingWeightDoesNotGoDownWhenUsersBorrow() public {
     _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xD0C),
+      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 2"),
       424.2 ether, // GOV deposit amount
       4 ether, // DAI borrow amount
       uint8(VoteType.For) // supportType
@@ -676,7 +744,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightDoesNotGoDownWhenUsersBorrow() public {
     _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      address(0xCAD),
+      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 3"),
       0.4242 ether, // GOV deposit amount
       0.0424 ether, // DAI borrow amount
       uint8(VoteType.Abstain) // supportType
@@ -685,7 +753,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xC0D3),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #1"),
       42 ether, // supplyAmount
       type(uint256).max, // withdrawAmount
       uint8(VoteType.Against) // supportType
@@ -694,7 +762,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_ForVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xD0C3),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #2"),
       42 ether, // supplyAmount
       type(uint256).max, // withdrawAmount
       uint8(VoteType.For) // supportType
@@ -703,7 +771,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightGoesDownWhenUsersFullyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xCAD3),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #3"),
       42 ether, // supplyAmount
       type(uint256).max, // withdrawAmount
       uint8(VoteType.Abstain) // supportType
@@ -712,7 +780,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AgainstVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xC0D4),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #4"),
       42 ether, // supplyAmount
       2 ether, // withdrawAmount
       uint8(VoteType.Against) // supportType
@@ -721,7 +789,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_ForVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xD0C4),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #5"),
       42 ether, // supplyAmount
       3 ether, // withdrawAmount
       uint8(VoteType.For) // supportType
@@ -730,7 +798,7 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_AbstainVotingWeightGoesDownWhenUsersPartiallyWithdraw() public {
     _testVotingWeightGoesDownWhenUsersWithdraw(
-      address(0xCAD4),
+      makeAddr("VotingWeightGoesDownWhenUsersWithdraw address #6"),
       42 ether, // supplyAmount
       10 ether, // withdrawAmount
       uint8(VoteType.Abstain) // supportType
@@ -739,37 +807,122 @@ contract VoteTest is AaveAtokenForkTest {
 
   function test_CannotExpressAgainstVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD4242), // userA
-      address(0xDAD1111), // userB
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #1"),
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #1"),
       uint8(VoteType.Against) // supportType
     );
   }
 
   function test_CannotExpressForVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD424242), // userA
-      address(0xDAD111111), // userB
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #2"),
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #2"),
       uint8(VoteType.For) // supportType
     );
   }
 
   function test_CannotExpressAbstainVoteAfterVotesHaveBeenCast() public {
     _testCannotExpressVoteAfterVotesHaveBeenCast(
-      address(0xDAD42424242), // userA
-      address(0xDAD11111111), // userB
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #3"),
+      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #3"),
       uint8(VoteType.Abstain) // supportType
     );
   }
 
   function test_CannotCastVoteWithoutVotesExpressed() public {
     _testCannotCastVoteWithoutVotesExpressed(
-      address(0xCA11), // who
+      makeAddr("CannotCastVoteWithoutVotesExpressed who"),
       uint8(VoteType.Abstain) // supportType
     );
   }
 
   function test_VotingWeightWorksWithRebasing() public {
-    _testVotingWeightWorksWithRebasing(address(0xABE1), address(0xABE2), 424_242 ether);
+    _testVotingWeightWorksWithRebasing(
+      makeAddr("VotingWeightWorksWithRebasing userA"),
+      makeAddr("VotingWeightWorksWithRebasing userB"),
+      424_242 ether
+    );
+  }
+
+  function test_CastForVoteWithFullyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #1"),
+      makeAddr("CastVoteWithTransferredATokens userB #1"),
+      1 ether, // weight
+      1 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_CastAgainstVoteWithFullyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #2"),
+      makeAddr("CastVoteWithTransferredATokens userB #2"),
+      42 ether, // weight
+      42 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.Against) // supportTypeB
+    );
+  }
+
+  function test_CastAbstainVoteWithFullyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #3"),
+      makeAddr("CastVoteWithTransferredATokens userB #3"),
+      0.42 ether, // weight
+      0.42 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.Abstain) // supportTypeB
+    );
+  }
+
+  function test_CastSameVoteWithBarelyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #4"),
+      makeAddr("CastVoteWithTransferredATokens userB #4"),
+      // Transfer less than half.
+      1 ether, // weight
+      0.33 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_CastDifferentVoteWithBarelyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #5"),
+      makeAddr("CastVoteWithTransferredATokens userB #5"),
+      // Transfer less than half.
+      1 ether, // weight
+      0.33 ether, // transferAmount
+      uint8(VoteType.Abstain), // supportTypeA
+      uint8(VoteType.Against) // supportTypeB
+    );
+  }
+
+  function test_CastSameVoteWithMostlyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #6"),
+      makeAddr("CastVoteWithTransferredATokens userB #6"),
+      // Transfer almost all of it.
+      42 ether, // weight
+      41 ether, // transferAmount
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_CastDifferentVoteWithMostlyTransferredATokens() public {
+    _testCastVoteWithTransferredATokens(
+      makeAddr("CastVoteWithTransferredATokens userA #7"),
+      makeAddr("CastVoteWithTransferredATokens userB #7"),
+      // Transfer almost all of it.
+      42 ether, // weight
+      41 ether, // transferAmount
+      uint8(VoteType.Against), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
   }
 
   function _testUserCanCastVotes(address _who, uint256 _voteWeight, uint8 _supportType) private {
@@ -777,9 +930,6 @@ contract VoteTest is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_who, _voteWeight);
     assertEq(aToken.balanceOf(_who), _voteWeight, "aToken balance wrong");
     assertEq(govToken.balanceOf(address(aToken)), _voteWeight, "govToken balance wrong");
-
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -834,9 +984,6 @@ contract VoteTest is AaveAtokenForkTest {
 
     assertEq(govToken.balanceOf(_who), _voteWeight);
 
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -853,9 +1000,6 @@ contract VoteTest is AaveAtokenForkTest {
   ) private {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -876,9 +1020,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -897,9 +1038,6 @@ contract VoteTest is AaveAtokenForkTest {
   {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -945,9 +1083,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeightA);
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -985,9 +1120,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_userA, _voteWeightA);
     _mintGovAndSupplyToAave(_userB, _voteWeightB);
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1032,9 +1164,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1070,9 +1199,6 @@ contract VoteTest is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
     uint256 _initGovBalance = govToken.balanceOf(address(aToken));
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Borrow GOV from the pool, decreasing its token balance.
     deal(weth, _vars.borrower, _vars.borrowerAssets);
     vm.startPrank(_vars.borrower);
@@ -1088,9 +1214,6 @@ contract VoteTest is AaveAtokenForkTest {
     );
     assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
     vm.stopPrank();
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1120,38 +1243,24 @@ contract VoteTest is AaveAtokenForkTest {
     // These can differ because votes are rounded.
     assertApproxEqAbs(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
 
+    // forgefmt: disable-start
     if (_vars.supportTypeA == _vars.supportTypeB) {
       assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
-      assertEq(
-        _againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0
-      );
-      assertEq(
-        _abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0
-      );
+      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
+      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
     } else {
       uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initGovBalance;
       uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initGovBalance;
 
       // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-      if (_vars.supportTypeA == uint8(VoteType.For)) {
-        assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-      }
-      if (_vars.supportTypeB == uint8(VoteType.For)) {
-        assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
-      }
-      if (_vars.supportTypeA == uint8(VoteType.Against)) {
-        assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-      }
-      if (_vars.supportTypeB == uint8(VoteType.Against)) {
-        assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
-      }
-      if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
-        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-      }
-      if (_vars.supportTypeB == uint8(VoteType.Abstain)) {
-        assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
-      }
+      if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
     }
+    // forgefmt: disable-end
   }
 
   struct VotingWeightIsAbandonedVars {
@@ -1175,9 +1284,6 @@ contract VoteTest is AaveAtokenForkTest {
     _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
     uint256 _initGovBalance = govToken.balanceOf(address(aToken));
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Borrow GOV from the pool, decreasing its token balance.
     deal(weth, _vars.borrower, _vars.borrowerAssets);
     vm.startPrank(_vars.borrower);
@@ -1193,9 +1299,6 @@ contract VoteTest is AaveAtokenForkTest {
     );
     assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
     vm.stopPrank();
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1244,16 +1347,12 @@ contract VoteTest is AaveAtokenForkTest {
       1
     );
 
+    // forgefmt: disable-start
     // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-    if (_vars.supportTypeA == uint8(VoteType.For)) {
-      assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-    }
-    if (_vars.supportTypeA == uint8(VoteType.Against)) {
-      assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-    }
-    if (_vars.supportTypeA == uint8(VoteType.Abstain)) {
-      assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-    }
+    if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    // forgefmt: disable-end
   }
 
   function _testVotingWeightIsUnaffectedByDepositsAfterProposal(
@@ -1269,9 +1368,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Mint and deposit for just userA.
     _mintGovAndSupplyToAave(_voterA, _voteWeightA);
     uint256 _initGovBalance = govToken.balanceOf(address(aToken));
-
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1323,9 +1419,6 @@ contract VoteTest is AaveAtokenForkTest {
       _who // onBehalfOf
     );
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1370,9 +1463,6 @@ contract VoteTest is AaveAtokenForkTest {
       _mintGovAndSupplyToAave(address(this), _withdrawAmount);
     }
 
-    // Advance one block so that our votes will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1400,21 +1490,11 @@ contract VoteTest is AaveAtokenForkTest {
   function _testVotingWeightWorksWithRebasing(address _userA, address _userB, uint256 _supplyAmount)
     private
   {
+    _initiateRebasing();
+
     // Someone supplies GOV to Aave.
     _mintGovAndSupplyToAave(_userA, _supplyAmount);
     uint256 _initATokenBalanceA = aToken.balanceOf(_userA);
-
-    // Borrow some Gov for aGOV to start rebasing.
-    deal(weth, address(this), _supplyAmount);
-    ERC20(weth).approve(address(pool), type(uint256).max);
-    pool.supply(weth, _supplyAmount, address(this), 0);
-    pool.borrow(
-      address(govToken),
-      _supplyAmount / 10, // amount of GOV to borrow
-      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-      0, // referralCode
-      address(this) // onBehalfOf
-    );
 
     // Let those aGovTokens rebase \o/.
     vm.roll(block.number + 365 * 24 * 60 * 12); // 12 blocks per min for a year.
@@ -1428,9 +1508,6 @@ contract VoteTest is AaveAtokenForkTest {
       aToken.balanceOf(_userB),
       "userA does not have more aTokens than userB"
     );
-
-    // Advance one block so that weight will be checkpointed by the govToken.
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1450,8 +1527,8 @@ contract VoteTest is AaveAtokenForkTest {
     (uint256 _againstVotes, uint256 _forVotes, /*uint256 _abstainVotes */ ) =
       governor.proposalVotes(_proposalId);
 
-    // userA's vote *should* have beaten userB's, but it won't.
-    assertEq(_forVotes, _againstVotes, "if this fails, you have fixed ATokenNaive!");
+    // userA's vote *should* have beaten userB's.
+    assertGt(_forVotes, _againstVotes, "rebasing isn't reflected in vote weight");
   }
 
   function _testCannotExpressVoteAfterVotesHaveBeenCast(
@@ -1462,9 +1539,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_userA, 1 ether);
     _mintGovAndSupplyToAave(_userB, 1 ether);
-
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1490,9 +1564,6 @@ contract VoteTest is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, 1 ether);
 
-    // Advance one block so that our votes will be checkpointed by the govToken;
-    vm.roll(block.number + 1);
-
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1509,5 +1580,477 @@ contract VoteTest is AaveAtokenForkTest {
 
     // Now votes should be castable.
     aToken.castVote(_proposalId);
+  }
+
+  function _testCastVoteWithTransferredATokens(
+    address _userA,
+    address _userB,
+    uint256 _weight,
+    uint256 _transferAmount,
+    uint8 _supportTypeA,
+    uint8 _supportTypeB
+  ) private {
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_userA, _weight);
+    assertEq(aToken.balanceOf(_userA), _weight);
+    assertEq(aToken.balanceOf(_userB), 0);
+
+    // Transfer all aTokens from userA to userB.
+    vm.prank(_userA);
+    aToken.transfer(_userB, _transferAmount);
+    assertEq(aToken.balanceOf(_userA), _weight - _transferAmount);
+    assertEq(aToken.balanceOf(_userB), _transferAmount);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express voting preferences.
+    if (aToken.balanceOf(_userA) == 0) vm.expectRevert(bytes("no weight"));
+    vm.prank(_userA);
+    aToken.expressVote(_proposalId, _supportTypeA);
+    vm.prank(_userB);
+    aToken.expressVote(_proposalId, _supportTypeB);
+
+    // Wait until after the pool's voting period closes.
+    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+
+    if (_supportTypeA == _supportTypeB) {
+      if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight);
+      if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
+      if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
+    } else {
+      // forgefmt: disable-start
+      if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight - _transferAmount);
+      if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight - _transferAmount);
+      if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight - _transferAmount);
+      if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _transferAmount);
+      if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _transferAmount);
+      if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _transferAmount);
+      // forgefmt: disable-end
+    }
+  }
+}
+
+contract GetPastStoredBalanceTest is AaveAtokenForkTest {
+  function test_GetPastStoredBalanceCorrectlyReadsCheckpoints() public {
+    _initiateRebasing();
+
+    address _who = makeAddr("GetPastStoredBalanceCorrectlyReadsCheckpoints _who");
+    uint256 _amountA = 42 ether;
+    uint256 _amountB = 3 ether;
+
+    uint256[] memory _rawBalances = new uint256[](3);
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_who, _amountA);
+    _rawBalances[0] = aToken.exposed_RawBalanceOf(_who);
+
+    // It's important that this be greater than a ray, since Aave uses this
+    // index when determining the raw stored balance. If it were a ray, the
+    // stored balance would just equal the supplied amount and this test would
+    // be less meaningful.
+    assertGt(
+      pool.getReserveData(address(govToken)).liquidityIndex,
+      1e27,
+      "liquidityIndex has not changed, is rebasing occuring?"
+    );
+
+    // The supplied amount should be less than the raw balance, which was
+    // scaled down by the reserve liquidity index.
+    assertLt(_rawBalances[0], _amountA, "supply wasn't reduced by liquidityIndex");
+
+    // Advance the clock.
+    uint256 _blocksJumped = 42;
+    vm.roll(block.number + _blocksJumped);
+    vm.warp(block.timestamp + 42 days);
+
+    // getPastStoredBalance should match the initial raw balance.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumped + 1),
+      _rawBalances[0],
+      "getPastStoredBalance does not match the initial raw balance"
+    );
+
+    // getPastStoredBalance should be able to give us the raw balance at an
+    // intermediate point.
+    assertEq(
+      aToken.getPastStoredBalance(
+        _who,
+        block.number - (_blocksJumped / 3) // 1/3 is just an arbitrary point.
+      ),
+      _rawBalances[0]
+    );
+
+    // Deposit again to make things more complicated.
+    _mintGovAndSupplyToAave(_who, _amountB);
+    _rawBalances[1] = aToken.exposed_RawBalanceOf(_who);
+
+    // Advance the clock.
+    uint256 _blocksJumpedSecondTime = 100;
+    vm.roll(block.number + _blocksJumpedSecondTime);
+    vm.warp(block.timestamp + 100 days);
+
+    // Rebasing should not affect the raw balance.
+    assertGt(_rawBalances[1], _rawBalances[0], "raw balance did not increase");
+
+    // getPastStoredBalance should match historical balances.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumped - _blocksJumpedSecondTime + 1),
+      _rawBalances[0],
+      "getPastStoredBalance did not match original raw balance"
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime + 1),
+      _rawBalances[1],
+      "getPastStoredBalance did not match raw balance after second supply"
+    );
+    // getPastStoredBalance should be able to give us the raw balance at intermediate points.
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3), // random point
+      _rawBalances[1]
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3),
+      aToken.getPastStoredBalance(_who, block.number - 1)
+    );
+
+    // Withdrawals should be reflected in getPastStoredBalance.
+    vm.startPrank(_who);
+    pool.withdraw(
+      address(govToken),
+      aToken.balanceOf(_who) / 3, // Withdraw 1/3rd of balance.
+      _who
+    );
+    vm.stopPrank();
+
+    // Advance the clock
+    uint256 _blocksJumpedThirdTime = 10;
+    vm.roll(block.number + _blocksJumpedThirdTime);
+    vm.warp(block.timestamp + 10 days);
+
+    assertEq(
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime),
+      aToken.exposed_RawBalanceOf(_who)
+    );
+    assertEq(aToken.getPastStoredBalance(_who, block.number - 1), aToken.exposed_RawBalanceOf(_who));
+    assertGt(
+      _rawBalances[1], // The raw balance pre-withdrawal.
+      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime)
+    );
+  }
+
+  function test_GetPastStoredBalanceHandlesTransfers() public {
+    _initiateRebasing();
+
+    address _userA = makeAddr("GetPastStoredBalanceHandlesTransfers _userA");
+    address _userB = makeAddr("GetPastStoredBalanceHandlesTransfers _userB");
+    uint256 _amount = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amount);
+    uint256 _initRawBalanceUserA = aToken.exposed_RawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // Get the rebased balances.
+    uint256 _initBalanceUserA = aToken.balanceOf(_userA);
+    uint256 _initBalanceUserB = aToken.balanceOf(_userB);
+    assertGt(_initBalanceUserA, 0);
+    assertEq(_initBalanceUserB, 0);
+
+    // Transfer aTokens to userB.
+    vm.prank(_userA);
+    aToken.transfer(_userB, _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userB), 1 * _initBalanceUserA / 3);
+
+    // Advance the clock so that we checkpoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    // Confirm voting weight has shifted.
+    assertEq(
+      aToken.getPastStoredBalance(_userA, block.number - 1),
+      2 * _initRawBalanceUserA / 3 // 2/3rds of A's initial balance
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_userB, block.number - 1),
+      1 * _initRawBalanceUserA / 3 // 1/3rd of A's initial balance
+    );
+  }
+
+  function test_GetPastStoredBalanceHandlesTransferFrom() public {
+    _initiateRebasing();
+
+    address _userA = makeAddr("GetPastStoredBalanceHandlesTransfers _userA");
+    address _userB = makeAddr("GetPastStoredBalanceHandlesTransfers _userB");
+    uint256 _amount = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amount);
+    uint256 _initRawBalanceUserA = aToken.exposed_RawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // Get the rebased balances.
+    uint256 _initBalanceUserA = aToken.balanceOf(_userA);
+    uint256 _initBalanceUserB = aToken.balanceOf(_userB);
+    assertGt(_initBalanceUserA, 0);
+    assertEq(_initBalanceUserB, 0);
+
+    // Transfer aTokens to userB.
+    vm.prank(_userA);
+    aToken.approve(address(this), type(uint256).max);
+    aToken.transferFrom(_userA, _userB, _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userB), _initBalanceUserA / 3);
+
+    // Advance the clock so that we checkpoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    // Confirm voting weight has shifted.
+    assertEq(
+      aToken.getPastStoredBalance(_userA, block.number - 1),
+      2 * _initRawBalanceUserA / 3 // 2/3rds of A's initial balance
+    );
+    assertEq(
+      aToken.getPastStoredBalance(_userB, block.number - 1),
+      1 * _initRawBalanceUserA / 3 // 1/3rd of A's initial balance
+    );
+  }
+
+  function test_MintToTreasuryIsCheckpointed() public {
+    _initiateRebasing();
+
+    // Advance the clock so that the treasury earns some interest.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    address _treasury = aToken.exposed_Treasury();
+    uint256 _initTreasuryBalance = aToken.balanceOf(_treasury);
+
+    // Repay the borrow and give the treasury more interest.
+    ERC20(govToken).approve(address(pool), type(uint256).max);
+    // Give the user some more gov to pay the interest on the borrow.
+    govToken.exposed_mint(address(this), 10 ether);
+    pool.repay(
+      address(govToken),
+      type(uint256).max, // pay entire debt.
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      address(this)
+    );
+
+    address[] memory _assetsForMintToTreasury = new address[](1);
+    _assetsForMintToTreasury[0] = address(govToken);
+    pool.mintToTreasury(_assetsForMintToTreasury);
+
+    // Advance the block so that we can query checkpoints.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    assertGt(aToken.balanceOf(_treasury), _initTreasuryBalance);
+
+    assertGt(aToken.getPastStoredBalance(_treasury, block.number - 1), 0);
+  }
+}
+
+contract GetPastTotalBalancesTest is AaveAtokenForkTest {
+  function test_GetPastTotalBalancesIncreasesOnDeposit() public {
+    _initiateRebasing();
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT);
+
+    address _userA = makeAddr("GetPastTotalBalancesIncreasesOnDeposit _userA");
+    address _userB = makeAddr("GetPastTotalBalancesIncreasesOnDeposit _userB");
+    uint256 _amountA = 4242 ether;
+    uint256 _amountB = 123 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amountA);
+    uint256 _rawBalanceA = aToken.exposed_RawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // forgefmt: disable-start
+    assertEq(aToken.getPastTotalBalances(block.number - 101), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalances(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    // forgefmt: disable-end
+
+    // Another user deposits.
+    _mintGovAndSupplyToAave(_userB, _amountB);
+    uint256 _rawBalanceB = aToken.exposed_RawBalanceOf(_userB);
+
+    // Advance the clock to checkpoint + rebase.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    // forgefmt: disable-start
+    assertEq(aToken.getPastTotalBalances(block.number - 201), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalances(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalances(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    // forgefmt: disable-end
+  }
+
+  function test_GetPastTotalBalancesDecreasesOnWithdraw() public {
+    _initiateRebasing();
+
+    address _userA = makeAddr("GetPastTotalBalancesDecreasesOnWithdraw _userA");
+    uint256 _amountA = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amountA);
+    uint256 _rawBalanceA = aToken.exposed_RawBalanceOf(_userA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+
+    vm.startPrank(_userA);
+    uint256 _withdrawAmount = aToken.balanceOf(_userA) / 3;
+    pool.withdraw(address(govToken), _withdrawAmount, _userA);
+    vm.stopPrank();
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalBalances(block.number - 1),
+      INITIAL_REBASING_DEPOSIT + aToken.exposed_RawBalanceOf(_userA)
+    );
+
+    uint256 _rawBalanceDelta = _rawBalanceA - aToken.exposed_RawBalanceOf(_userA);
+    assertEq(
+      aToken.getPastTotalBalances(block.number - 101) - _rawBalanceDelta,
+      aToken.getPastTotalBalances(block.number - 1)
+    );
+  }
+
+  function test_GetPastTotalBalancesIsUnaffectedByTransfer() public {
+    _initiateRebasing();
+
+    address _userA = makeAddr("GetPastTotalBalancesIsUnaffectedByTransfer _userA");
+    address _userB = makeAddr("GetPastTotalBalancesIsUnaffectedByTransfer _userB");
+    uint256 _amountA = 4242 ether;
+
+    // Deposit.
+    _mintGovAndSupplyToAave(_userA, _amountA);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
+
+    vm.startPrank(_userA);
+    aToken.transfer(_userB, aToken.balanceOf(_userA) / 2);
+    vm.stopPrank();
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalBalances(block.number - 1),
+      _totalDeposits // No change because of the transfer;
+    );
+
+    // Repeat.
+    vm.startPrank(_userA);
+    aToken.transfer(_userB, aToken.balanceOf(_userA));
+    vm.stopPrank();
+
+    assertEq(aToken.balanceOf(_userA), 0);
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(
+      aToken.getPastTotalBalances(block.number - 1),
+      _totalDeposits // Still no change caused by transfer.
+    );
+  }
+
+  function test_GetPastTotalBalancesIsUnaffectedByBorrow() public {
+    _initiateRebasing();
+
+    address _userA = makeAddr("GetPastTotalBalancesIsUnaffectedByBorrow _userA");
+    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
+
+    // Borrow gov.
+    vm.startPrank(_userA);
+    deal(weth, _userA, 100 ether);
+    ERC20(weth).approve(address(pool), type(uint256).max);
+    pool.supply(weth, 100 ether, _userA, 0);
+    pool.borrow(
+      address(govToken),
+      42 ether, // amount of GOV to borrow
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      0, // referralCode
+      _userA // onBehalfOf
+    );
+    assertEq(govToken.balanceOf(_userA), 42 ether);
+    vm.stopPrank();
+
+    // Advance the clock so that we checkpoint and let some rebasing happen.
+    vm.roll(block.number + 100);
+    vm.warp(block.timestamp + 100 days);
+
+    assertEq(aToken.getPastTotalBalances(block.number - 1), _totalDeposits);
+  }
+
+  function test_GetPastTotalBalancesZerosOutIfAllPositionsAreUnwound() public {
+    _initiateRebasing();
+
+    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
+    assertGt(_totalDeposits, 0);
+    assertGt(govToken.balanceOf(address(aToken)), 0);
+
+    // Repay the borrow that kicked off rebasing.
+    ERC20(govToken).approve(address(pool), type(uint256).max);
+    // Give the user some more gov to pay the interest on the borrow.
+    govToken.exposed_mint(address(this), 10 ether);
+    pool.repay(
+      address(govToken),
+      type(uint256).max, // pay entire debt.
+      uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
+      address(this)
+    );
+
+    // Withdraw the only balance.
+    vm.startPrank(initialSupplier);
+    pool.withdraw(
+      address(govToken),
+      type(uint256).max, // Withdraw it all.
+      initialSupplier
+    );
+
+    // Advance the clock so that we checkpoint.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+
+    assertEq(
+      aToken.getPastTotalBalances(block.number - 1),
+      0, // Total balances should now be zero; any remaining supply belongs to the reserve.
+      "getPastTotalBalances accounting is wrong"
+    );
   }
 }

@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.10;
 
+// forgefmt: disable-start
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
+import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
 import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
 import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
+import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
 import {IERC20} from "aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
+// forgefmt: disable-end
 
 interface IFractionalGovernor {
   function token() external returns (address);
@@ -31,7 +35,7 @@ interface IVotingToken {
   function getPastVotes(address account, uint256 blockNumber) external view returns (uint256);
 }
 
-contract ATokenNaive is AToken {
+contract ATokenFlexVoting is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
   using GPv2SafeERC20 for IERC20;
@@ -67,12 +71,11 @@ contract ATokenNaive is AToken {
   mapping(uint256 => ProposalVote) public proposalVotes;
 
   /// @notice The governor contract associated with this governance token. It
-  /// must be one that supports fractional voting, e.g.
-  /// GovernorCountingFractional.
-  IFractionalGovernor public immutable governor;
+  /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
+  IFractionalGovernor public immutable GOVERNOR;
 
-  /// @notice Mapping from address to deposit checkpoint history.
-  mapping(address => Checkpoints.History) private depositCheckpoints;
+  /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
+  mapping(address => Checkpoints.History) private balanceCheckpoints;
 
   /// @notice History of total underlying asset balance.
   Checkpoints.History private totalDepositCheckpoints;
@@ -83,15 +86,19 @@ contract ATokenNaive is AToken {
   /// @param _castVoteWindow The number of blocks that users have to express
   /// their votes on a proposal before votes can be cast.
   constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
-    governor = IFractionalGovernor(_governor);
+    GOVERNOR = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
-  // TODO Is there a better way to do this? It cannot be done in the constructor
-  // because the AToken is just used a proxy -- it won't share an address with
-  // the implementation (i.e. this code).
+  // Self-delegation cannot be done in the constructor because the aToken is
+  // just a proxy -- it won't share an address with the implementation (i.e.
+  // this code). Instead we do it at the end of `initialize`. But even that won't
+  // handle already-initialized aTokens. For those, we'll need to self-delegate
+  // during the upgrade process. More details in these issues:
+  // https://github.com/aave/aave-v3-core/pull/774
+  // https://github.com/ScopeLift/flexible-voting/issues/16
   function selfDelegate() public {
-    IVotingToken(governor.token()).delegate(address(this));
+    IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
 
   /// @notice Method which returns the deadline (as a block number) by which
@@ -106,7 +113,7 @@ contract ATokenNaive is AToken {
     view
     returns (uint256 _lastVotingBlock)
   {
-    _lastVotingBlock = governor.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
+    _lastVotingBlock = GOVERNOR.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
   }
 
   /// @notice Allow a depositor to express their voting preference for a given
@@ -117,7 +124,7 @@ contract ATokenNaive is AToken {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
-    uint256 weight = getPastDeposits(msg.sender, governor.proposalSnapshot(proposalId));
+    uint256 weight = getPastStoredBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
     require(!proposalVotersHasVoted[proposalId][msg.sender], "already voted");
@@ -153,31 +160,33 @@ contract ATokenNaive is AToken {
       "no votes expressed"
     );
 
-    uint256 _proposalSnapshotBlockNumber = governor.proposalSnapshot(proposalId);
+    uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
-    // Use the snapshot of total deposits to determine total voting weight. We cannot
-    // use the proposalVote numbers alone, since some people with deposits at the
-    // snapshot might not have expressed votes.
-    uint256 _totalDepositWeightAtSnapshot = getPastTotalDeposits(_proposalSnapshotBlockNumber);
+    // Use the snapshot of total raw balances to determine total voting weight.
+    // We cannot use the proposalVote numbers alone, since some people with
+    // balances at the snapshot might not have expressed votes. We don't want to
+    // make it possible for aToken holders to *increase* their voting power when
+    // other people don't express their votes. That'd be a terrible incentive.
+    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalances(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
       address(this), _proposalSnapshotBlockNumber
     );
 
-    //      forVotesRaw          forVotesScaled
-    // --------------------- = ---------------------
-    //     totalDeposits        deposits (@snapshot)
+    //      forVotesRaw          forVoteWeight
+    // --------------------- = ------------------
+    //     totalRawBalance      totalVoteWeight
     //
-    // forVotesScaled = forVotesRaw * deposits@snapshot / totalDeposits
+    // forVoteWeight = forVotesRaw * totalVoteWeight / totalRawBalance
     uint128 _forVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalDepositWeightAtSnapshot
+      (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalRawBalanceAtSnapshot
     );
     uint128 _againstVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalDepositWeightAtSnapshot
+      (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalRawBalanceAtSnapshot
     );
     uint128 _abstainVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalDepositWeightAtSnapshot
+      (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalRawBalanceAtSnapshot
     );
 
     // This param is ignored by the governor when voting with fractional
@@ -187,94 +196,102 @@ contract ATokenNaive is AToken {
     hasCastVotesOnProposal[proposalId] = true;
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
-    governor.castVoteWithReasonAndParams(
-      proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
+    GOVERNOR.castVoteWithReasonAndParams(
+      proposalId,
+      unusedSupportParam,
+      "rolled-up vote from aToken holders", // Reason string.
+      fractionalizedVotes
     );
   }
 
-  /// @notice Implements the basic logic to mint a scaled balance token.
-  /// @param caller The address performing the mint
-  /// @param onBehalfOf The address of the user that will receive the scaled tokens
-  /// @param amount The amount of tokens getting minted
-  /// @param index The next liquidity index of the reserve
-  /// @return `true` if the the previous balance of the user was 0
-  function _mintScaledWithCheckpoint(
-    address caller,
-    address onBehalfOf,
-    uint256 amount,
-    uint256 index
-  ) internal returns (bool) {
-    // We increment by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
-    // need our checkpoints to still match up with underlying asset transactions.
-    Checkpoints.History storage _depositHistory = depositCheckpoints[onBehalfOf];
-    _depositHistory.push(_depositHistory.latest() + amount);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
-
-    return _mintScaled(caller, onBehalfOf, amount, index);
+  /// @notice Returns the _user's current balance in storage.
+  function _rawBalanceOf(address _user) internal view returns (uint256) {
+    return _userState[_user].balance;
   }
 
-  function getPastDeposits(address _voter, uint256 _blockNumber) public returns (uint256) {
-    return depositCheckpoints[_voter].getAtBlock(_blockNumber);
+  /// @notice Checkpoints the _user's current raw balance.
+  function _checkpointRawBalanceOf(address _user) internal {
+    balanceCheckpoints[_user].push(_rawBalanceOf(_user));
   }
 
-  function getPastTotalDeposits(uint256 _blockNumber) public returns (uint256) {
-    return totalDepositCheckpoints.getAtBlock(_blockNumber);
+  /// @notice Returns the _user's balance in storage at the _blockNumber.
+  /// @param _user The account that's historical balance will be looked up.
+  /// @param _blockNumber The block at which to lookup the _user's balance.
+  function getPastStoredBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
+    return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
+  }
+
+  /// @notice Returns the total stored balance of all users at _blockNumber.
+  /// @param _blockNumber The block at which to lookup the total stored balance.
+  function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
+    return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 
   // forgefmt: disable-start
   //===========================================================================
   // BEGIN: Aave overrides
   //===========================================================================
-  /// Note: this has been modified from Aave v3's AToken to call our custom
-  /// mintScaledWithCheckpoint function.
+  /// Note: this has been modified from Aave v3's AToken to delegate voting
+  /// power to itself during initialization.
   ///
-  /// @inheritdoc IAToken
-  function mint(
-    address caller,
-    address onBehalfOf,
-    uint256 amount,
-    uint256 index
-  ) external virtual override onlyPool returns (bool) {
-    return _mintScaledWithCheckpoint(caller, onBehalfOf, amount, index);
+  /// @inheritdoc AToken
+  function initialize(
+    IPool initializingPool,
+    address treasury,
+    address underlyingAsset,
+    IAaveIncentivesController incentivesController,
+    uint8 aTokenDecimals,
+    string calldata aTokenName,
+    string calldata aTokenSymbol,
+    bytes calldata params
+  ) public override initializer {
+    AToken.initialize(
+      initializingPool,
+      treasury,
+      underlyingAsset,
+      incentivesController,
+      aTokenDecimals,
+      aTokenName,
+      aTokenSymbol,
+      params
+    );
+
+    selfDelegate();
   }
 
-  /// Note: this has been modified from Aave v3's AToken to call our custom
-  /// mintScaledWithCheckpoint function.
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc IAToken
-  function mintToTreasury(uint256 amount, uint256 index) external override onlyPool {
-    if (amount == 0) {
-      return;
-    }
-    _mintScaledWithCheckpoint(address(POOL), _treasury, amount, index);
-  }
-
-  /// Note: this has been modified from Aave v3's AToken to update deposit
-  /// balance accordingly. We cannot just call `super` here because the function
-  /// is external.
-  ///
-  /// @inheritdoc IAToken
-  function burn(
-    address from,
-    address receiverOfUnderlying,
-    uint256 amount,
-    uint256 index
-  ) external virtual override onlyPool {
-    // Begin modifications.
-    //
-    // We decrement by `amount` instead of any computed/rebased amounts because
-    // `amount` is what actually gets transferred of the underlying asset. We
-    // need our checkpoints to still match up with underlying asset transactions.
-    Checkpoints.History storage _depositHistory = depositCheckpoints[from];
-    _depositHistory.push(_depositHistory.latest() - amount);
+  /// @inheritdoc MintableIncentivizedERC20
+  function _burn(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._burn(account, amount);
+    _checkpointRawBalanceOf(account);
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
+  }
 
-    // End modifications.
-    _burnScaled(from, receiverOfUnderlying, amount, index);
-    if (receiverOfUnderlying != address(this)) {
-      IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
-    }
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _mint(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._mint(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
+  }
+
+  /// Note: this has been modified from Aave v3's AToken contract to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc AToken
+  function _transfer(
+    address from,
+    address to,
+    uint256 amount,
+    bool validate
+  ) internal virtual override {
+    AToken._transfer(from, to, amount, validate);
+    _checkpointRawBalanceOf(from);
+    _checkpointRawBalanceOf(to);
   }
   //===========================================================================
   // END: Aave overrides

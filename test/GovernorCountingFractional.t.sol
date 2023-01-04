@@ -151,7 +151,11 @@ contract GovernorCountingFractionalTest is Test {
     );
   }
 
-  function _setupNominalVoters(uint256[4] memory weights) internal returns (Voter[4] memory voters) {
+  function _setupNominalVoters(uint256[4] memory weights)
+    internal
+    view
+    returns (Voter[4] memory voters)
+  {
     Voter memory voter;
     for (uint8 _i; _i < voters.length; _i++) {
       voter = voters[_i];
@@ -169,12 +173,13 @@ contract GovernorCountingFractionalTest is Test {
     return address(uint160(uint256(keccak256(abi.encodePacked(salt1, salt2)))));
   }
 
-  function _randomSupportType(uint256 salt) public returns (uint8) {
+  function _randomSupportType(uint256 salt) public view returns (uint8) {
     return uint8(bound(salt, 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
   }
 
   function _randomVoteSplit(FractionalVoteSplit memory _voteSplit)
     public
+    view
     returns (FractionalVoteSplit memory)
   {
     _voteSplit.percentFor = bound(_voteSplit.percentFor, 0, 1e18);
@@ -187,7 +192,7 @@ contract GovernorCountingFractionalTest is Test {
   function _setupFractionalVoters(
     uint256[4] memory weights,
     FractionalVoteSplit[4] memory voteSplits
-  ) internal returns (Voter[4] memory voters) {
+  ) internal view returns (Voter[4] memory voters) {
     voters = _setupNominalVoters(weights);
 
     Voter memory voter;
