@@ -1763,28 +1763,27 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     // Get the rebased balances.
     uint256 _initBalanceUserA = aToken.balanceOf(_userA);
     uint256 _initBalanceUserB = aToken.balanceOf(_userB);
+    assertGt(_initBalanceUserA, 0);
     assertEq(_initBalanceUserB, 0);
 
     // Transfer aTokens to userB.
     vm.prank(_userA);
     aToken.transfer(_userB, _initBalanceUserA / 3);
-    assertApproxEqAbs(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3, 1);
-    assertApproxEqAbs(aToken.balanceOf(_userB), _initBalanceUserA / 3, 1);
+    assertEq(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userB), 1 * _initBalanceUserA / 3);
 
     // Advance the clock so that we checkpoint.
     vm.roll(block.number + 1);
     vm.warp(block.timestamp + 1 days);
 
     // Confirm voting weight has shifted.
-    assertApproxEqAbs(
+    assertEq(
       aToken.getPastStoredBalance(_userA, block.number - 1),
-      2 * _initRawBalanceUserA / 3,
-      1 // In case of rounding.
+      2 * _initRawBalanceUserA / 3 // 2/3rds of A's initial balance
     );
-    assertApproxEqAbs(
+    assertEq(
       aToken.getPastStoredBalance(_userB, block.number - 1),
-      _initRawBalanceUserA / 3,
-      1 // In case of rounding.
+      1 * _initRawBalanceUserA / 3 // 1/3rd of A's initial balance
     );
   }
 
@@ -1806,29 +1805,28 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     // Get the rebased balances.
     uint256 _initBalanceUserA = aToken.balanceOf(_userA);
     uint256 _initBalanceUserB = aToken.balanceOf(_userB);
+    assertGt(_initBalanceUserA, 0);
     assertEq(_initBalanceUserB, 0);
 
     // Transfer aTokens to userB.
     vm.prank(_userA);
     aToken.approve(address(this), type(uint256).max);
     aToken.transferFrom(_userA, _userB, _initBalanceUserA / 3);
-    assertApproxEqAbs(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3, 1);
-    assertApproxEqAbs(aToken.balanceOf(_userB), _initBalanceUserA / 3, 1);
+    assertEq(aToken.balanceOf(_userA), 2 * _initBalanceUserA / 3);
+    assertEq(aToken.balanceOf(_userB), _initBalanceUserA / 3);
 
     // Advance the clock so that we checkpoint.
     vm.roll(block.number + 1);
     vm.warp(block.timestamp + 1 days);
 
     // Confirm voting weight has shifted.
-    assertApproxEqAbs(
+    assertEq(
       aToken.getPastStoredBalance(_userA, block.number - 1),
-      2 * _initRawBalanceUserA / 3,
-      1 // In case of rounding.
+      2 * _initRawBalanceUserA / 3 // 2/3rds of A's initial balance
     );
-    assertApproxEqAbs(
+    assertEq(
       aToken.getPastStoredBalance(_userB, block.number - 1),
-      _initRawBalanceUserA / 3,
-      1 // In case of rounding.
+      1 * _initRawBalanceUserA / 3 // 1/3rd of A's initial balance
     );
   }
 
