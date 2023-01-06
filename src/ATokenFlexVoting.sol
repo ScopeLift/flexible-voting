@@ -90,6 +90,77 @@ contract ATokenFlexVoting is AToken {
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
+  // forgefmt: disable-start
+  //===========================================================================
+  // BEGIN: Aave overrides
+  //===========================================================================
+  /// Note: this has been modified from Aave v3's AToken to delegate voting
+  /// power to itself during initialization.
+  ///
+  /// @inheritdoc AToken
+  function initialize(
+    IPool initializingPool,
+    address treasury,
+    address underlyingAsset,
+    IAaveIncentivesController incentivesController,
+    uint8 aTokenDecimals,
+    string calldata aTokenName,
+    string calldata aTokenSymbol,
+    bytes calldata params
+  ) public override initializer {
+    AToken.initialize(
+      initializingPool,
+      treasury,
+      underlyingAsset,
+      incentivesController,
+      aTokenDecimals,
+      aTokenName,
+      aTokenSymbol,
+      params
+    );
+
+    selfDelegate();
+  }
+
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _burn(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._burn(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
+  }
+
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _mint(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._mint(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
+  }
+
+  /// Note: this has been modified from Aave v3's AToken contract to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc AToken
+  function _transfer(
+    address from,
+    address to,
+    uint256 amount,
+    bool validate
+  ) internal virtual override {
+    AToken._transfer(from, to, amount, validate);
+    _checkpointRawBalanceOf(from);
+    _checkpointRawBalanceOf(to);
+  }
+  //===========================================================================
+  // END: Aave overrides
+  //===========================================================================
+  // forgefmt: disable-end
+
   // Self-delegation cannot be done in the constructor because the aToken is
   // just a proxy -- it won't share an address with the implementation (i.e.
   // this code). Instead we do it at the end of `initialize`. But even that won't
@@ -226,75 +297,4 @@ contract ATokenFlexVoting is AToken {
   function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
-
-  // forgefmt: disable-start
-  //===========================================================================
-  // BEGIN: Aave overrides
-  //===========================================================================
-  /// Note: this has been modified from Aave v3's AToken to delegate voting
-  /// power to itself during initialization.
-  ///
-  /// @inheritdoc AToken
-  function initialize(
-    IPool initializingPool,
-    address treasury,
-    address underlyingAsset,
-    IAaveIncentivesController incentivesController,
-    uint8 aTokenDecimals,
-    string calldata aTokenName,
-    string calldata aTokenSymbol,
-    bytes calldata params
-  ) public override initializer {
-    AToken.initialize(
-      initializingPool,
-      treasury,
-      underlyingAsset,
-      incentivesController,
-      aTokenDecimals,
-      aTokenName,
-      aTokenSymbol,
-      params
-    );
-
-    selfDelegate();
-  }
-
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc MintableIncentivizedERC20
-  function _burn(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._burn(account, amount);
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
-  }
-
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc MintableIncentivizedERC20
-  function _mint(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._mint(account, amount);
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
-  }
-
-  /// Note: this has been modified from Aave v3's AToken contract to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc AToken
-  function _transfer(
-    address from,
-    address to,
-    uint256 amount,
-    bool validate
-  ) internal virtual override {
-    AToken._transfer(from, to, amount, validate);
-    _checkpointRawBalanceOf(from);
-    _checkpointRawBalanceOf(to);
-  }
-  //===========================================================================
-  // END: Aave overrides
-  //===========================================================================
-  // forgefmt: disable-end
 }
