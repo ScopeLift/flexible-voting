@@ -2,6 +2,8 @@
 pragma solidity 0.8.10;
 
 // forgefmt: disable-start
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
 import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
@@ -15,25 +17,6 @@ import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
 // forgefmt: disable-end
-
-interface IFractionalGovernor {
-  function token() external returns (address);
-  function proposalSnapshot(uint256 proposalId) external view returns (uint256);
-  function proposalDeadline(uint256 proposalId) external view returns (uint256);
-  function castVoteWithReasonAndParams(
-    uint256 proposalId,
-    uint8 support,
-    string calldata reason,
-    bytes memory params
-  ) external returns (uint256);
-}
-
-interface IVotingToken {
-  function transfer(address to, uint256 amount) external returns (bool);
-  function transferFrom(address from, address to, uint256 amount) external returns (bool);
-  function delegate(address delegatee) external;
-  function getPastVotes(address account, uint256 blockNumber) external view returns (uint256);
-}
 
 contract ATokenFlexVoting is AToken {
   using WadRayMath for uint256;
