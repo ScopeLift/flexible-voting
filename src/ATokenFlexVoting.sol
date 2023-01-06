@@ -20,10 +20,10 @@ import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.so
 
 /// @notice This is an extension of Aave V3's AToken contract which makes it possible for AToken
 /// holders to still vote on governance proposals. This way, holders of governance tokens do not
-/// have to choose between earning yeild on Aave and voting. They can do both.
+/// have to choose between earning yield on Aave and voting. They can do both.
 ///
 /// AToken holders are able to call `expressVote` to signal their preference on open governance
-/// proposals. When they do so, this extention records that preference with weight proportional to
+/// proposals. When they do so, this extension records that preference with weight proportional to
 /// the users's AToken balance at the proposal snapshot.
 ///
 /// When the proposal deadline nears, the AToken's public `castVote` function is called to roll up

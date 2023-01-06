@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.10;
 
-// @notice The interface that flexible voting-compatible voting tokens are expected to support.
+/// @dev The interface that flexible voting-compatible voting tokens are expected to support.
 interface IVotingToken {
   function transfer(address to, uint256 amount) external returns (bool);
   function transferFrom(address from, address to, uint256 amount) external returns (bool);
