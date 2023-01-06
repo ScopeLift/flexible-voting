@@ -18,6 +18,28 @@ import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
 // forgefmt: disable-end
 
+/// @notice This is an extension of Aave V3's AToken contract which makes it possible for AToken
+/// holders to still vote on governance proposals. This way, holders of governance tokens do not
+/// have to choose between earning yeild on Aave and voting. They can do both.
+///
+/// AToken holders are able to call `expressVote` to signal their preference on open governance
+/// proposals. When they do so, this extention records that preference with weight proportional to
+/// the users's AToken balance at the proposal snapshot.
+///
+/// When the proposal deadline nears, the AToken's public `castVote` function is called to roll up
+/// all internal voting records into a single delegated vote to the Governor contract -- a vote
+/// which specifies the exact For/Abstain/Against totals expressed by AToken holders.
+///
+/// This extension has the following requirements:
+///   (a) the underlying token be a governance token
+///   (b) the related governor contract supports flexible voting (see GovernorCountingFractional)
+///
+/// Participating in governance via AToken voting is completely optional. Users otherwise still
+/// supply, borrow, and hold tokens with Aave as usual.
+///
+/// The original AToken that this contract extends is viewable here:
+///
+///   https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/tokenization/AToken.sol
 contract ATokenFlexVoting is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
