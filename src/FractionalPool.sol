@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.10;
 
-import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import "openzeppelin-contracts/contracts/utils/math/Math.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
 ///  @notice A proof-of-concept implementation demonstrating how Flexible Voting can be used to
 ///  allow holders of governance tokens to use them in DeFi but still participate in governance. The

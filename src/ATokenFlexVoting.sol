@@ -2,8 +2,6 @@
 pragma solidity 0.8.10;
 
 // forgefmt: disable-start
-import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
 import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
 import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
@@ -16,6 +14,8 @@ import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayM
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 // forgefmt: disable-end
 
 /// @notice This is an extension of Aave V3's AToken contract which makes it possible for AToken
@@ -39,7 +39,7 @@ import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.so
 ///
 /// The original AToken that this contract extends is viewable here:
 ///
-///   https://github.com/aave/aave-v3-core/blob/master/contracts/protocol/tokenization/AToken.sol
+///   https://github.com/aave/aave-v3-core/blob/c38c627683c0db0449b7c9ea2fbd68bde3f8dc01/contracts/protocol/tokenization/AToken.sol
 contract ATokenFlexVoting is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
