@@ -8,9 +8,7 @@ import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.s
 import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
 import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
-import {IERC20} from "aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
-import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
@@ -39,11 +37,9 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 ///
 /// The original AToken that this contract extends is viewable here:
 ///
-///   https://github.com/aave/aave-v3-core/blob/c38c627683c0db0449b7c9ea2fbd68bde3f8dc01/contracts/protocol/tokenization/AToken.sol
+///   https://github.com/aave/aave-v3-core/blob/c38c6276/contracts/protocol/tokenization/AToken.sol
 contract ATokenFlexVoting is AToken {
-  using WadRayMath for uint256;
   using SafeCast for uint256;
-  using GPv2SafeERC20 for IERC20;
   using Checkpoints for Checkpoints.History;
 
   /// @notice The voting options corresponding to those used in the Governor.
