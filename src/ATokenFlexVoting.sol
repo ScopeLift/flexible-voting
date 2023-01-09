@@ -14,27 +14,32 @@ import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayM
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 // forgefmt: disable-end
 
-interface IFractionalGovernor {
-  function token() external returns (address);
-  function proposalSnapshot(uint256 proposalId) external view returns (uint256);
-  function proposalDeadline(uint256 proposalId) external view returns (uint256);
-  function castVoteWithReasonAndParams(
-    uint256 proposalId,
-    uint8 support,
-    string calldata reason,
-    bytes memory params
-  ) external returns (uint256);
-}
-
-interface IVotingToken {
-  function transfer(address to, uint256 amount) external returns (bool);
-  function transferFrom(address from, address to, uint256 amount) external returns (bool);
-  function delegate(address delegatee) external;
-  function getPastVotes(address account, uint256 blockNumber) external view returns (uint256);
-}
-
+/// @notice This is an extension of Aave V3's AToken contract which makes it possible for AToken
+/// holders to still vote on governance proposals. This way, holders of governance tokens do not
+/// have to choose between earning yield on Aave and voting. They can do both.
+///
+/// AToken holders are able to call `expressVote` to signal their preference on open governance
+/// proposals. When they do so, this extension records that preference with weight proportional to
+/// the users's AToken balance at the proposal snapshot.
+///
+/// When the proposal deadline nears, the AToken's public `castVote` function is called to roll up
+/// all internal voting records into a single delegated vote to the Governor contract -- a vote
+/// which specifies the exact For/Abstain/Against totals expressed by AToken holders.
+///
+/// This extension has the following requirements:
+///   (a) the underlying token be a governance token
+///   (b) the related governor contract supports flexible voting (see GovernorCountingFractional)
+///
+/// Participating in governance via AToken voting is completely optional. Users otherwise still
+/// supply, borrow, and hold tokens with Aave as usual.
+///
+/// The original AToken that this contract extends is viewable here:
+///
+///   https://github.com/aave/aave-v3-core/blob/c38c627683c0db0449b7c9ea2fbd68bde3f8dc01/contracts/protocol/tokenization/AToken.sol
 contract ATokenFlexVoting is AToken {
   using WadRayMath for uint256;
   using SafeCast for uint256;
@@ -89,6 +94,77 @@ contract ATokenFlexVoting is AToken {
     GOVERNOR = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
+
+  // forgefmt: disable-start
+  //===========================================================================
+  // BEGIN: Aave overrides
+  //===========================================================================
+  /// Note: this has been modified from Aave v3's AToken to delegate voting
+  /// power to itself during initialization.
+  ///
+  /// @inheritdoc AToken
+  function initialize(
+    IPool initializingPool,
+    address treasury,
+    address underlyingAsset,
+    IAaveIncentivesController incentivesController,
+    uint8 aTokenDecimals,
+    string calldata aTokenName,
+    string calldata aTokenSymbol,
+    bytes calldata params
+  ) public override initializer {
+    AToken.initialize(
+      initializingPool,
+      treasury,
+      underlyingAsset,
+      incentivesController,
+      aTokenDecimals,
+      aTokenName,
+      aTokenSymbol,
+      params
+    );
+
+    selfDelegate();
+  }
+
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _burn(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._burn(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
+  }
+
+  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc MintableIncentivizedERC20
+  function _mint(address account, uint128 amount) internal override {
+    MintableIncentivizedERC20._mint(account, amount);
+    _checkpointRawBalanceOf(account);
+    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
+  }
+
+  /// Note: this has been modified from Aave v3's AToken contract to
+  /// checkpoint raw balances accordingly.
+  ///
+  /// @inheritdoc AToken
+  function _transfer(
+    address from,
+    address to,
+    uint256 amount,
+    bool validate
+  ) internal virtual override {
+    AToken._transfer(from, to, amount, validate);
+    _checkpointRawBalanceOf(from);
+    _checkpointRawBalanceOf(to);
+  }
+  //===========================================================================
+  // END: Aave overrides
+  //===========================================================================
+  // forgefmt: disable-end
 
   // Self-delegation cannot be done in the constructor because the aToken is
   // just a proxy -- it won't share an address with the implementation (i.e.
@@ -226,75 +302,4 @@ contract ATokenFlexVoting is AToken {
   function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
-
-  // forgefmt: disable-start
-  //===========================================================================
-  // BEGIN: Aave overrides
-  //===========================================================================
-  /// Note: this has been modified from Aave v3's AToken to delegate voting
-  /// power to itself during initialization.
-  ///
-  /// @inheritdoc AToken
-  function initialize(
-    IPool initializingPool,
-    address treasury,
-    address underlyingAsset,
-    IAaveIncentivesController incentivesController,
-    uint8 aTokenDecimals,
-    string calldata aTokenName,
-    string calldata aTokenSymbol,
-    bytes calldata params
-  ) public override initializer {
-    AToken.initialize(
-      initializingPool,
-      treasury,
-      underlyingAsset,
-      incentivesController,
-      aTokenDecimals,
-      aTokenName,
-      aTokenSymbol,
-      params
-    );
-
-    selfDelegate();
-  }
-
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc MintableIncentivizedERC20
-  function _burn(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._burn(account, amount);
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
-  }
-
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc MintableIncentivizedERC20
-  function _mint(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._mint(account, amount);
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
-  }
-
-  /// Note: this has been modified from Aave v3's AToken contract to
-  /// checkpoint raw balances accordingly.
-  ///
-  /// @inheritdoc AToken
-  function _transfer(
-    address from,
-    address to,
-    uint256 amount,
-    bool validate
-  ) internal virtual override {
-    AToken._transfer(from, to, amount, validate);
-    _checkpointRawBalanceOf(from);
-    _checkpointRawBalanceOf(to);
-  }
-  //===========================================================================
-  // END: Aave overrides
-  //===========================================================================
-  // forgefmt: disable-end
 }

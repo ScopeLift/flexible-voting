@@ -1,26 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.10;
 
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import "openzeppelin-contracts/contracts/utils/math/Math.sol";
-
-interface IFractionalGovernor {
-  function proposalSnapshot(uint256 proposalId) external returns (uint256);
-  function proposalDeadline(uint256 proposalId) external view returns (uint256);
-  function castVoteWithReasonAndParams(
-    uint256 proposalId,
-    uint8 support,
-    string calldata reason,
-    bytes memory params
-  ) external returns (uint256);
-}
-
-interface IVotingToken {
-  function transfer(address to, uint256 amount) external returns (bool);
-  function transferFrom(address from, address to, uint256 amount) external returns (bool);
-  function delegate(address delegatee) external;
-  function getPastVotes(address account, uint256 blockNumber) external returns (uint256);
-}
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
 ///  @notice A proof-of-concept implementation demonstrating how Flexible Voting can be used to
 ///  allow holders of governance tokens to use them in DeFi but still participate in governance. The
