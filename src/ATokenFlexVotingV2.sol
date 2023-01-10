@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.6.12;
+pragma experimental ABIEncoderV2;
 
 // forgefmt: disable-start
-import {AToken} from "aave-protocol-v2/contracts/protocol/tokenization/AToken.sol";
+import {
+  AToken,
+  IAaveIncentivesController,
+  IncentivizedERC20,
+  ILendingPool
+} from "aave-protocol-v2/contracts/protocol/tokenization/AToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 // forgefmt: disable-end
@@ -91,7 +97,7 @@ contract ATokenFlexVotingV2 is AToken {
   /// @param _governor The address of the flex-voting-compatible governance contract.
   /// @param _castVoteWindow The number of blocks that users have to express
   /// their votes on a proposal before votes can be cast.
-  constructor(address _governor, uint32 _castVoteWindow) {
+  constructor(address _governor, uint32 _castVoteWindow) internal {
     GOVERNOR = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
@@ -131,7 +137,7 @@ contract ATokenFlexVotingV2 is AToken {
   /// Note: this has been modified from Aave v2 to checkpoint raw balances accordingly.
   ///
   /// @inheritdoc IncentivizedERC20
-  function _burn(address account, uint128 amount) internal override {
+  function _burn(address account, uint256 amount) internal override {
     IncentivizedERC20._burn(account, amount);
     _writeCheckpoint(balanceCheckpoints[account], _subtractionFn, amount);
     _writeCheckpoint(totalBalanceCheckpoints, _subtractionFn, amount);
@@ -140,7 +146,7 @@ contract ATokenFlexVotingV2 is AToken {
   /// Note: this has been modified from Aave v2 to checkpoint raw balances accordingly.
   ///
   /// @inheritdoc IncentivizedERC20
-  function _mint(address account, uint128 amount) internal override {
+  function _mint(address account, uint256 amount) internal override {
     IncentivizedERC20._mint(account, amount);
     _writeCheckpoint(balanceCheckpoints[account], _additionFn, amount);
     _writeCheckpoint(totalBalanceCheckpoints, _additionFn, amount);
@@ -148,15 +154,18 @@ contract ATokenFlexVotingV2 is AToken {
 
   /// Note: this has been modified from Aave v2 to checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc IncentivizedERC20
+  /// @inheritdoc AToken
   function _transfer(
-    address sender,
-    address recipient,
-    uint256 amount
+    address from,
+    address to,
+    uint256 amount,
+    bool validate
   ) internal virtual override {
-    IncentivizedERC20._transfer(from, to, amount);
-    _writeCheckpoint(balanceCheckpoints[sender], _subtractionFn, amount);
-    _writeCheckpoint(balanceCheckpoints[recipient], _additionFn, amount);
+    AToken._transfer(from, to, amount, validate);
+    uint256 _liquidityIndex = _pool.getReserveNormalizedIncome(_underlyingAsset);
+    uint256 _amountDelta = amount.rayDiv(_liquidityIndex);
+    _writeCheckpoint(balanceCheckpoints[from], _subtractionFn, _amountDelta);
+    _writeCheckpoint(balanceCheckpoints[to], _additionFn, _amountDelta);
   }
   //===========================================================================
   // END: Aave overrides
@@ -313,7 +322,7 @@ contract ATokenFlexVotingV2 is AToken {
       uint256 high = ckpts.length;
       uint256 low = 0;
       while (low < high) {
-          uint256 mid = Math.average(low, high);
+          uint256 mid = average(low, high);
           if (ckpts[mid].fromBlock > blockNumber) {
               high = mid;
           } else {
@@ -343,6 +352,10 @@ contract ATokenFlexVotingV2 is AToken {
 
   function _subtractionFn(uint256 a, uint256 b) private pure returns (uint256) {
       return a - b;
+  }
+  function average(uint256 a, uint256 b) internal pure returns (uint256) {
+    // (a + b) / 2 can overflow.
+    return (a & b) + (a ^ b) / 2;
   }
   /// ===========================================================================
   /// END: Checkpointing code.
