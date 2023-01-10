@@ -1865,13 +1865,13 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
   }
 }
 
-contract GetPastTotalBalancesTest is AaveAtokenForkTest {
-  function test_GetPastTotalBalancesIncreasesOnDeposit() public {
+contract GetPastTotalBalanceTest is AaveAtokenForkTest {
+  function test_GetPastTotalBalanceIncreasesOnDeposit() public {
     _initiateRebasing();
-    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalance(block.number - 1), INITIAL_REBASING_DEPOSIT);
 
-    address _userA = makeAddr("GetPastTotalBalancesIncreasesOnDeposit _userA");
-    address _userB = makeAddr("GetPastTotalBalancesIncreasesOnDeposit _userB");
+    address _userA = makeAddr("GetPastTotalBalanceIncreasesOnDeposit _userA");
+    address _userB = makeAddr("GetPastTotalBalanceIncreasesOnDeposit _userB");
     uint256 _amountA = 4242 ether;
     uint256 _amountB = 123 ether;
 
@@ -1884,10 +1884,10 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     // forgefmt: disable-start
-    assertEq(aToken.getPastTotalBalances(block.number - 101), INITIAL_REBASING_DEPOSIT);
-    assertEq(aToken.getPastTotalBalances(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
-    assertEq(aToken.getPastTotalBalances(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
-    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalance(block.number - 101), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalance(block.number - 100), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalance(block.number - 10), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalance(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
     // forgefmt: disable-end
 
     // Another user deposits.
@@ -1899,17 +1899,17 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     // forgefmt: disable-start
-    assertEq(aToken.getPastTotalBalances(block.number - 201), INITIAL_REBASING_DEPOSIT);
-    assertEq(aToken.getPastTotalBalances(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
-    assertEq(aToken.getPastTotalBalances(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
-    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    assertEq(aToken.getPastTotalBalance(block.number - 201), INITIAL_REBASING_DEPOSIT);
+    assertEq(aToken.getPastTotalBalance(block.number - 120), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalance(block.number - 20), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
+    assertEq(aToken.getPastTotalBalance(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA + _rawBalanceB);
     // forgefmt: disable-end
   }
 
-  function test_GetPastTotalBalancesDecreasesOnWithdraw() public {
+  function test_GetPastTotalBalanceDecreasesOnWithdraw() public {
     _initiateRebasing();
 
-    address _userA = makeAddr("GetPastTotalBalancesDecreasesOnWithdraw _userA");
+    address _userA = makeAddr("GetPastTotalBalanceDecreasesOnWithdraw _userA");
     uint256 _amountA = 4242 ether;
 
     // Deposit.
@@ -1920,7 +1920,7 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    assertEq(aToken.getPastTotalBalances(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
+    assertEq(aToken.getPastTotalBalance(block.number - 1), INITIAL_REBASING_DEPOSIT + _rawBalanceA);
 
     vm.startPrank(_userA);
     uint256 _withdrawAmount = aToken.balanceOf(_userA) / 3;
@@ -1932,22 +1932,22 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     assertEq(
-      aToken.getPastTotalBalances(block.number - 1),
+      aToken.getPastTotalBalance(block.number - 1),
       INITIAL_REBASING_DEPOSIT + aToken.exposed_RawBalanceOf(_userA)
     );
 
     uint256 _rawBalanceDelta = _rawBalanceA - aToken.exposed_RawBalanceOf(_userA);
     assertEq(
-      aToken.getPastTotalBalances(block.number - 101) - _rawBalanceDelta,
-      aToken.getPastTotalBalances(block.number - 1)
+      aToken.getPastTotalBalance(block.number - 101) - _rawBalanceDelta,
+      aToken.getPastTotalBalance(block.number - 1)
     );
   }
 
-  function test_GetPastTotalBalancesIsUnaffectedByTransfer() public {
+  function test_GetPastTotalBalanceIsUnaffectedByTransfer() public {
     _initiateRebasing();
 
-    address _userA = makeAddr("GetPastTotalBalancesIsUnaffectedByTransfer _userA");
-    address _userB = makeAddr("GetPastTotalBalancesIsUnaffectedByTransfer _userB");
+    address _userA = makeAddr("GetPastTotalBalanceIsUnaffectedByTransfer _userA");
+    address _userB = makeAddr("GetPastTotalBalanceIsUnaffectedByTransfer _userB");
     uint256 _amountA = 4242 ether;
 
     // Deposit.
@@ -1957,7 +1957,7 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
+    uint256 _totalDeposits = aToken.getPastTotalBalance(block.number - 1);
 
     vm.startPrank(_userA);
     aToken.transfer(_userB, aToken.balanceOf(_userA) / 2);
@@ -1968,7 +1968,7 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     assertEq(
-      aToken.getPastTotalBalances(block.number - 1),
+      aToken.getPastTotalBalance(block.number - 1),
       _totalDeposits // No change because of the transfer;
     );
 
@@ -1984,16 +1984,16 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 100 days);
 
     assertEq(
-      aToken.getPastTotalBalances(block.number - 1),
+      aToken.getPastTotalBalance(block.number - 1),
       _totalDeposits // Still no change caused by transfer.
     );
   }
 
-  function test_GetPastTotalBalancesIsUnaffectedByBorrow() public {
+  function test_GetPastTotalBalanceIsUnaffectedByBorrow() public {
     _initiateRebasing();
 
-    address _userA = makeAddr("GetPastTotalBalancesIsUnaffectedByBorrow _userA");
-    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
+    address _userA = makeAddr("GetPastTotalBalanceIsUnaffectedByBorrow _userA");
+    uint256 _totalDeposits = aToken.getPastTotalBalance(block.number - 1);
 
     // Borrow gov.
     vm.startPrank(_userA);
@@ -2014,13 +2014,13 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.roll(block.number + 100);
     vm.warp(block.timestamp + 100 days);
 
-    assertEq(aToken.getPastTotalBalances(block.number - 1), _totalDeposits);
+    assertEq(aToken.getPastTotalBalance(block.number - 1), _totalDeposits);
   }
 
-  function test_GetPastTotalBalancesZerosOutIfAllPositionsAreUnwound() public {
+  function test_GetPastTotalBalanceZerosOutIfAllPositionsAreUnwound() public {
     _initiateRebasing();
 
-    uint256 _totalDeposits = aToken.getPastTotalBalances(block.number - 1);
+    uint256 _totalDeposits = aToken.getPastTotalBalance(block.number - 1);
     assertGt(_totalDeposits, 0);
     assertGt(govToken.balanceOf(address(aToken)), 0);
 
@@ -2048,9 +2048,9 @@ contract GetPastTotalBalancesTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 1 days);
 
     assertEq(
-      aToken.getPastTotalBalances(block.number - 1),
+      aToken.getPastTotalBalance(block.number - 1),
       0, // Total balances should now be zero; any remaining supply belongs to the reserve.
-      "getPastTotalBalances accounting is wrong"
+      "getPastTotalBalance accounting is wrong"
     );
   }
 }

@@ -239,7 +239,7 @@ contract ATokenFlexVoting is AToken {
     // balances at the snapshot might not have expressed votes. We don't want to
     // make it possible for aToken holders to *increase* their voting power when
     // other people don't express their votes. That'd be a terrible incentive.
-    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalances(_proposalSnapshotBlockNumber);
+    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
@@ -295,7 +295,7 @@ contract ATokenFlexVoting is AToken {
 
   /// @notice Returns the total stored balance of all users at _blockNumber.
   /// @param _blockNumber The block at which to lookup the total stored balance.
-  function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
+  function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 }
