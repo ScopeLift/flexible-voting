@@ -8,11 +8,8 @@ import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.s
 import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
 import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
-import {IERC20} from "aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
-import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
-import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
@@ -39,11 +36,9 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 ///
 /// The original AToken that this contract extends is viewable here:
 ///
-///   https://github.com/aave/aave-v3-core/blob/c38c627683c0db0449b7c9ea2fbd68bde3f8dc01/contracts/protocol/tokenization/AToken.sol
+///   https://github.com/aave/aave-v3-core/blob/c38c6276/contracts/protocol/tokenization/AToken.sol
 contract ATokenFlexVoting is AToken {
-  using WadRayMath for uint256;
   using SafeCast for uint256;
-  using GPv2SafeERC20 for IERC20;
   using Checkpoints for Checkpoints.History;
 
   /// @notice The voting options corresponding to those used in the Governor.
@@ -147,8 +142,10 @@ contract ATokenFlexVoting is AToken {
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
   }
 
-  /// Note: this has been modified from Aave v3's AToken contract to
-  /// checkpoint raw balances accordingly.
+  /// @dev This has been modified from Aave v3's AToken contract to checkpoint raw balances
+  /// accordingly.  Ideally we would have overriden `IncentivizedERC20._transfer` instead of
+  /// `AToken._transfer` as we did for `_mint` and `_burn`, but that isn't possible here:
+  /// `AToken._transfer` *already is* an override of `IncentivizedERC20._transfer`
   ///
   /// @inheritdoc AToken
   function _transfer(
@@ -243,7 +240,7 @@ contract ATokenFlexVoting is AToken {
     // balances at the snapshot might not have expressed votes. We don't want to
     // make it possible for aToken holders to *increase* their voting power when
     // other people don't express their votes. That'd be a terrible incentive.
-    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalances(_proposalSnapshotBlockNumber);
+    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
@@ -299,7 +296,7 @@ contract ATokenFlexVoting is AToken {
 
   /// @notice Returns the total stored balance of all users at _blockNumber.
   /// @param _blockNumber The block at which to lookup the total stored balance.
-  function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
+  function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
     return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 }
