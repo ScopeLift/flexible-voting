@@ -1,23 +1,29 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.10;
+pragma solidity 0.6.12;
 
 // forgefmt: disable-start
-import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
-import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
-import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
-import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
-import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
-import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
-import {IERC20} from "aave-v3-core/contracts/dependencies/openzeppelin/contracts/IERC20.sol";
-import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
-import {WadRayMath} from "aave-v3-core/contracts/protocol/libraries/math/WadRayMath.sol";
-import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
-import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
+import {AToken} from "aave-protocol-v2/contracts/protocol/tokenization/AToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 // forgefmt: disable-end
 
-/// @notice This is an extension of Aave V3's AToken contract which makes it possible for AToken
+// This was copy/pasted from OZ's SafeCast library because aave V2's solc version conflicts with OZ's.
+library SafeCast {
+  function toUint224(uint256 value) internal pure returns (uint224) {
+    require(value <= type(uint224).max, "SafeCast: value doesn't fit in 224 bits");
+    return uint224(value);
+  }
+  function toUint128(uint256 value) internal pure returns (uint128) {
+    require(value <= type(uint128).max, "SafeCast: value doesn't fit in 128 bits");
+    return uint128(value);
+  }
+  function toUint32(uint256 value) internal pure returns (uint32) {
+    require(value <= type(uint32).max, "SafeCast: value doesn't fit in 32 bits");
+    return uint32(value);
+  }
+}
+
+/// @notice This is an extension of Aave V2's AToken contract which makes it possible for AToken
 /// holders to still vote on governance proposals. This way, holders of governance tokens do not
 /// have to choose between earning yield on Aave and voting. They can do both.
 ///
@@ -38,12 +44,9 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 ///
 /// The original AToken that this contract extends is viewable here:
 ///
-///   https://github.com/aave/aave-v3-core/blob/c38c627683c0db0449b7c9ea2fbd68bde3f8dc01/contracts/protocol/tokenization/AToken.sol
-contract ATokenFlexVoting is AToken {
-  using WadRayMath for uint256;
+///   https://github.com/aave/protocol-v2/blob/7e39178e/contracts/protocol/tokenization/AToken.sol
+contract ATokenFlexVotingV2 is AToken {
   using SafeCast for uint256;
-  using GPv2SafeERC20 for IERC20;
-  using Checkpoints for Checkpoints.History;
 
   /// @notice The voting options corresponding to those used in the Governor.
   enum VoteType {
@@ -79,17 +82,16 @@ contract ATokenFlexVoting is AToken {
   IFractionalGovernor public immutable GOVERNOR;
 
   /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
-  mapping(address => Checkpoints.History) private balanceCheckpoints;
+  mapping(address => Checkpoint[]) private balanceCheckpoints;
 
   /// @notice History of total underlying asset balance.
-  Checkpoints.History private totalDepositCheckpoints;
+  Checkpoint[] private totalBalanceCheckpoints;
 
   /// @dev Constructor.
-  /// @param _pool The address of the Pool contract
   /// @param _governor The address of the flex-voting-compatible governance contract.
   /// @param _castVoteWindow The number of blocks that users have to express
   /// their votes on a proposal before votes can be cast.
-  constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
+  constructor(address _governor, uint32 _castVoteWindow) {
     GOVERNOR = IFractionalGovernor(_governor);
     CAST_VOTE_WINDOW = _castVoteWindow;
   }
@@ -98,12 +100,12 @@ contract ATokenFlexVoting is AToken {
   //===========================================================================
   // BEGIN: Aave overrides
   //===========================================================================
-  /// Note: this has been modified from Aave v3's AToken to delegate voting
+  /// Note: this has been modified from Aave v2's AToken to delegate voting
   /// power to itself during initialization.
   ///
   /// @inheritdoc AToken
   function initialize(
-    IPool initializingPool,
+    ILendingPool pool,
     address treasury,
     address underlyingAsset,
     IAaveIncentivesController incentivesController,
@@ -113,7 +115,7 @@ contract ATokenFlexVoting is AToken {
     bytes calldata params
   ) public override initializer {
     AToken.initialize(
-      initializingPool,
+      pool,
       treasury,
       underlyingAsset,
       incentivesController,
@@ -126,39 +128,35 @@ contract ATokenFlexVoting is AToken {
     selfDelegate();
   }
 
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
+  /// Note: this has been modified from Aave v2 to checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc MintableIncentivizedERC20
+  /// @inheritdoc IncentivizedERC20
   function _burn(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._burn(account, amount);
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() - amount);
+    IncentivizedERC20._burn(account, amount);
+    _writeCheckpoint(balanceCheckpoints[account], _subtractionFn, amount);
+    _writeCheckpoint(totalBalanceCheckpoints, _subtractionFn, amount);
   }
 
-  /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to
-  /// checkpoint raw balances accordingly.
+  /// Note: this has been modified from Aave v2 to checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc MintableIncentivizedERC20
+  /// @inheritdoc IncentivizedERC20
   function _mint(address account, uint128 amount) internal override {
-    MintableIncentivizedERC20._mint(account, amount);
-    _checkpointRawBalanceOf(account);
-    totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
+    IncentivizedERC20._mint(account, amount);
+    _writeCheckpoint(balanceCheckpoints[account], _additionFn, amount);
+    _writeCheckpoint(totalBalanceCheckpoints, _additionFn, amount);
   }
 
-  /// Note: this has been modified from Aave v3's AToken contract to
-  /// checkpoint raw balances accordingly.
+  /// Note: this has been modified from Aave v2 to checkpoint raw balances accordingly.
   ///
-  /// @inheritdoc AToken
+  /// @inheritdoc IncentivizedERC20
   function _transfer(
-    address from,
-    address to,
-    uint256 amount,
-    bool validate
+    address sender,
+    address recipient,
+    uint256 amount
   ) internal virtual override {
-    AToken._transfer(from, to, amount, validate);
-    _checkpointRawBalanceOf(from);
-    _checkpointRawBalanceOf(to);
+    IncentivizedERC20._transfer(from, to, amount);
+    _writeCheckpoint(balanceCheckpoints[sender], _subtractionFn, amount);
+    _writeCheckpoint(balanceCheckpoints[recipient], _additionFn, amount);
   }
   //===========================================================================
   // END: Aave overrides
@@ -242,7 +240,7 @@ contract ATokenFlexVoting is AToken {
     // balances at the snapshot might not have expressed votes. We don't want to
     // make it possible for aToken holders to *increase* their voting power when
     // other people don't express their votes. That'd be a terrible incentive.
-    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalances(_proposalSnapshotBlockNumber);
+    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(_underlyingAsset)).getPastVotes(
@@ -279,26 +277,75 @@ contract ATokenFlexVoting is AToken {
     );
   }
 
-  /// @notice Returns the _user's current balance in storage.
-  function _rawBalanceOf(address _user) internal view returns (uint256) {
-    return _userState[_user].balance;
+  /// ===========================================================================
+  /// BEGIN: Checkpointing code.
+  /// ===========================================================================
+  /// This has been copied from OZ's ERC20Votes checkpointing system with minor revisions:
+  ///   * Replace "Vote" with "Balance", as balances are what we need to track
+  ///   * Make some variable names longer for readibility
+  ///
+  /// We're disabling forgefmt to make this as easy as possible to diff with OZ's version.
+  /// forgefmt: disable-start
+  ///
+  /// Reference code:
+  ///   https://github.com/OpenZeppelin/openzeppelin-contracts/blob/d5ca39e9/contracts/token/ERC20/extensions/ERC20Votes.sol
+  struct Checkpoint {
+      uint32 fromBlock;
+      uint224 balance;
+  }
+  function checkpoints(address account, uint32 pos) public view virtual returns (Checkpoint memory) {
+      return balanceCheckpoints[account][pos];
+  }
+  function getLastBalance(address account) public view virtual returns (uint256) {
+      uint256 pos = balanceCheckpoints[account].length;
+      return pos == 0 ? 0 : balanceCheckpoints[account][pos - 1].balance;
+  }
+  function getPastStoredBalance(address account, uint256 blockNumber) public view virtual returns (uint256) {
+      require(blockNumber < block.number, "block not yet mined");
+      return _checkpointsLookup(balanceCheckpoints[account], blockNumber);
+  }
+  function getPastTotalBalance(uint256 blockNumber) public view virtual returns (uint256) {
+      require(blockNumber < block.number, "block not yet mined");
+      return _checkpointsLookup(totalBalanceCheckpoints, blockNumber);
+  }
+  function _checkpointsLookup(Checkpoint[] storage ckpts, uint256 blockNumber) private view returns (uint256) {
+      // We run a binary search to look for the earliest checkpoint taken after `blockNumber`.
+      uint256 high = ckpts.length;
+      uint256 low = 0;
+      while (low < high) {
+          uint256 mid = Math.average(low, high);
+          if (ckpts[mid].fromBlock > blockNumber) {
+              high = mid;
+          } else {
+              low = mid + 1;
+          }
+      }
+      return high == 0 ? 0 : ckpts[high - 1].balance;
+  }
+  function _writeCheckpoint(
+      Checkpoint[] storage ckpts,
+      function(uint256, uint256) view returns (uint256) operation,
+      uint256 delta
+  ) private returns (uint256 oldBalance, uint256 newBalance) {
+      uint256 position = ckpts.length;
+      oldBalance = position == 0 ? 0 : ckpts[position - 1].balance;
+      newBalance = operation(oldBalance, delta);
+
+      if (position > 0 && ckpts[position - 1].fromBlock == block.number) {
+          ckpts[position - 1].balance = SafeCast.toUint224(newBalance);
+      } else {
+          ckpts.push(Checkpoint({fromBlock: SafeCast.toUint32(block.number), balance: SafeCast.toUint224(newBalance)}));
+      }
+  }
+  function _additionFn(uint256 a, uint256 b) private pure returns (uint256) {
+      return a + b;
   }
 
-  /// @notice Checkpoints the _user's current raw balance.
-  function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(_rawBalanceOf(_user));
+  function _subtractionFn(uint256 a, uint256 b) private pure returns (uint256) {
+      return a - b;
   }
-
-  /// @notice Returns the _user's balance in storage at the _blockNumber.
-  /// @param _user The account that's historical balance will be looked up.
-  /// @param _blockNumber The block at which to lookup the _user's balance.
-  function getPastStoredBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
-    return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
-  }
-
-  /// @notice Returns the total stored balance of all users at _blockNumber.
-  /// @param _blockNumber The block at which to lookup the total stored balance.
-  function getPastTotalBalances(uint256 _blockNumber) public view returns (uint256) {
-    return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
-  }
+  /// ===========================================================================
+  /// END: Checkpointing code.
+  /// ===========================================================================
+  /// forgefmt: disable-end
 }
