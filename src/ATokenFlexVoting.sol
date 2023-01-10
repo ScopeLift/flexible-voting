@@ -10,7 +10,6 @@ import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
-import {Math} from "openzeppelin-contracts/contracts/utils/math/Math.sol";
 import {Checkpoints} from "openzeppelin-contracts/contracts/utils/Checkpoints.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
