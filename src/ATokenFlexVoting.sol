@@ -142,10 +142,10 @@ contract ATokenFlexVoting is AToken {
     totalDepositCheckpoints.push(totalDepositCheckpoints.latest() + amount);
   }
 
-  /// Note: this has been modified from Aave v3's AToken contract to checkpoint raw balances
-  /// accordingly.  Ideally we would have overriden IncentivizedERC20._transfer instead of
-  /// AToken._transfer as we did for _mint and _burn above, but that isn't possible here:
-  /// AToken._transfer *already is* an override of IncentivizedERC20._transfer
+  /// @dev This has been modified from Aave v3's AToken contract to checkpoint raw balances
+  /// accordingly.  Ideally we would have overriden `IncentivizedERC20._transfer` instead of
+  /// `AToken._transfer` as we did for `_mint` and `_burn`, but that isn't possible here:
+  /// `AToken._transfer` *already is* an override of `IncentivizedERC20._transfer`
   ///
   /// @inheritdoc AToken
   function _transfer(
