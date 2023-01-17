@@ -599,4 +599,81 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_againstVotes, _actualAgainstVotes);
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
+
+  function testFuzz_CanCastPartialVotesMultipleTimes(uint256 _salt, FractionalVoteSplit memory _voteSplit)
+    public
+  {
+    // Build the vote split.
+    _voteSplit = _randomVoteSplit(_voteSplit);
+
+    // Build the voter.
+    Voter memory _voter;
+    _voter.addr = makeAddr("CanCastPartialVotesMultipleTimes voter"); // TODO add more randomness
+    _voter.weight = bound(_salt, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.voteSplit = _voteSplit;
+
+    // Mint, delegate, and propose.
+    _mintAndDelegateToVoter(_voter);
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Calculate the vote amounts.
+    uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
+    uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
+    uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
+    assertEq(_voter.weight, _forVotes + _againstVotes + _abstainVotes);
+
+    // Cast votes, only including Against votes this time.
+    bytes memory fractionalizedVotes = abi.encodePacked(
+      uint128(0), // Initial forVotes cast.
+      _againstVotes,
+      uint128(0) // Initial abstainVotes cast.
+    );
+    vm.prank(_voter.addr);
+    governor.castVoteWithReasonAndParams(
+      _proposalId, _voter.support, "My 1st vote", fractionalizedVotes
+    );
+
+    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
+      governor.proposalVotes(_proposalId);
+    assertEq(0, _actualForVotes);
+    assertEq(_againstVotes, _actualAgainstVotes);
+    assertEq(0, _actualAbstainVotes);
+
+    // Now cast votes again, this time only including For votes.
+    fractionalizedVotes = abi.encodePacked(
+      _forVotes,
+      uint128(0), // againstVotes
+      uint128(0) // abstainVotes
+    );
+    vm.prank(_voter.addr);
+    governor.castVoteWithReasonAndParams(
+      _proposalId, _voter.support, "My 2nd vote", fractionalizedVotes
+    );
+
+    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _actualForVotes);
+    assertEq(_againstVotes, _actualAgainstVotes);
+    assertEq(0, _actualAbstainVotes);
+
+    // One more time!
+    fractionalizedVotes = abi.encodePacked(
+      uint128(0),// forVotes
+      uint128(0), // againstVotes
+      _abstainVotes
+    );
+    vm.prank(_voter.addr);
+    governor.castVoteWithReasonAndParams(
+      _proposalId, _voter.support, "My 3rd vote", fractionalizedVotes
+    );
+
+    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _actualForVotes);
+    assertEq(_againstVotes, _actualAgainstVotes);
+    assertEq(_abstainVotes, _actualAbstainVotes);
+  }
+
+  // TODO test partial support types in multiple partial votes
+  // TODO test that multiple votes cannot overflow weight
+  // TODO test DOS-ing the protocol with tons of small votes
+  // TODO multiple partial votes, multiple vote types in each one, NOT summing to total weight
 }
