@@ -27,7 +27,7 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     mapping(uint256 => ProposalVote) private _proposalVotes;
-    mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
+    mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -41,7 +41,7 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev See {IGovernor-hasVoted}.
      */
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
-        return _proposalVotersHasVoted[proposalId][account];
+        return _proposalVotersWeightCast[proposalId][account] > 0;
     }
 
     /**
@@ -98,13 +98,17 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 weight,
         bytes memory voteData
     ) internal virtual override {
-        require(!_proposalVotersHasVoted[proposalId][account], "GovernorCountingFractional: vote already cast");
-        _proposalVotersHasVoted[proposalId][account] = true;
+        require(
+          _proposalVotersWeightCast[proposalId][account] < weight,
+          "GovernorCountingFractional: vote would exceed weight"
+        );
+
+        uint128 safeWeight = SafeCast.toUint128(weight);
 
         if (voteData.length == 0) {
-            _countVoteNominal(proposalId, support, weight);
+            _countVoteNominal(proposalId, account, safeWeight, support);
         } else {
-            _countVoteFractional(proposalId, weight, voteData);
+            _countVoteFractional(proposalId, account, safeWeight, voteData);
         }
     }
 
@@ -113,15 +117,18 @@ abstract contract GovernorCountingFractional is Governor {
      */
     function _countVoteNominal(
         uint256 proposalId,
-        uint8 support,
-        uint256 weight
+        address account,
+        uint128 weight,
+        uint8 support
     ) internal {
+        _proposalVotersWeightCast[proposalId][account] = weight;
+
         if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
-            _proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].againstVotes += weight;
         } else if (support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
-            _proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].forVotes += weight;
         } else if (support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
-            _proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].abstainVotes += weight;
         } else {
             revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
         }
@@ -134,16 +141,19 @@ abstract contract GovernorCountingFractional is Governor {
      */
     function _countVoteFractional(
         uint256 proposalId,
-        uint256 weight,
+        address account,
+        uint128 weight,
         bytes memory voteData
     ) internal {
         require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
         (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _decodePackedVotes(voteData);
 
+        uint128 remainingWeight = weight - _proposalVotersWeightCast[proposalId][account];
+
         require(
-            uint256(forVotes) + againstVotes + abstainVotes <= uint128(weight),
-            "GovernorCountingFractional: votes exceed weight"
+            uint256(forVotes) + againstVotes + abstainVotes <= remainingWeight,
+            "GovernorCountingFractional: votes exceed remaining weight"
         );
 
         ProposalVote memory _proposalVote = _proposalVotes[proposalId];

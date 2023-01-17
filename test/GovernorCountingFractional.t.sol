@@ -619,8 +619,8 @@ contract GovernorCountingFractionalTest is Test {
     // Calculate the vote amounts.
     uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
     uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
-    uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
-    assertEq(_voter.weight, _forVotes + _againstVotes + _abstainVotes);
+    uint128 _abstainVotes = uint128(_voter.weight) - _forVotes - _againstVotes;
+    assertEq(_voter.weight, _forVotes + _againstVotes + _abstainVotes, "weights not equal");
 
     // Cast votes, only including Against votes this time.
     bytes memory fractionalizedVotes = abi.encodePacked(
