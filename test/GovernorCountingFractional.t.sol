@@ -734,7 +734,7 @@ contract GovernorCountingFractionalTest is Test {
       );
 
       // Now attempt to vote fractionally. It should fail.
-      vm.expectRevert("GovernorCountingFractional: votes exceed weight");
+      vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
         _proposalId,
@@ -760,8 +760,8 @@ contract GovernorCountingFractionalTest is Test {
         _fractionalizedVoteData
       );
 
-      vm.expectRevert("GovernorCountingFractional: votes exceed weight");
       vm.prank(_voter.addr);
+      vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
       governor.castVoteWithReasonAndParams(
         _proposalId,
         _voter.support,
