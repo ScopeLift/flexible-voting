@@ -121,6 +121,11 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 weight,
         uint8 support
     ) internal {
+        require(
+            _proposalVotersWeightCast[proposalId][account] == 0,
+            "GovernorCountingFractional: vote would exceed weight"
+        );
+
         _proposalVotersWeightCast[proposalId][account] = weight;
 
         if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
@@ -147,20 +152,22 @@ abstract contract GovernorCountingFractional is Governor {
     ) internal {
         require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
-        (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _decodePackedVotes(voteData);
+        (uint128 _forVotes, uint128 _againstVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
 
-        uint128 remainingWeight = weight - _proposalVotersWeightCast[proposalId][account];
+        uint128 _existingWeight = _proposalVotersWeightCast[proposalId][account];
 
         require(
-            uint256(forVotes) + againstVotes + abstainVotes <= remainingWeight,
-            "GovernorCountingFractional: votes exceed remaining weight"
+            uint256(_forVotes) + _againstVotes + _abstainVotes + _existingWeight <= weight,
+            "GovernorCountingFractional: vote would exceed weight"
         );
+
+        _proposalVotersWeightCast[proposalId][account] = _existingWeight + _forVotes + _againstVotes + _abstainVotes;
 
         ProposalVote memory _proposalVote = _proposalVotes[proposalId];
         _proposalVote = ProposalVote(
-            _proposalVote.againstVotes + againstVotes,
-            _proposalVote.forVotes + forVotes,
-            _proposalVote.abstainVotes + abstainVotes
+            _proposalVote.againstVotes + _againstVotes,
+            _proposalVote.forVotes + _forVotes,
+            _proposalVote.abstainVotes + _abstainVotes
         );
 
         _proposalVotes[proposalId] = _proposalVote;
