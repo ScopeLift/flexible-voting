@@ -249,35 +249,36 @@ contract GovernorCountingFractionalTest is Test {
     return voteSplit.percentFor > 0 || voteSplit.percentAgainst > 0 || voteSplit.percentAbstain > 0;
   }
 
-  function _castVotes(Voter[4] memory voters, uint256 _proposalId) internal {
-    Voter memory voter;
-    for (uint8 _i = 0; _i < voters.length; _i++) {
-      voter = voters[_i];
+  function _castVotes(Voter memory _voter, uint256 _proposalId) internal {
+    assert(!governor.hasVoted(_proposalId, _voter.addr));
 
-      assert(!governor.hasVoted(_proposalId, voter.addr));
+    bytes memory fractionalizedVotes;
+    FractionalVoteSplit memory voteSplit = _voter.voteSplit;
 
-      bytes memory fractionalizedVotes;
-      FractionalVoteSplit memory voteSplit = voter.voteSplit;
-
-      if (_isVotingFractionally(voteSplit)) {
-        fractionalizedVotes = abi.encodePacked(
-          uint128(voter.weight.mulWadDown(voteSplit.percentFor)),
-          uint128(voter.weight.mulWadDown(voteSplit.percentAgainst)),
-          uint128(voter.weight.mulWadDown(voteSplit.percentAbstain))
+    if (_isVotingFractionally(voteSplit)) {
+      fractionalizedVotes = abi.encodePacked(
+        uint128(_voter.weight.mulWadDown(voteSplit.percentFor)),
+        uint128(_voter.weight.mulWadDown(voteSplit.percentAgainst)),
+        uint128(_voter.weight.mulWadDown(voteSplit.percentAbstain))
+      );
+      vm.expectEmit(true, false, false, true);
+      emit VoteCastWithParams(
+        _voter.addr, _proposalId, _voter.support, _voter.weight, "Yay", fractionalizedVotes
         );
-        vm.expectEmit(true, false, false, true);
-        emit VoteCastWithParams(
-          voter.addr, _proposalId, voter.support, voter.weight, "Yay", fractionalizedVotes
-          );
-      } else {
-        vm.expectEmit(true, false, false, true);
-        emit VoteCast(voter.addr, _proposalId, voter.support, voter.weight, "Yay");
-      }
+    } else {
+      vm.expectEmit(true, false, false, true);
+      emit VoteCast(_voter.addr, _proposalId, _voter.support, _voter.weight, "Yay");
+    }
 
-      vm.prank(voter.addr);
-      governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Yay", fractionalizedVotes);
+    vm.prank(_voter.addr);
+    governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", fractionalizedVotes);
 
-      assert(governor.hasVoted(_proposalId, voter.addr));
+    assert(governor.hasVoted(_proposalId, _voter.addr));
+  }
+
+  function _castVotes(Voter[4] memory voters, uint256 _proposalId) internal {
+    for (uint8 _i = 0; _i < voters.length; _i++) {
+      _castVotes(voters[_i], _proposalId);
     }
   }
 
@@ -600,7 +601,7 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
-  function testFuzz_CanCastPartialVotesMultipleTimes(uint256 _salt, FractionalVoteSplit memory _voteSplit)
+  function testFuzz_CanCastPartialWeightMultipleTimes(uint256 _salt, FractionalVoteSplit memory _voteSplit)
     public
   {
     // Build the vote split.
@@ -672,8 +673,114 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
+  function testFuzz_NominalVotingCannotExceedOverallWeightWithMultipleVotes(uint256[4] memory _weights) public {
+    Voter memory _voter = _setupNominalVoters(_weights)[0];
+    _mintAndDelegateToVoter(_voter);
+
+    uint256 _proposalId = _createAndSubmitProposal();
+    bytes memory _emptyDataBecauseWereVotingNominally;
+
+    vm.expectEmit(true, false, false, true);
+    emit VoteCast(_voter.addr, _proposalId, _voter.support, _voter.weight, "Yay");
+    vm.prank(_voter.addr);
+    governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally);
+
+    // It should not be possible to vote again.
+    vm.prank(_voter.addr);
+    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally);
+  }
+
+  function testFuzz_VotersCannotAvoidWeightChecksByMixedFractionalAndNominalVotes(
+    uint256 _weight,
+    FractionalVoteSplit memory _voteSplit,
+    uint256 _supportType,
+    uint256 _partialVotePrcnt,
+    bool _isCastingNominallyFirst
+  ) public {
+    Voter memory _voter;
+    _voter.addr = makeAddr("VotersCannotAvoidWeightChecksByMixedFractionalAndNominalVotes");
+    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.voteSplit = _randomVoteSplit(_voteSplit);
+    _voter.support = _randomSupportType(_supportType);
+
+    uint256 _partialVotePrcnt = bound(_partialVotePrcnt, 0.1e18, 0.99e18); // 10% to 99%
+    _voteSplit.percentFor = _voter.voteSplit.percentFor.mulWadDown(_partialVotePrcnt);
+    _voteSplit.percentAgainst = _voter.voteSplit.percentAgainst.mulWadDown(_partialVotePrcnt);
+    _voteSplit.percentAbstain = _voter.voteSplit.percentAbstain.mulWadDown(_partialVotePrcnt);
+
+    // Build data for both types of vote.
+    bytes memory _nominalVoteData;
+    bytes memory _fractionalizedVoteData = abi.encodePacked(
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor)), // forVotes
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst)), // againstVotes
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain)) // abstainVotes
+    );
+
+    // Mint, delegate, and propose.
+    _mintAndDelegateToVoter(_voter);
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    if (_isCastingNominallyFirst) {
+      // Vote nominally. It should succeed.
+      vm.expectEmit(true, false, false, true);
+      emit VoteCast(_voter.addr, _proposalId, _voter.support, _voter.weight, "Nominal vote");
+      vm.prank(_voter.addr);
+      governor.castVoteWithReasonAndParams(
+        _proposalId,
+        _voter.support,
+        "Nominal vote",
+        _nominalVoteData
+      );
+
+      // Now attempt to vote fractionally. It should fail.
+      vm.expectRevert("GovernorCountingFractional: votes exceed weight");
+      vm.prank(_voter.addr);
+      governor.castVoteWithReasonAndParams(
+        _proposalId,
+        _voter.support,
+        "Fractional vote",
+        _fractionalizedVoteData
+      );
+    } else {
+      vm.expectEmit(true, false, false, true);
+      emit VoteCastWithParams(
+        _voter.addr,
+        _proposalId,
+        _voter.support,
+        _voter.weight,
+        "Fractional vote",
+        _fractionalizedVoteData
+      );
+      vm.prank(_voter.addr);
+      governor.castVoteWithReasonAndParams(
+        _proposalId,
+        _voter.support,
+        "Fractional vote",
+        _fractionalizedVoteData
+      );
+
+      vm.expectRevert("GovernorCountingFractional: votes exceed weight");
+      vm.prank(_voter.addr);
+      governor.castVoteWithReasonAndParams(
+        _proposalId,
+        _voter.support,
+        "Nominal vote",
+        _nominalVoteData
+      );
+    }
+
+    // The voter should not have been able to increase his/her vote weight by voting twice.
+    (uint256 _againstVotesCast, uint256 _forVotesCast, uint256 _abstainVotesCast) = governor.proposalVotes(_proposalId);
+    assertLe(_againstVotesCast + _forVotesCast + _abstainVotesCast, _voter.weight);
+  }
+
+
+  // TODO test actual concrete partial vote balances are recorded appropriately
+  // TODO test that someone who votes partially cannot turn around and vote nominally and vice versa
   // TODO test partial support types in multiple partial votes
   // TODO test that multiple votes cannot overflow weight
   // TODO test DOS-ing the protocol with tons of small votes
   // TODO multiple partial votes, multiple vote types in each one, NOT summing to total weight
+  //
 }
