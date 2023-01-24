@@ -98,11 +98,6 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 weight,
         bytes memory voteData
     ) internal virtual override {
-        require(
-          _proposalVotersWeightCast[proposalId][account] < weight,
-          "GovernorCountingFractional: vote would exceed weight"
-        );
-
         uint128 safeWeight = SafeCast.toUint128(weight);
 
         if (voteData.length == 0) {
