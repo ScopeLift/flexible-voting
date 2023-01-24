@@ -601,76 +601,98 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
-  function testFuzz_CanCastPartialWeightMultipleTimes(uint256 _salt, FractionalVoteSplit memory _voteSplit)
-    public
-  {
+  struct CanCastPartialWeightMultipleTimesVote {
+    uint128 forVotes;
+    uint128 againstVotes;
+    uint128 abstainVotes;
+  }
+
+  function testFuzz_CanCastPartialWeightMultipleTimes(
+    uint256 _weight,
+    uint256 _votePercentage1,
+    uint256 _votePercentage2,
+    FractionalVoteSplit memory _voteSplit
+  ) public {
     // Build the vote split.
     _voteSplit = _randomVoteSplit(_voteSplit);
+    _votePercentage1 = bound(_votePercentage1, 0.0e18, 1.0e18);
+    _votePercentage2 = bound(_votePercentage2, 0.0e18, 1e18 - _votePercentage1);
+    uint256 _votePercentage3 = 1e18 - _votePercentage1 - _votePercentage2;
 
     // Build the voter.
     Voter memory _voter;
     _voter.addr = makeAddr("CanCastPartialVotesMultipleTimes voter"); // TODO add more randomness
-    _voter.weight = bound(_salt, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
     _voter.voteSplit = _voteSplit;
 
     // Mint, delegate, and propose.
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
 
-    // Calculate the vote amounts.
-    uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
-    uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
-    uint128 _abstainVotes = uint128(_voter.weight) - _forVotes - _againstVotes;
-    assertEq(_voter.weight, _forVotes + _againstVotes + _abstainVotes, "weights not equal");
+    // Calculate the vote amounts for the first vote.
+    CanCastPartialWeightMultipleTimesVote  memory _firstVote;
+    _firstVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage1));
+    _firstVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage1));
+    _firstVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage1));
 
-    // Cast votes, only including Against votes this time.
-    bytes memory fractionalizedVotes = abi.encodePacked(
-      uint128(0), // Initial forVotes cast.
-      _againstVotes,
-      uint128(0) // Initial abstainVotes cast.
-    );
+    // Cast votes the first time.
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(
-      _proposalId, _voter.support, "My 1st vote", fractionalizedVotes
+      _proposalId,
+      _voter.support,
+      "My 1st vote",
+      abi.encodePacked(_firstVote.forVotes, _firstVote.againstVotes, _firstVote.abstainVotes)
     );
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
       governor.proposalVotes(_proposalId);
-    assertEq(0, _actualForVotes);
-    assertEq(_againstVotes, _actualAgainstVotes);
-    assertEq(0, _actualAbstainVotes);
+    assertEq(_firstVote.forVotes, _actualForVotes);
+    assertEq(_firstVote.againstVotes, _actualAgainstVotes);
+    assertEq(_firstVote.abstainVotes, _actualAbstainVotes);
 
-    // Now cast votes again, this time only including For votes.
-    fractionalizedVotes = abi.encodePacked(
-      _forVotes,
-      uint128(0), // againstVotes
-      uint128(0) // abstainVotes
-    );
+    // If the entire weight was cast; further votes are not possible.
+    if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
+
+    // Now cast votes again.
+    CanCastPartialWeightMultipleTimesVote  memory _secondVote;
+    _secondVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage2));
+    _secondVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage2));
+    _secondVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage2));
+
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(
-      _proposalId, _voter.support, "My 2nd vote", fractionalizedVotes
+      _proposalId,
+      _voter.support,
+      "My 2nd vote",
+      abi.encodePacked(_secondVote.forVotes, _secondVote.againstVotes, _secondVote.abstainVotes)
     );
 
     (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) = governor.proposalVotes(_proposalId);
-    assertEq(_forVotes, _actualForVotes);
-    assertEq(_againstVotes, _actualAgainstVotes);
-    assertEq(0, _actualAbstainVotes);
+    assertEq(_firstVote.forVotes + _secondVote.forVotes, _actualForVotes);
+    assertEq(_firstVote.againstVotes + _secondVote.againstVotes, _actualAgainstVotes);
+    assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes, _actualAbstainVotes);
+
+    // If the entire weight was cast; further votes are not possible.
+    if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
 
     // One more time!
-    fractionalizedVotes = abi.encodePacked(
-      uint128(0),// forVotes
-      uint128(0), // againstVotes
-      _abstainVotes
-    );
+    CanCastPartialWeightMultipleTimesVote  memory _thirdVote;
+    _thirdVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage3));
+    _thirdVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage3));
+    _thirdVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage3));
+
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(
-      _proposalId, _voter.support, "My 3rd vote", fractionalizedVotes
+      _proposalId,
+      _voter.support,
+      "My 3rd vote",
+      abi.encodePacked(_thirdVote.forVotes, _thirdVote.againstVotes, _thirdVote.abstainVotes)
     );
 
     (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) = governor.proposalVotes(_proposalId);
-    assertEq(_forVotes, _actualForVotes);
-    assertEq(_againstVotes, _actualAgainstVotes);
-    assertEq(_abstainVotes, _actualAbstainVotes);
+    assertEq(_firstVote.forVotes + _secondVote.forVotes + _thirdVote.forVotes, _actualForVotes);
+    assertEq(_firstVote.againstVotes + _secondVote.againstVotes + _thirdVote.againstVotes, _actualAgainstVotes);
+    assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes + _thirdVote.abstainVotes, _actualAbstainVotes);
   }
 
   function testFuzz_NominalVotingCannotExceedOverallWeightWithMultipleVotes(uint256[4] memory _weights) public {
