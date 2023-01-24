@@ -250,6 +250,7 @@ contract GovernorCountingFractionalTest is Test {
   }
 
   function _castVotes(Voter memory _voter, uint256 _proposalId) internal {
+    if (_voter.weight == 0) return;
     assert(!governor.hasVoted(_proposalId, _voter.addr));
 
     bytes memory fractionalizedVotes;
@@ -273,7 +274,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", fractionalizedVotes);
 
-    if (_voter.weight > 0) assert(governor.hasVoted(_proposalId, _voter.addr));
+    assert(governor.hasVoted(_proposalId, _voter.addr));
   }
 
   function _castVotes(Voter[4] memory voters, uint256 _proposalId) internal {
@@ -717,7 +718,7 @@ contract GovernorCountingFractionalTest is Test {
 
     // It should not be possible to vote again.
     vm.prank(_voter.addr);
-    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    vm.expectRevert("GovernorCountingFractional: vote already cast");
     governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally);
   }
 
@@ -764,7 +765,7 @@ contract GovernorCountingFractionalTest is Test {
       );
 
       // Now attempt to vote fractionally. It should fail.
-      vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+      vm.expectRevert("GovernorCountingFractional: vote already cast");
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
         _proposalId,
