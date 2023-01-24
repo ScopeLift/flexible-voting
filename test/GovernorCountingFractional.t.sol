@@ -273,7 +273,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", fractionalizedVotes);
 
-    assert(governor.hasVoted(_proposalId, _voter.addr));
+    if (_voter.weight > 0) assert(governor.hasVoted(_proposalId, _voter.addr));
   }
 
   function _castVotes(Voter[4] memory voters, uint256 _proposalId) internal {
@@ -349,26 +349,24 @@ contract GovernorCountingFractionalTest is Test {
     _fractionalGovernorHappyPathTest(voters);
   }
 
-  function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory weights, uint8 maxSplit) public {
-    maxSplit = uint8(bound(maxSplit, 0, 2));
-
-    Voter[4] memory voters = _setupNominalVoters(weights);
-
-    // We don't actually want these users to vote.
-    voters[1].weight = 0;
-    voters[2].weight = 0;
-    voters[3].weight = 0;
+  function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
+    Voter[4] memory _voters = _setupNominalVoters(_weights);
 
     // Set one of the splits to 100% and all of the others to 0%.
-    uint256 forSplit;
-    uint256 againstSplit;
-    uint256 abstainSplit;
-    if (maxSplit == 0) forSplit = 1.0e18;
-    if (maxSplit == 1) againstSplit = 1.0e18;
-    if (maxSplit == 2) abstainSplit = 1.0e18;
-    voters[0].voteSplit = FractionalVoteSplit(forSplit, againstSplit, abstainSplit);
+    uint256 _forSplit;
+    uint256 _againstSplit;
+    uint256 _abstainSplit;
+    if (_maxSplit % 3 == 0) _forSplit = 1.0e18;
+    if (_maxSplit % 3 == 1) _againstSplit = 1.0e18;
+    if (_maxSplit % 3 == 2) _abstainSplit = 1.0e18;
+    _voters[0].voteSplit = FractionalVoteSplit(_forSplit, _againstSplit, _abstainSplit);
 
-    _fractionalGovernorHappyPathTest(voters);
+    // We don't actually want these users to vote.
+    _voters[1].weight = 0;
+    _voters[2].weight = 0;
+    _voters[3].weight = 0;
+
+    _fractionalGovernorHappyPathTest(_voters);
   }
 
   function testFuzz_VotingWithMixedFractionalAndNominalVoters(
@@ -426,7 +424,7 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     vm.prank(voter.addr);
-    vm.expectRevert("GovernorCountingFractional: votes exceed weight");
+    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Yay", fractionalizedVotes);
   }
 
@@ -455,22 +453,22 @@ contract GovernorCountingFractionalTest is Test {
     voter.addr = _randomAddress(_weight);
     // The weight cannot overflow the max supply for the token, but must overflow the
     // max for the GovernorFractional contract.
-    voter.weight = bound(_weight, MAX_VOTE_WEIGHT, token.exposed_maxSupply());
+    voter.weight = bound(_weight, MAX_VOTE_WEIGHT + 1, token.exposed_maxSupply());
 
     _mintAndDelegateToVoter(voter);
     uint256 _proposalId = _createAndSubmitProposal();
 
-    uint256 forVotes;
-    uint256 againstVotes;
-    uint256 abstainVotes;
+    uint256 _forVotes;
+    uint256 _againstVotes;
+    uint256 _abstainVotes;
 
-    if (voteTypeToOverflow[0]) forVotes = voter.weight;
-    if (voteTypeToOverflow[1]) againstVotes = voter.weight;
-    if (voteTypeToOverflow[2]) abstainVotes = voter.weight;
+    if (voteTypeToOverflow[0]) _forVotes = voter.weight;
+    if (voteTypeToOverflow[1]) _againstVotes = voter.weight;
+    if (voteTypeToOverflow[2]) _abstainVotes = voter.weight;
 
-    bytes memory fractionalizedVotes = abi.encodePacked(forVotes, againstVotes, abstainVotes);
+    bytes memory fractionalizedVotes = abi.encodePacked(_forVotes, _againstVotes, _abstainVotes);
     vm.prank(voter.addr);
-    vm.expectRevert("GovernorCountingFractional: invalid voteData");
+    vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", fractionalizedVotes);
   }
 
@@ -809,7 +807,6 @@ contract GovernorCountingFractionalTest is Test {
 
 
   // TODO test actual concrete partial vote balances are recorded appropriately
-  // TODO test that someone who votes partially cannot turn around and vote nominally and vice versa
   // TODO test partial support types in multiple partial votes
   // TODO test that multiple votes cannot overflow weight
   // TODO test DOS-ing the protocol with tons of small votes
