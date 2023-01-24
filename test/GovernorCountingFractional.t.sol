@@ -477,11 +477,20 @@ contract GovernorCountingFractionalTest is Test {
   function testFuzz_ParamLengthIsChecked(
     uint256 _weight,
     FractionalVoteSplit memory _voteSplit,
-    uint256 invalidParamLength
+    uint256 _invalidParamLength
   ) public {
-    invalidParamLength = bound(invalidParamLength, 1, 256);
-    vm.assume(invalidParamLength != 48);
-    bytes memory fractionalVoteData = new bytes(invalidParamLength);
+    _invalidParamLength = bound(_invalidParamLength, 1, 255);
+    vm.assume(_invalidParamLength != 48);
+
+    // Construct a byte array of arbitrary length and arbitrary values.
+    bytes memory _invalidVoteData = new bytes(_invalidParamLength);
+    for(uint256 _i; _i < _invalidParamLength; _i++) {
+      _invalidVoteData[_i] = bytes1(
+        // Generate a random byte of data.
+        uint8(uint256(keccak256(abi.encode(block.timestamp + _i))))
+      );
+    }
+    assertEq(_invalidVoteData.length, _invalidParamLength);
 
     Voter memory voter;
     voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
@@ -491,8 +500,9 @@ contract GovernorCountingFractionalTest is Test {
     _mintAndDelegateToVoter(voter);
     uint256 _proposalId = _createAndSubmitProposal();
 
+    vm.prank(voter.addr);
     vm.expectRevert("GovernorCountingFractional: invalid voteData");
-    governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", fractionalVoteData);
+    governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", _invalidVoteData);
   }
 
   function test_QuorumDoesNotIncludeAbstainVotes() public {
