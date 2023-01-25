@@ -179,7 +179,7 @@ contract GovernorCountingFractionalTest is Test {
   }
 
   function _randomAddress(uint256 salt1) public view returns (address) {
-    return address(uint160(uint256(keccak256(abi.encodePacked(salt1, block.number)))));
+    return address(uint160(uint256(keccak256(abi.encodePacked(salt1, block.timestamp)))));
   }
 
   function _randomAddress(uint256 salt1, uint256 salt2) public pure returns (address) {
@@ -902,6 +902,4 @@ contract GovernorCountingFractionalTest is Test {
     (uint256 _againstVotesCast, uint256 _forVotesCast, uint256 _abstainVotesCast) = governor.proposalVotes(_proposalId);
     assertLe(_againstVotesCast + _forVotesCast + _abstainVotesCast, _voter.weight);
   }
-
-  // TODO test DOS-ing the protocol with tons of small votes
 }
