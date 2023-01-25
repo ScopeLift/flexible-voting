@@ -57,6 +57,12 @@ contract GovernorCountingFractionalTest is Test {
     FractionalVoteSplit voteSplit;
   }
 
+  struct VoteData {
+    uint128 forVotes;
+    uint128 againstVotes;
+    uint128 abstainVotes;
+  }
+
   struct Proposal {
     uint256 id;
     address[] targets;
@@ -163,6 +169,13 @@ contract GovernorCountingFractionalTest is Test {
       voter.weight = bound(weights[_i], MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT / 4);
       voter.support = _randomSupportType(weights[_i]);
     }
+  }
+
+  function _assumeAndLabelFuzzedAddress(address _addr, string memory _name) internal returns(address) {
+    vm.assume(_addr > address(0));
+    assumeNoPrecompiles(_addr);
+    vm.label(_addr, _name);
+    return _addr;
   }
 
   function _randomAddress(uint256 salt1) public view returns (address) {
@@ -368,6 +381,35 @@ contract GovernorCountingFractionalTest is Test {
     _voters[3].weight = 0;
 
     _fractionalGovernorHappyPathTest(_voters);
+  }
+
+  function testFuzz_UsersCannotVoteWithZeroWeight(address _voterAddr) public {
+    _assumeAndLabelFuzzedAddress(_voterAddr, "voter");
+
+    // They must have no weight at the time of the proposal snapshot.
+    vm.assume(token.balanceOf(_voterAddr) == 0);
+
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Attempt to cast nominal votes.
+    vm.prank(_voterAddr);
+    vm.expectRevert("GovernorCountingFractional: no weight");
+    governor.castVoteWithReasonAndParams(
+      _proposalId,
+      uint8(GovernorCompatibilityBravo.VoteType.For),
+      "I hope no one catches me doing this!",
+      new bytes(0) // No data, this is a nominal vote.
+    );
+
+    // Attempt to cast fractional votes.
+    vm.prank(_voterAddr);
+    vm.expectRevert("GovernorCountingFractional: no weight");
+    governor.castVoteWithReasonAndParams(
+      _proposalId,
+      uint8(GovernorCompatibilityBravo.VoteType.For),
+      "I'm so bad",
+      abi.encodePacked(type(uint128).max, type(uint128).max, type(uint128).max)
+    );
   }
 
   function testFuzz_VotingWithMixedFractionalAndNominalVoters(
@@ -610,27 +652,23 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
-  struct CanCastPartialWeightMultipleTimesVote {
-    uint128 forVotes;
-    uint128 againstVotes;
-    uint128 abstainVotes;
-  }
-
   function testFuzz_CanCastPartialWeightMultipleTimes(
+    address _voterAddr,
     uint256 _weight,
     uint256 _votePercentage1,
     uint256 _votePercentage2,
+    uint256 _votePercentage3,
     FractionalVoteSplit memory _voteSplit
   ) public {
     // Build the vote split.
     _voteSplit = _randomVoteSplit(_voteSplit);
     _votePercentage1 = bound(_votePercentage1, 0.0e18, 1.0e18);
     _votePercentage2 = bound(_votePercentage2, 0.0e18, 1e18 - _votePercentage1);
-    uint256 _votePercentage3 = 1e18 - _votePercentage1 - _votePercentage2;
+    _votePercentage3 = bound(_votePercentage3, 0.0e18, 1e18 - _votePercentage1 - _votePercentage2);
 
     // Build the voter.
     Voter memory _voter;
-    _voter.addr = makeAddr("CanCastPartialVotesMultipleTimes voter"); // TODO add more randomness
+    _voter.addr = _assumeAndLabelFuzzedAddress(_voterAddr, "voter");
     _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
     _voter.voteSplit = _voteSplit;
 
@@ -639,7 +677,7 @@ contract GovernorCountingFractionalTest is Test {
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Calculate the vote amounts for the first vote.
-    CanCastPartialWeightMultipleTimesVote  memory _firstVote;
+    VoteData  memory _firstVote;
     _firstVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage1));
     _firstVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage1));
     _firstVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage1));
@@ -663,7 +701,7 @@ contract GovernorCountingFractionalTest is Test {
     if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
 
     // Now cast votes again.
-    CanCastPartialWeightMultipleTimesVote  memory _secondVote;
+    VoteData  memory _secondVote;
     _secondVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage2));
     _secondVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage2));
     _secondVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage2));
@@ -685,7 +723,7 @@ contract GovernorCountingFractionalTest is Test {
     if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
 
     // One more time!
-    CanCastPartialWeightMultipleTimesVote  memory _thirdVote;
+    VoteData  memory _thirdVote;
     _thirdVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage3));
     _thirdVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage3));
     _thirdVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage3));
@@ -702,6 +740,64 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_firstVote.forVotes + _secondVote.forVotes + _thirdVote.forVotes, _actualForVotes);
     assertEq(_firstVote.againstVotes + _secondVote.againstVotes + _thirdVote.againstVotes, _actualAgainstVotes);
     assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes + _thirdVote.abstainVotes, _actualAbstainVotes);
+  }
+
+  function testFuzz_FractionalVotingCannotExceedOverallWeightWithMultipleVotes(
+    address _voterAddr,
+    uint256 _weight,
+    uint256 _votePercentage,
+    FractionalVoteSplit memory _voteSplit
+  ) public {
+    // Build the vote split.
+    _voteSplit = _randomVoteSplit(_voteSplit);
+
+    // This needs to be big enough that two votes will exceed the full weight but not so big that
+    // one vote exceeds the weight. So it's 51-99%.
+    _votePercentage = bound(_votePercentage, 0.51e18, 0.99e18);
+
+    // Build the voter.
+    Voter memory _voter;
+    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.voteSplit = _voteSplit;
+    _voter.addr = _assumeAndLabelFuzzedAddress(_voterAddr, "voter");
+
+    // Mint, delegate, and propose.
+    _mintAndDelegateToVoter(_voter);
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Calculate the vote amounts for the first vote.
+    VoteData memory _voteData;
+    _voteData.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage));
+    _voteData.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage));
+    _voteData.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage));
+
+    // We're going to do this twice to try to exceed our vote weight.
+    assertLt(_voter.weight, 2 * (uint256(_voteData.forVotes) + _voteData.againstVotes + _voteData.abstainVotes));
+
+    // Cast votes the first time.
+    vm.prank(_voter.addr);
+    governor.castVoteWithReasonAndParams(
+      _proposalId,
+      _voter.support,
+      "My 1st vote",
+      abi.encodePacked(_voteData.forVotes, _voteData.againstVotes, _voteData.abstainVotes)
+    );
+
+    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
+      governor.proposalVotes(_proposalId);
+    assertEq(_voteData.forVotes, _actualForVotes);
+    assertEq(_voteData.againstVotes, _actualAgainstVotes);
+    assertEq(_voteData.abstainVotes, _actualAbstainVotes);
+
+    // Attempt to cast votes again. This should revert.
+    vm.prank(_voter.addr);
+    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    governor.castVoteWithReasonAndParams(
+      _proposalId,
+      _voter.support,
+      "My 2nd vote",
+      abi.encodePacked(_voteData.forVotes, _voteData.againstVotes, _voteData.abstainVotes)
+    );
   }
 
   function testFuzz_NominalVotingCannotExceedOverallWeightWithMultipleVotes(uint256[4] memory _weights) public {
@@ -723,6 +819,7 @@ contract GovernorCountingFractionalTest is Test {
   }
 
   function testFuzz_VotersCannotAvoidWeightChecksByMixedFractionalAndNominalVotes(
+    address _voterAddr,
     uint256 _weight,
     FractionalVoteSplit memory _voteSplit,
     uint256 _supportType,
@@ -730,12 +827,12 @@ contract GovernorCountingFractionalTest is Test {
     bool _isCastingNominallyFirst
   ) public {
     Voter memory _voter;
-    _voter.addr = makeAddr("VotersCannotAvoidWeightChecksByMixedFractionalAndNominalVotes");
+    _voter.addr = _assumeAndLabelFuzzedAddress(_voterAddr, "voter");
     _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
     _voter.voteSplit = _randomVoteSplit(_voteSplit);
     _voter.support = _randomSupportType(_supportType);
 
-    uint256 _partialVotePrcnt = bound(_partialVotePrcnt, 0.1e18, 0.99e18); // 10% to 99%
+    _partialVotePrcnt = bound(_partialVotePrcnt, 0.1e18, 0.99e18); // 10% to 99%
     _voteSplit.percentFor = _voter.voteSplit.percentFor.mulWadDown(_partialVotePrcnt);
     _voteSplit.percentAgainst = _voter.voteSplit.percentAgainst.mulWadDown(_partialVotePrcnt);
     _voteSplit.percentAbstain = _voter.voteSplit.percentAbstain.mulWadDown(_partialVotePrcnt);
@@ -806,11 +903,5 @@ contract GovernorCountingFractionalTest is Test {
     assertLe(_againstVotesCast + _forVotesCast + _abstainVotesCast, _voter.weight);
   }
 
-
-  // TODO test actual concrete partial vote balances are recorded appropriately
-  // TODO test partial support types in multiple partial votes
-  // TODO test that multiple votes cannot overflow weight
   // TODO test DOS-ing the protocol with tons of small votes
-  // TODO multiple partial votes, multiple vote types in each one, NOT summing to total weight
-  //
 }
