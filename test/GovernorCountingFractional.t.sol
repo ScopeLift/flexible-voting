@@ -171,7 +171,10 @@ contract GovernorCountingFractionalTest is Test {
     }
   }
 
-  function _assumeAndLabelFuzzedAddress(address _addr, string memory _name) internal returns(address) {
+  function _assumeAndLabelFuzzedAddress(address _addr, string memory _name)
+    internal
+    returns (address)
+  {
     vm.assume(_addr > address(0));
     assumeNoPrecompiles(_addr);
     vm.label(_addr, _name);
@@ -525,7 +528,7 @@ contract GovernorCountingFractionalTest is Test {
 
     // Construct a byte array of arbitrary length and arbitrary values.
     bytes memory _invalidVoteData = new bytes(_invalidParamLength);
-    for(uint256 _i; _i < _invalidParamLength; _i++) {
+    for (uint256 _i; _i < _invalidParamLength; _i++) {
       _invalidVoteData[_i] = bytes1(
         // Generate a random byte of data.
         uint8(uint256(keccak256(abi.encode(block.timestamp + _i))))
@@ -677,10 +680,13 @@ contract GovernorCountingFractionalTest is Test {
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Calculate the vote amounts for the first vote.
-    VoteData  memory _firstVote;
-    _firstVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage1));
-    _firstVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage1));
-    _firstVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage1));
+    VoteData memory _firstVote;
+    _firstVote.forVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage1));
+    _firstVote.againstVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage1));
+    _firstVote.abstainVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage1));
 
     // Cast votes the first time.
     vm.prank(_voter.addr);
@@ -701,10 +707,13 @@ contract GovernorCountingFractionalTest is Test {
     if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
 
     // Now cast votes again.
-    VoteData  memory _secondVote;
-    _secondVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage2));
-    _secondVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage2));
-    _secondVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage2));
+    VoteData memory _secondVote;
+    _secondVote.forVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage2));
+    _secondVote.againstVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage2));
+    _secondVote.abstainVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage2));
 
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(
@@ -714,7 +723,8 @@ contract GovernorCountingFractionalTest is Test {
       abi.encodePacked(_secondVote.forVotes, _secondVote.againstVotes, _secondVote.abstainVotes)
     );
 
-    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) = governor.proposalVotes(_proposalId);
+    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
+      governor.proposalVotes(_proposalId);
     assertEq(_firstVote.forVotes + _secondVote.forVotes, _actualForVotes);
     assertEq(_firstVote.againstVotes + _secondVote.againstVotes, _actualAgainstVotes);
     assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes, _actualAbstainVotes);
@@ -723,10 +733,13 @@ contract GovernorCountingFractionalTest is Test {
     if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
 
     // One more time!
-    VoteData  memory _thirdVote;
-    _thirdVote.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage3));
-    _thirdVote.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage3));
-    _thirdVote.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage3));
+    VoteData memory _thirdVote;
+    _thirdVote.forVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage3));
+    _thirdVote.againstVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage3));
+    _thirdVote.abstainVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage3));
 
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(
@@ -736,10 +749,17 @@ contract GovernorCountingFractionalTest is Test {
       abi.encodePacked(_thirdVote.forVotes, _thirdVote.againstVotes, _thirdVote.abstainVotes)
     );
 
-    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) = governor.proposalVotes(_proposalId);
+    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
+      governor.proposalVotes(_proposalId);
     assertEq(_firstVote.forVotes + _secondVote.forVotes + _thirdVote.forVotes, _actualForVotes);
-    assertEq(_firstVote.againstVotes + _secondVote.againstVotes + _thirdVote.againstVotes, _actualAgainstVotes);
-    assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes + _thirdVote.abstainVotes, _actualAbstainVotes);
+    assertEq(
+      _firstVote.againstVotes + _secondVote.againstVotes + _thirdVote.againstVotes,
+      _actualAgainstVotes
+    );
+    assertEq(
+      _firstVote.abstainVotes + _secondVote.abstainVotes + _thirdVote.abstainVotes,
+      _actualAbstainVotes
+    );
   }
 
   function testFuzz_FractionalVotingCannotExceedOverallWeightWithMultipleVotes(
@@ -767,12 +787,18 @@ contract GovernorCountingFractionalTest is Test {
 
     // Calculate the vote amounts for the first vote.
     VoteData memory _voteData;
-    _voteData.forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage));
-    _voteData.againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage));
-    _voteData.abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage));
+    _voteData.forVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage));
+    _voteData.againstVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst).mulWadDown(_votePercentage));
+    _voteData.abstainVotes =
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain).mulWadDown(_votePercentage));
 
     // We're going to do this twice to try to exceed our vote weight.
-    assertLt(_voter.weight, 2 * (uint256(_voteData.forVotes) + _voteData.againstVotes + _voteData.abstainVotes));
+    assertLt(
+      _voter.weight,
+      2 * (uint256(_voteData.forVotes) + _voteData.againstVotes + _voteData.abstainVotes)
+    );
 
     // Cast votes the first time.
     vm.prank(_voter.addr);
@@ -800,7 +826,9 @@ contract GovernorCountingFractionalTest is Test {
     );
   }
 
-  function testFuzz_NominalVotingCannotExceedOverallWeightWithMultipleVotes(uint256[4] memory _weights) public {
+  function testFuzz_NominalVotingCannotExceedOverallWeightWithMultipleVotes(
+    uint256[4] memory _weights
+  ) public {
     Voter memory _voter = _setupNominalVoters(_weights)[0];
     _mintAndDelegateToVoter(_voter);
 
@@ -810,12 +838,16 @@ contract GovernorCountingFractionalTest is Test {
     vm.expectEmit(true, false, false, true);
     emit VoteCast(_voter.addr, _proposalId, _voter.support, _voter.weight, "Yay");
     vm.prank(_voter.addr);
-    governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally);
+    governor.castVoteWithReasonAndParams(
+      _proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally
+    );
 
     // It should not be possible to vote again.
     vm.prank(_voter.addr);
     vm.expectRevert("GovernorCountingFractional: vote already cast");
-    governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally);
+    governor.castVoteWithReasonAndParams(
+      _proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally
+    );
   }
 
   function testFuzz_VotersCannotAvoidWeightChecksByMixedFractionalAndNominalVotes(
@@ -855,20 +887,14 @@ contract GovernorCountingFractionalTest is Test {
       emit VoteCast(_voter.addr, _proposalId, _voter.support, _voter.weight, "Nominal vote");
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
-        _proposalId,
-        _voter.support,
-        "Nominal vote",
-        _nominalVoteData
+        _proposalId, _voter.support, "Nominal vote", _nominalVoteData
       );
 
       // Now attempt to vote fractionally. It should fail.
       vm.expectRevert("GovernorCountingFractional: vote already cast");
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
-        _proposalId,
-        _voter.support,
-        "Fractional vote",
-        _fractionalizedVoteData
+        _proposalId, _voter.support, "Fractional vote", _fractionalizedVoteData
       );
     } else {
       vm.expectEmit(true, false, false, true);
@@ -879,27 +905,22 @@ contract GovernorCountingFractionalTest is Test {
         _voter.weight,
         "Fractional vote",
         _fractionalizedVoteData
-      );
+        );
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
-        _proposalId,
-        _voter.support,
-        "Fractional vote",
-        _fractionalizedVoteData
+        _proposalId, _voter.support, "Fractional vote", _fractionalizedVoteData
       );
 
       vm.prank(_voter.addr);
       vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
       governor.castVoteWithReasonAndParams(
-        _proposalId,
-        _voter.support,
-        "Nominal vote",
-        _nominalVoteData
+        _proposalId, _voter.support, "Nominal vote", _nominalVoteData
       );
     }
 
     // The voter should not have been able to increase his/her vote weight by voting twice.
-    (uint256 _againstVotesCast, uint256 _forVotesCast, uint256 _abstainVotesCast) = governor.proposalVotes(_proposalId);
+    (uint256 _againstVotesCast, uint256 _forVotesCast, uint256 _abstainVotesCast) =
+      governor.proposalVotes(_proposalId);
     assertLe(_againstVotesCast + _forVotesCast + _abstainVotesCast, _voter.weight);
   }
 }
