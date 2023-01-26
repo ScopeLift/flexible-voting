@@ -446,7 +446,7 @@ contract Vote is FractionalPoolTest {
     pool.castVote(_proposalId);
 
     // Try to submit them again.
-    vm.expectRevert(bytes("GovernorCountingFractional: vote already cast"));
+    vm.expectRevert(bytes("GovernorCountingFractional: all weight cast"));
     pool.castVote(_proposalId);
   }
 
