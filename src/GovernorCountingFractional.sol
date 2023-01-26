@@ -57,8 +57,8 @@ abstract contract GovernorCountingFractional is Governor {
             uint256 abstainVotes
         )
     {
-        ProposalVote storage proposalvote = _proposalVotes[proposalId];
-        return (proposalvote.againstVotes, proposalvote.forVotes, proposalvote.abstainVotes);
+        ProposalVote storage proposalVote = _proposalVotes[proposalId];
+        return (proposalVote.againstVotes, proposalVote.forVotes, proposalVote.abstainVotes);
     }
 
     /**
@@ -100,7 +100,7 @@ abstract contract GovernorCountingFractional is Governor {
     ) internal virtual override {
         require(weight > 0, "GovernorCountingFractional: no weight");
         if (_proposalVotersWeightCast[proposalId][account] == weight) {
-          revert("GovernorCountingFractional: vote already cast");
+          revert("GovernorCountingFractional: all weight cast");
         }
 
         uint128 safeWeight = SafeCast.toUint128(weight);
@@ -155,13 +155,13 @@ abstract contract GovernorCountingFractional is Governor {
         (uint128 _forVotes, uint128 _againstVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
 
         uint128 _existingWeight = _proposalVotersWeightCast[proposalId][account];
+        uint256 _newWeight = uint256(_forVotes) + _againstVotes + _abstainVotes + _existingWeight;
 
-        require(
-            uint256(_forVotes) + _againstVotes + _abstainVotes + _existingWeight <= weight,
-            "GovernorCountingFractional: vote would exceed weight"
-        );
+        require(_newWeight <= weight, "GovernorCountingFractional: vote would exceed weight");
 
-        _proposalVotersWeightCast[proposalId][account] = _existingWeight + _forVotes + _againstVotes + _abstainVotes;
+        // It's safe to downcast here because we've just confirmed that
+        // _newWeight < weight, and we know that weight is <= uint128.max.
+        _proposalVotersWeightCast[proposalId][account] = uint128(_newWeight);
 
         ProposalVote memory _proposalVote = _proposalVotes[proposalId];
         _proposalVote = ProposalVote(

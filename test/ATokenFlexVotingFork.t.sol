@@ -1053,7 +1053,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.castVote(_proposalId);
 
     // Try to submit them again.
-    vm.expectRevert(bytes("GovernorCountingFractional: vote already cast"));
+    vm.expectRevert(bytes("GovernorCountingFractional: all weight cast"));
     aToken.castVote(_proposalId);
   }
 
