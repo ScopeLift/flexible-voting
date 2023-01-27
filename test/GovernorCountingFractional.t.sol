@@ -44,6 +44,11 @@ contract GovernorCountingFractionalTest is Test {
   // This is the vote storage slot size on the Fractional Governor contract.
   uint256 constant MAX_VOTE_WEIGHT = type(uint128).max;
 
+  // See OZ's EIP712._domainSeparatorV4() function for how this was computed.
+  // This can also be obtained from GovernorCountingFractional with:
+  //   console2.log(uint(_domainSeparatorV4()))
+  bytes32 EIP712_DOMAIN_SEPARATOR = bytes32(0xa0a8c0ee225b9b2b0e1a80e3945e9dfdc24e869a543941e63c2c0544c27b37b0);
+
   bytes32 internal nextUser = keccak256(abi.encodePacked("user address"));
 
   struct FractionalVoteSplit {
@@ -363,6 +368,116 @@ contract GovernorCountingFractionalTest is Test {
   ) public {
     Voter[4] memory voters = _setupFractionalVoters(weights, _voteSplits);
     _fractionalGovernorHappyPathTest(voters);
+  }
+
+  function testFuzz_NominalVotingWithFractionalizedParamsAndSignature(
+    uint256 _weight
+  ) public {
+    Voter memory _voter;
+    uint256 _privateKey;
+    (_voter.addr, _privateKey) = makeAddrAndKey("voter");
+    vm.assume(_voter.addr != address(this));
+
+    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.support = _randomSupportType(_weight);
+
+    _mintAndDelegateToVoter(_voter);
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    bytes32 _voteMessage = keccak256(
+      abi.encode(
+        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
+        _proposalId,
+        _voter.support,
+        keccak256(bytes("I have my reasons")),
+        keccak256(new bytes(0))
+      )
+    );
+
+    bytes32 _voteMessageHash = keccak256(
+      abi.encodePacked(
+        "\x19\x01",
+        EIP712_DOMAIN_SEPARATOR,
+        _voteMessage
+      )
+    );
+
+    (uint8 _v, bytes32 _r, bytes32 _s) = vm.sign(_privateKey, _voteMessageHash);
+
+    governor.castVoteWithReasonAndParamsBySig(
+      _proposalId,
+      _voter.support,
+      "I have my reasons",
+      new bytes(0),
+      _v,
+      _r,
+      _s
+    );
+
+    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) = governor.proposalVotes(_proposalId);
+    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.For))
+      assertEq(_voter.weight, _actualForVotes);
+    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.Against))
+      assertEq(_voter.weight, _actualAgainstVotes);
+    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.Abstain))
+      assertEq(_voter.weight, _actualAbstainVotes);
+  }
+
+  function testFuzz_VotingWithFractionalizedParamsAndSignature(
+    uint256 _weight,
+    FractionalVoteSplit memory _voteSplit
+  ) public {
+    Voter memory _voter;
+    uint256 _privateKey;
+    (_voter.addr, _privateKey) = makeAddrAndKey("voter");
+    vm.assume(_voter.addr != address(this));
+
+    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.support = _randomSupportType(_weight);
+    _voter.voteSplit = _randomVoteSplit(_voteSplit);
+
+    uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
+    uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
+    uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
+    bytes memory _fractionalizedVotes = abi.encodePacked(_forVotes, _againstVotes, _abstainVotes);
+
+    _mintAndDelegateToVoter(_voter);
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    bytes32 _voteMessage = keccak256(
+      abi.encode(
+        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
+        _proposalId,
+        _voter.support,
+        keccak256(bytes("I have my reasons")),
+        keccak256(_fractionalizedVotes)
+      )
+    );
+
+    bytes32 _voteMessageHash = keccak256(
+      abi.encodePacked(
+        "\x19\x01",
+        EIP712_DOMAIN_SEPARATOR,
+        _voteMessage
+      )
+    );
+
+    (uint8 _v, bytes32 _r, bytes32 _s) = vm.sign(_privateKey, _voteMessageHash);
+
+    governor.castVoteWithReasonAndParamsBySig(
+      _proposalId,
+      _voter.support,
+      "I have my reasons",
+      _fractionalizedVotes,
+      _v,
+      _r,
+      _s
+    );
+
+    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _actualForVotes);
+    assertEq(_againstVotes, _actualAgainstVotes);
+    assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
