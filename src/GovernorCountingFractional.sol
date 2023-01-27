@@ -99,7 +99,7 @@ abstract contract GovernorCountingFractional is Governor {
         bytes memory voteData
     ) internal virtual override {
         require(weight > 0, "GovernorCountingFractional: no weight");
-        if (_proposalVotersWeightCast[proposalId][account] == weight) {
+        if (_proposalVotersWeightCast[proposalId][account] >= weight) {
           revert("GovernorCountingFractional: all weight cast");
         }
 
