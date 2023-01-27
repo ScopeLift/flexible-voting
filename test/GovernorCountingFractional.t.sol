@@ -271,7 +271,7 @@ contract GovernorCountingFractionalTest is Test {
 
   function _castVotes(Voter memory _voter, uint256 _proposalId) internal {
     if (_voter.weight == 0) return;
-    assertEq(governor.hasVoted(_proposalId, _voter.addr), false);
+    assertFalse(governor.hasVoted(_proposalId, _voter.addr));
 
     bytes memory fractionalizedVotes;
     FractionalVoteSplit memory voteSplit = _voter.voteSplit;
@@ -294,7 +294,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Yay", fractionalizedVotes);
 
-    assertEq(governor.hasVoted(_proposalId, _voter.addr), true);
+    assertTrue(governor.hasVoted(_proposalId, _voter.addr));
   }
 
   function _castVotes(Voter[4] memory voters, uint256 _proposalId) internal {
