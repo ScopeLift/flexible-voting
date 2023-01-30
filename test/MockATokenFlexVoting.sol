@@ -5,8 +5,8 @@ import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {ATokenFlexVoting} from "src/ATokenFlexVoting.sol";
 
 contract MockATokenFlexVoting is ATokenFlexVoting {
-  constructor(IPool _pool, address _governor, uint32 _castVoteWindow)
-    ATokenFlexVoting(_pool, _governor, _castVoteWindow)
+  constructor(IPool _pool, address _governor)
+    ATokenFlexVoting(_pool, _governor)
   {}
 
   function handleRepayment(address user, uint256 amount) external virtual onlyPool {

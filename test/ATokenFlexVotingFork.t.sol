@@ -114,7 +114,7 @@ contract AaveAtokenForkTest is Test {
       PoolConfigurator(0x8145eddDf43f50276641b55bd3AD95944510021E);
 
     // deploy the aGOV token
-    AToken _aTokenImplementation = new MockATokenFlexVoting(pool, address(governor), 1200);
+    AToken _aTokenImplementation = new MockATokenFlexVoting(pool, address(governor));
 
     // This is the stableDebtToken implementation that all of the Optimism
     // aTokens use. You can see this here: https://dune.com/queries/1332820.
@@ -866,6 +866,15 @@ contract CastVote is AaveAtokenForkTest {
     );
   }
 
+  function test_VotesCanBeCastIncrementally() public {
+    _testVotesCanBeCastIncrementally(
+      makeAddr("test_VotesCanBeCastIncrementally userA #1"),
+      makeAddr("test_VotesCanBeCastIncrementally userB #1"),
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.Abstain) // supportTypeB
+    );
+  }
+
   function test_CastAbstainVoteWithFullyTransferredATokens() public {
     _testCastVoteWithTransferredATokens(
       makeAddr("CastVoteWithTransferredATokens userA #3"),
@@ -960,7 +969,7 @@ contract CastVote is AaveAtokenForkTest {
     assertEq(_abstainVotes, 0);
 
     // Wait until after the voting period
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // submit votes on behalf of the pool
     aToken.castVote(_proposalId);
@@ -1047,7 +1056,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
 
     // Wait until after the voting period.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1144,7 +1153,7 @@ contract CastVote is AaveAtokenForkTest {
     assertEq(_abstainVotes, 0);
 
     // Wait until after the voting period.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1171,11 +1180,9 @@ contract CastVote is AaveAtokenForkTest {
     vm.prank(_who);
     aToken.expressVote(_proposalId, _supportType);
 
-    // The AToken's internal voting period has not passed.
-    assert(aToken.internalVotingPeriodEnd(_proposalId) > block.number);
-
     // Try to submit votes on behalf of the pool.
-    vm.expectRevert(bytes("cannot castVote during internal voting period"));
+    // TODO this is fine now
+    // vm.expectRevert(bytes("cannot castVote during internal voting period"));
     aToken.castVote(_proposalId);
   }
 
@@ -1230,7 +1237,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _vars.supportTypeB);
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1321,7 +1328,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _vars.supportTypeA);
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1387,7 +1394,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportTypeA);
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1427,7 +1434,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1473,7 +1480,7 @@ contract CastVote is AaveAtokenForkTest {
     if (_withdrawAmount == type(uint256).max) return; // Nothing left to test.
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1519,7 +1526,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, uint8(VoteType.Against));
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1548,14 +1555,15 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
 
     // Wait until after the voting period
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // submit votes on behalf of the pool
     aToken.castVote(_proposalId);
 
     // _userB should not be able to express his/her vote on the proposal since the
     // vote was cast.
-    vm.expectRevert(bytes("too late to express, votes already cast"));
+    // TODO this isn't going to revert anymore
+    // vm.expectRevert(bytes("too late to express, votes already cast"));
     vm.prank(_userB);
     aToken.expressVote(_proposalId, _supportType);
   }
@@ -1568,10 +1576,11 @@ contract CastVote is AaveAtokenForkTest {
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Wait until after the voting period
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Try to submit votes on behalf of the pool. It should fail.
-    vm.expectRevert(bytes("no votes expressed"));
+    // TODO this isn't going to fail anymore
+    // vm.expectRevert(bytes("no votes expressed"));
     aToken.castVote(_proposalId);
 
     // Express voting preference on the proposal.
@@ -1612,7 +1621,7 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportTypeB);
 
     // Wait until after the pool's voting period closes.
-    vm.roll(aToken.internalVotingPeriodEnd(_proposalId) + 1);
+    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1634,6 +1643,53 @@ contract CastVote is AaveAtokenForkTest {
       if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _transferAmount);
       // forgefmt: disable-end
     }
+  }
+
+  function _testVotesCanBeCastIncrementally(
+    address _userA,
+    address _userB,
+    uint8 _supportTypeA,
+    uint8 _supportTypeB
+  ) private {
+    require(_supportTypeA != _supportTypeB, "This test assumes the support types are different");
+    uint256 _weight = 1 ether;
+
+    // Deposit some funds.
+    _mintGovAndSupplyToAave(_userA, _weight);
+    _mintGovAndSupplyToAave(_userB, _weight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // UserA expresses a voting preference on the proposal.
+    vm.prank(_userA);
+    aToken.expressVote(_proposalId, _supportTypeA);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+
+    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight);
+    if (_supportTypeA != uint8(VoteType.For)) assertEq(_forVotes, 0);
+    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
+    if (_supportTypeA != uint8(VoteType.Against)) assertEq(_againstVotes, 0);
+    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
+    if (_supportTypeA != uint8(VoteType.Abstain)) assertEq(_abstainVotes, 0);
+
+    // UserB expresses a voting preference on the proposal.
+    vm.prank(_userB);
+    aToken.expressVote(_proposalId, _supportTypeB);
+
+    // Submit votes on behalf of the pool.
+    aToken.castVote(_proposalId);
+
+    (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+
+    if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _weight);
+    if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
+    if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
   }
 }
 
