@@ -225,9 +225,6 @@ contract ATokenFlexVoting is AToken {
     // weights. It makes no difference what vote type this is.
     uint8 unusedSupportParam = uint8(VoteType.Abstain);
 
-    // Clear the stored votes so that we don't double-cast them.
-    delete proposalVotes[proposalId];
-
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(

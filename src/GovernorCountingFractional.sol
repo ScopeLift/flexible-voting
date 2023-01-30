@@ -26,17 +26,22 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 abstainVotes;
     }
 
+    function _totalProposalVoteWeights(ProposalVote memory _vote) internal view returns(uint256) {
+      return uint256(_vote.againstVotes) + _vote.forVotes + _vote.abstainVotes;
+    }
+
     /**
      * @dev Mapping from proposal ID to vote tallies for that proposal.
      */
     mapping(uint256 => ProposalVote) private _proposalVotes;
 
     /**
-     * @dev Mapping from proposal ID and address to the weight the address
-     * has cast on that proposal, e.g. _proposalVotersWeightCast[42][0xBEEF]
-     * would tell you the number of votes that 0xBEEF has cast on proposal 42.
+     * @dev Mapping from proposal ID and address to the votes the address
+     * has cast on that proposal, e.g. _proposalVotesCast[42][0xBEEF]
+     * would tell you the number of against/for/abstain votes that 0xBEEF has
+     * cast on proposal 42.
      */
-    mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
+    mapping(uint256 => mapping(address => ProposalVote)) private _proposalVotesCast;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -50,7 +55,8 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev See {IGovernor-hasVoted}.
      */
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
-        return _proposalVotersWeightCast[proposalId][account] > 0;
+        (uint againstVotes, uint forVotes, uint abstainVotes) = proposalVotes(proposalId, account);
+        return againstVotes + forVotes + abstainVotes > 0;
     }
 
     /**
@@ -67,6 +73,23 @@ abstract contract GovernorCountingFractional is Governor {
         )
     {
         ProposalVote storage proposalVote = _proposalVotes[proposalId];
+        return (proposalVote.againstVotes, proposalVote.forVotes, proposalVote.abstainVotes);
+    }
+
+    /**
+     * @dev Accessor to the internal vote counts by address.
+     */
+    function proposalVotes(uint256 proposalId, address voter)
+        public
+        view
+        virtual
+        returns (
+            uint256 againstVotes,
+            uint256 forVotes,
+            uint256 abstainVotes
+        )
+    {
+        ProposalVote storage proposalVote = _proposalVotesCast[proposalId][voter];
         return (proposalVote.againstVotes, proposalVote.forVotes, proposalVote.abstainVotes);
     }
 
@@ -108,16 +131,18 @@ abstract contract GovernorCountingFractional is Governor {
         bytes memory voteData
     ) internal virtual override {
         require(weight > 0, "GovernorCountingFractional: no weight");
-        if (_proposalVotersWeightCast[proposalId][account] >= weight) {
+        ProposalVote storage _vote = _proposalVotesCast[proposalId][account];
+
+        if ( _totalProposalVoteWeights(_vote) >= weight) {
           revert("GovernorCountingFractional: all weight cast");
         }
 
         uint128 safeWeight = SafeCast.toUint128(weight);
 
         if (voteData.length == 0) {
-            _countVoteNominal(proposalId, account, safeWeight, support);
+            _countVoteNominal(proposalId, _vote, safeWeight, support);
         } else {
-            _countVoteFractional(proposalId, account, safeWeight, voteData);
+            _countVoteFractional(proposalId, _vote, account, safeWeight, voteData);
         }
     }
 
@@ -126,22 +151,25 @@ abstract contract GovernorCountingFractional is Governor {
      */
     function _countVoteNominal(
         uint256 proposalId,
-        address account,
+        ProposalVote storage _vote,
         uint128 weight,
         uint8 support
     ) internal {
+        // Nominal voting uses all weight, so previous partial votes are
+        // disallowed.
         require(
-            _proposalVotersWeightCast[proposalId][account] == 0,
+            _totalProposalVoteWeights(_vote) == 0,
             "GovernorCountingFractional: vote would exceed weight"
         );
 
-        _proposalVotersWeightCast[proposalId][account] = weight;
-
         if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
+            _vote.againstVotes = weight;
             _proposalVotes[proposalId].againstVotes += weight;
         } else if (support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
+            _vote.forVotes = weight;
             _proposalVotes[proposalId].forVotes += weight;
         } else if (support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
+            _vote.abstainVotes = weight;
             _proposalVotes[proposalId].abstainVotes += weight;
         } else {
             revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
@@ -155,31 +183,45 @@ abstract contract GovernorCountingFractional is Governor {
      */
     function _countVoteFractional(
         uint256 proposalId,
+        ProposalVote storage _storedVote,
         address account,
         uint128 weight,
         bytes memory voteData
     ) internal {
         require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
-        (uint128 _forVotes, uint128 _againstVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
-
-        uint128 _existingWeight = _proposalVotersWeightCast[proposalId][account];
-        uint256 _newWeight = uint256(_forVotes) + _againstVotes + _abstainVotes + _existingWeight;
+        ProposalVote memory _newVote = _decodePackedVotes(voteData);
+        uint256 _newWeight = _totalProposalVoteWeights(_newVote);
 
         require(_newWeight <= weight, "GovernorCountingFractional: vote would exceed weight");
 
-        // It's safe to downcast here because we've just confirmed that
-        // _newWeight < weight, and we know that weight is <= uint128.max.
-        _proposalVotersWeightCast[proposalId][account] = uint128(_newWeight);
+        require(_storedVote.againstVotes <= _newVote.againstVotes, "cannot undo past votes");
+        require(_storedVote.forVotes <= _newVote.forVotes, "cannot undo past votes");
+        require(_storedVote.abstainVotes <= _newVote.abstainVotes, "cannot undo past votes");
 
-        ProposalVote memory _proposalVote = _proposalVotes[proposalId];
-        _proposalVote = ProposalVote(
-            _proposalVote.againstVotes + _againstVotes,
-            _proposalVote.forVotes + _forVotes,
-            _proposalVote.abstainVotes + _abstainVotes
+        // How many votes are we adding here?
+        ProposalVote memory _voteDelta;
+        _voteDelta.againstVotes = _newVote.againstVotes - _storedVote.againstVotes;
+        _voteDelta.forVotes = _newVote.forVotes - _storedVote.forVotes;
+        _voteDelta.abstainVotes = _newVote.abstainVotes - _storedVote.abstainVotes;
+
+        // Update the voter's vote balances.
+        _storedVote.againstVotes = _newVote.againstVotes;
+        _storedVote.forVotes = _newVote.forVotes;
+        _storedVote.abstainVotes = _newVote.abstainVotes;
+
+        // TODO it would be good to have an invariant test to confirm that the
+        // overall talley always equals the sum of the individual totals
+
+        // Update the overall vote talley.
+        ProposalVote memory _overallVoteTalley = _proposalVotes[proposalId];
+        _overallVoteTalley = ProposalVote(
+            _overallVoteTalley.againstVotes + _voteDelta.againstVotes,
+            _overallVoteTalley.forVotes + _voteDelta.forVotes,
+            _overallVoteTalley.abstainVotes + _voteDelta.abstainVotes
         );
 
-        _proposalVotes[proposalId] = _proposalVote;
+        _proposalVotes[proposalId] = _overallVoteTalley;
     }
 
     uint256 constant internal _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
@@ -191,17 +233,21 @@ abstract contract GovernorCountingFractional is Governor {
     function _decodePackedVotes(bytes memory voteData)
         internal
         pure
-        returns (
-            uint128 forVotes,
-            uint128 againstVotes,
-            uint128 abstainVotes
-        )
+        returns (ProposalVote memory _vote)
     {
+        uint128 forVotes;
+        uint128 againstVotes;
+        uint128 abstainVotes;
+
         assembly {
             forVotes := shr(128, mload(add(voteData, 0x20)))
             againstVotes := and(_VOTEMASK, mload(add(voteData, 0x20)))
             abstainVotes := shr(128, mload(add(voteData, 0x40)))
         }
+
+        _vote.forVotes = forVotes;
+        _vote.againstVotes = againstVotes;
+        _vote.abstainVotes = abstainVotes;
     }
 }
 // forgefmt: disable-end
