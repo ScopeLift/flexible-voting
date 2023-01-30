@@ -1261,6 +1261,20 @@ contract CastVote is AaveAtokenForkTest {
       if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
     }
     // forgefmt: disable-end
+
+    // The borrower should also be able to submit votes!
+    vm.prank(_vars.borrower);
+    governor.castVoteWithReasonAndParams(
+      _proposalId,
+      uint8(VoteType.For),
+      "Vote from the person that borrowed Gov from Aave",
+      new bytes(0) // Vote nominally so that all of the borrower's weight is used.
+    );
+
+    // The summed votes should not exceed the amount of Gov initially supplied.
+    (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertGe(_initGovBalance, _againstVotes + _forVotes + _abstainVotes);
+    assertGe(_vars.voteWeightA + _vars.voteWeightB, _againstVotes + _forVotes + _abstainVotes);
   }
 
   struct VotingWeightIsAbandonedVars {
