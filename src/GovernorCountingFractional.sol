@@ -26,7 +26,16 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 abstainVotes;
     }
 
+    /**
+     * @dev Mapping from proposal ID to vote tallies for that proposal.
+     */
     mapping(uint256 => ProposalVote) private _proposalVotes;
+
+    /**
+     * @dev Mapping from proposal ID and address to the weight the address
+     * has cast on that proposal, e.g. _proposalVotersWeightCast[42][0xBEEF]
+     * would tell you the number of votes that 0xBEEF has cast on proposal 42.
+     */
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
     /**
