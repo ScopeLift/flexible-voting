@@ -1675,11 +1675,12 @@ contract CastVote is AaveAtokenForkTest {
     uint8 _supportTypeB
   ) private {
     require(_supportTypeA != _supportTypeB, "This test assumes the support types are different");
-    uint256 _weight = 1 ether;
+    uint256 _weightA = 1 ether;
+    uint256 _weightB = 3 ether;
 
     // Deposit some funds.
-    _mintGovAndSupplyToAave(_userA, _weight);
-    _mintGovAndSupplyToAave(_userB, _weight);
+    _mintGovAndSupplyToAave(_userA, _weightA);
+    _mintGovAndSupplyToAave(_userB, _weightB);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1694,11 +1695,11 @@ contract CastVote is AaveAtokenForkTest {
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       governor.proposalVotes(_proposalId);
 
-    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weight);
+    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weightA);
     if (_supportTypeA != uint8(VoteType.For)) assertEq(_forVotes, 0);
-    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
+    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weightA);
     if (_supportTypeA != uint8(VoteType.Against)) assertEq(_againstVotes, 0);
-    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
+    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightA);
     if (_supportTypeA != uint8(VoteType.Abstain)) assertEq(_abstainVotes, 0);
 
     // UserB expresses a voting preference on the proposal.
@@ -1710,9 +1711,12 @@ contract CastVote is AaveAtokenForkTest {
 
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
 
-    if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _weight);
-    if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _weight);
-    if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weight);
+    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weightA);
+    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weightA);
+    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightA);
+    if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _weightB);
+    if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _weightB);
+    if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightB);
   }
 }
 
