@@ -4,7 +4,7 @@ pragma solidity >=0.8.10;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
-import "openzeppelin-contracts/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
+import "openzeppelin-contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import "solmate/utils/FixedPointMathLib.sol";
 
 import "./GovToken.sol";
