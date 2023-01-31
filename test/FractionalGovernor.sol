@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 import "../src/GovernorCountingFractional.sol";
-import "openzeppelin-contracts/contracts/governance/extensions/GovernorVotes.sol";
+import "openzeppelin-contracts/governance/extensions/GovernorVotes.sol";
 
 contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
   constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}

@@ -4,8 +4,8 @@ pragma solidity >=0.8.10;
 // forgefmt: disable-start
 import { Test } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
-import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import { IVotes } from "openzeppelin-contracts/contracts/governance/utils/IVotes.sol";
+import { ERC20 } from "openzeppelin-contracts/token/ERC20/ERC20.sol";
+import { IVotes } from "openzeppelin-contracts/governance/utils/IVotes.sol";
 
 import { AaveOracle } from 'aave-v3-core/contracts/misc/AaveOracle.sol';
 import { AToken } from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
