@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.10;
 
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
-import "openzeppelin-contracts/contracts/utils/math/Math.sol";
+import "openzeppelin-contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/utils/math/Math.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
