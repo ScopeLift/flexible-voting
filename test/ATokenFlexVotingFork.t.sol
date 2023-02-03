@@ -1213,6 +1213,7 @@ contract CastVote is AaveAtokenForkTest {
       _vars.borrower // onBehalfOf
     );
     assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
+    govToken.delegate(_vars.borrower);
     vm.stopPrank();
 
     // Create the proposal.
@@ -1271,10 +1272,18 @@ contract CastVote is AaveAtokenForkTest {
       new bytes(0) // Vote nominally so that all of the borrower's weight is used.
     );
 
-    // The summed votes should not exceed the amount of Gov initially supplied.
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
-    assertGe(_initGovBalance, _againstVotes + _forVotes + _abstainVotes);
-    assertGe(_vars.voteWeightA + _vars.voteWeightB, _againstVotes + _forVotes + _abstainVotes);
+    // The summed votes should now ~equal the amount of Gov initially supplied,
+    // since the borrower also voted. There can be off-by-one errors because
+    // the aToken rounds vote weights down before casting, but the total voting
+    // weight expressed should be constrained by the amount of govToken injected into
+    // the system. This ensures there's no double counting possible.
+    assertApproxEqAbs(
+      _initGovBalance,
+      _againstVotes + _forVotes + _abstainVotes,
+      1,
+      "the number of votes cast does not match the amount of gov minted"
+    );
   }
 
   struct VotingWeightIsAbandonedVars {
