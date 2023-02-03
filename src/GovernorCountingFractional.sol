@@ -6,9 +6,9 @@ pragma solidity ^0.8.0;
 // Disabling forgefmt to stay consistent with OZ's style.
 // forgefmt: disable-start
 
-import "openzeppelin-contracts/governance/Governor.sol";
-import "openzeppelin-contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
-import "openzeppelin-contracts/utils/math/SafeCast.sol";
+import {Governor} from "openzeppelin-contracts/governance/Governor.sol";
+import {GovernorCompatibilityBravo} from "openzeppelin-contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
+import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 /**
  * @notice Extension of {Governor} for 3 option fractional vote counting. When voting, a delegate may split their vote
@@ -26,8 +26,17 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 abstainVotes;
     }
 
+    /**
+     * @dev Mapping from proposal ID to vote tallies for that proposal.
+     */
     mapping(uint256 => ProposalVote) private _proposalVotes;
-    mapping(uint256 => mapping(address => bool)) private _proposalVotersHasVoted;
+
+    /**
+     * @dev Mapping from proposal ID and address to the weight the address
+     * has cast on that proposal, e.g. _proposalVotersWeightCast[42][0xBEEF]
+     * would tell you the number of votes that 0xBEEF has cast on proposal 42.
+     */
+    mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -41,7 +50,7 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev See {IGovernor-hasVoted}.
      */
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
-        return _proposalVotersHasVoted[proposalId][account];
+        return _proposalVotersWeightCast[proposalId][account] > 0;
     }
 
     /**
@@ -57,8 +66,8 @@ abstract contract GovernorCountingFractional is Governor {
             uint256 abstainVotes
         )
     {
-        ProposalVote storage proposalvote = _proposalVotes[proposalId];
-        return (proposalvote.againstVotes, proposalvote.forVotes, proposalvote.abstainVotes);
+        ProposalVote storage proposalVote = _proposalVotes[proposalId];
+        return (proposalVote.againstVotes, proposalVote.forVotes, proposalVote.abstainVotes);
     }
 
     /**
@@ -98,13 +107,17 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 weight,
         bytes memory voteData
     ) internal virtual override {
-        require(!_proposalVotersHasVoted[proposalId][account], "GovernorCountingFractional: vote already cast");
-        _proposalVotersHasVoted[proposalId][account] = true;
+        require(weight > 0, "GovernorCountingFractional: no weight");
+        if (_proposalVotersWeightCast[proposalId][account] >= weight) {
+          revert("GovernorCountingFractional: all weight cast");
+        }
+
+        uint128 safeWeight = SafeCast.toUint128(weight);
 
         if (voteData.length == 0) {
-            _countVoteNominal(proposalId, support, weight);
+            _countVoteNominal(proposalId, account, safeWeight, support);
         } else {
-            _countVoteFractional(proposalId, weight, voteData);
+            _countVoteFractional(proposalId, account, safeWeight, voteData);
         }
     }
 
@@ -113,15 +126,23 @@ abstract contract GovernorCountingFractional is Governor {
      */
     function _countVoteNominal(
         uint256 proposalId,
-        uint8 support,
-        uint256 weight
+        address account,
+        uint128 weight,
+        uint8 support
     ) internal {
+        require(
+            _proposalVotersWeightCast[proposalId][account] == 0,
+            "GovernorCountingFractional: vote would exceed weight"
+        );
+
+        _proposalVotersWeightCast[proposalId][account] = weight;
+
         if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
-            _proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].againstVotes += weight;
         } else if (support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
-            _proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].forVotes += weight;
         } else if (support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
-            _proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
+            _proposalVotes[proposalId].abstainVotes += weight;
         } else {
             revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
         }
@@ -134,23 +155,28 @@ abstract contract GovernorCountingFractional is Governor {
      */
     function _countVoteFractional(
         uint256 proposalId,
-        uint256 weight,
+        address account,
+        uint128 weight,
         bytes memory voteData
     ) internal {
         require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
-        (uint128 forVotes, uint128 againstVotes, uint128 abstainVotes) = _decodePackedVotes(voteData);
+        (uint128 _forVotes, uint128 _againstVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
 
-        require(
-            uint256(forVotes) + againstVotes + abstainVotes <= uint128(weight),
-            "GovernorCountingFractional: votes exceed weight"
-        );
+        uint128 _existingWeight = _proposalVotersWeightCast[proposalId][account];
+        uint256 _newWeight = uint256(_forVotes) + _againstVotes + _abstainVotes + _existingWeight;
+
+        require(_newWeight <= weight, "GovernorCountingFractional: vote would exceed weight");
+
+        // It's safe to downcast here because we've just confirmed that
+        // _newWeight < weight, and we know that weight is <= uint128.max.
+        _proposalVotersWeightCast[proposalId][account] = uint128(_newWeight);
 
         ProposalVote memory _proposalVote = _proposalVotes[proposalId];
         _proposalVote = ProposalVote(
-            _proposalVote.againstVotes + againstVotes,
-            _proposalVote.forVotes + forVotes,
-            _proposalVote.abstainVotes + abstainVotes
+            _proposalVote.againstVotes + _againstVotes,
+            _proposalVote.forVotes + _forVotes,
+            _proposalVote.abstainVotes + _abstainVotes
         );
 
         _proposalVotes[proposalId] = _proposalVote;
