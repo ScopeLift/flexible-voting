@@ -23,9 +23,11 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 /// proposals. When they do so, this extension records that preference with weight proportional to
 /// the users's AToken balance at the proposal snapshot.
 ///
-/// When the proposal deadline nears, the AToken's public `castVote` function is called to roll up
-/// all internal voting records into a single delegated vote to the Governor contract -- a vote
-/// which specifies the exact For/Abstain/Against totals expressed by AToken holders.
+/// At any point after voting preferrences have been expressed, the AToken's public `castVote`
+/// function may be called to roll up all internal voting records into a single delegated vote to
+/// the Governor contract -- a vote which specifies the exact For/Abstain/Against totals expressed
+/// by AToken holders. Votes can be rolled up and cast in this manner multiple times for a given
+/// proposal.
 ///
 /// This extension has the following requirements:
 ///   (a) the underlying token be a governance token
@@ -68,7 +70,7 @@ contract ATokenFlexVoting is AToken {
   /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
   mapping(address => Checkpoints.History) private balanceCheckpoints;
 
-  /// @notice History of total underlying asset balance.
+  /// @notice History of total stored (not rebased) balances.
   Checkpoints.History private totalDepositCheckpoints;
 
   /// @dev Constructor.
@@ -186,9 +188,9 @@ contract ATokenFlexVoting is AToken {
   }
 
   /// @notice Causes this contract to cast a vote to the Governor for all of the
-  /// accumulated votes expressed by users. Uses the sum of all depositor voting
-  /// expressions to decide how to split its voting weight. Can be called by
-  /// anyone.
+  /// accumulated votes expressed by users. Uses the sum of all raw (unrebased) balances
+  /// to proportion and split its voting weight. Can be called by anyone. Can be called
+  /// multiple times during the lifecycle of a given proposal.
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
@@ -198,11 +200,22 @@ contract ATokenFlexVoting is AToken {
     );
     uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
-    // Use the snapshot of total raw balances to determine total voting weight.
-    // We cannot use the proposalVote numbers alone, since some people with
-    // balances at the snapshot might not have expressed votes. We don't want to
-    // make it possible for aToken holders to *increase* their voting power when
-    // other people don't express their votes. That'd be a terrible incentive.
+    // We use the snapshot of total raw balances to determine the weight with
+    // which to vote. We do this for two reasons:
+    //   (1) We cannot use the proposalVote numbers alone, since some people with
+    //       balances at the snapshot might never express their preferences. If a
+    //       large holder never expressed a preference, but this contract nevertheless
+    //       cast votes to the governor with all of its weight, then other users would
+    //       effectively have *increased* their voting weight because someone else
+    //       didn't participate, which creates all kinds of bad incentives.
+    //   (2) Other people might have already expressed their preferences on this
+    //       proposal and had those preferences submitted to the governor by an
+    //       earlier call to this function. The weight of those preferences
+    //       should still be taken into consideration when determining how much
+    //       weight to vote with this time.
+    // Using the total raw balance to proportion votes in this way means that in
+    // many circumstances this function will not cast votes with all of its
+    // weight.
     uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
