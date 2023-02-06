@@ -192,6 +192,10 @@ contract ATokenFlexVoting is AToken {
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
+    require(
+      _proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes > 0,
+      "no votes expressed"
+    );
     uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
     // Use the snapshot of total raw balances to determine total voting weight.

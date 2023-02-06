@@ -583,30 +583,6 @@ contract CastVote is AaveAtokenForkTest {
     );
   }
 
-  function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAgainst() public {
-    _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
-      0.000001 ether,
-      uint8(VoteType.Against)
-    );
-  }
-
-  function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingFor() public {
-    _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
-      0.000001 ether,
-      uint8(VoteType.For)
-    );
-  }
-
-  function test_UserCannotMakeThePoolCastVotesImmediatelyAfterVotingAbstain() public {
-    _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
-      makeAddr("UserCannotMakeThePoolCastVotesImmediatelyAfterVoting address"),
-      0.000001 ether,
-      uint8(VoteType.Abstain)
-    );
-  }
-
   function test_VoteWeightIsScaledBasedOnPoolBalanceAgainstFor() public {
     _testVoteWeightIsScaledBasedOnPoolBalance(
       VoteWeightIsScaledVars(
@@ -805,30 +781,6 @@ contract CastVote is AaveAtokenForkTest {
     );
   }
 
-  function test_CannotExpressAgainstVoteAfterVotesHaveBeenCast() public {
-    _testCannotExpressVoteAfterVotesHaveBeenCast(
-      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #1"),
-      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #1"),
-      uint8(VoteType.Against) // supportType
-    );
-  }
-
-  function test_CannotExpressForVoteAfterVotesHaveBeenCast() public {
-    _testCannotExpressVoteAfterVotesHaveBeenCast(
-      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #2"),
-      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #2"),
-      uint8(VoteType.For) // supportType
-    );
-  }
-
-  function test_CannotExpressAbstainVoteAfterVotesHaveBeenCast() public {
-    _testCannotExpressVoteAfterVotesHaveBeenCast(
-      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userA #3"),
-      makeAddr("CannotExpressVoteAfterVotesHaveBeenCast userB #3"),
-      uint8(VoteType.Abstain) // supportType
-    );
-  }
-
   function test_CannotCastVoteWithoutVotesExpressed() public {
     _testCannotCastVoteWithoutVotesExpressed(
       makeAddr("CannotCastVoteWithoutVotesExpressed who"),
@@ -968,9 +920,6 @@ contract CastVote is AaveAtokenForkTest {
     assertEq(_againstVotes, 0);
     assertEq(_abstainVotes, 0);
 
-    // Wait until after the voting period
-    // TODO set up a random wait period??
-
     // submit votes on behalf of the pool
     aToken.castVote(_proposalId);
 
@@ -1048,6 +997,9 @@ contract CastVote is AaveAtokenForkTest {
     // Deposit some funds.
     _mintGovAndSupplyToAave(_who, _voteWeight);
 
+    // Have someone else deposit as well so that _who isn't the only one.
+    _mintGovAndSupplyToAave(makeAddr("testUserCannotCastVotesTwice"), _voteWeight);
+
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
@@ -1055,14 +1007,11 @@ contract CastVote is AaveAtokenForkTest {
     vm.prank(_who);
     aToken.expressVote(_proposalId, _supportType);
 
-    // Wait until after the voting period.
-    // TODO set up a random wait period??
-
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
     // Try to submit them again.
-    vm.expectRevert(bytes("GovernorCountingFractional: all weight cast"));
+    vm.expectRevert("no votes expressed");
     aToken.castVote(_proposalId);
   }
 
@@ -1152,9 +1101,6 @@ contract CastVote is AaveAtokenForkTest {
     assertEq(_againstVotes, 0);
     assertEq(_abstainVotes, 0);
 
-    // Wait until after the voting period.
-    // TODO set up a random wait period??
-
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
@@ -1165,7 +1111,7 @@ contract CastVote is AaveAtokenForkTest {
     assertEq(_abstainVotes, _voteWeightB);
   }
 
-  function _testUserCannotMakeThePoolCastVotesImmediatelyAfterVoting(
+  function _testUserCanMakeThePoolCastVotesImmediatelyAfterVoting(
     address _who,
     uint256 _voteWeight,
     uint8 _supportType
@@ -1181,8 +1127,6 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
 
     // Try to submit votes on behalf of the pool.
-    // TODO this is fine now
-    // vm.expectRevert(bytes("cannot castVote during internal voting period"));
     aToken.castVote(_proposalId);
   }
 
@@ -1236,9 +1180,6 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _vars.supportTypeA);
     vm.prank(_vars.voterB);
     aToken.expressVote(_proposalId, _vars.supportTypeB);
-
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1350,9 +1291,6 @@ contract CastVote is AaveAtokenForkTest {
     vm.prank(_vars.voterA);
     aToken.expressVote(_proposalId, _vars.supportTypeA);
 
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
-
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
@@ -1416,9 +1354,6 @@ contract CastVote is AaveAtokenForkTest {
     vm.prank(_voterA);
     aToken.expressVote(_proposalId, _supportTypeA);
 
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
-
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
@@ -1455,9 +1390,6 @@ contract CastVote is AaveAtokenForkTest {
     // Express voting preference.
     vm.prank(_who);
     aToken.expressVote(_proposalId, _supportType);
-
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
@@ -1502,9 +1434,6 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportType);
     if (_withdrawAmount == type(uint256).max) return; // Nothing left to test.
 
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
-
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
@@ -1548,9 +1477,6 @@ contract CastVote is AaveAtokenForkTest {
     vm.prank(_userB);
     aToken.expressVote(_proposalId, uint8(VoteType.Against));
 
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
-
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
 
@@ -1561,7 +1487,7 @@ contract CastVote is AaveAtokenForkTest {
     assertGt(_forVotes, _againstVotes, "rebasing isn't reflected in vote weight");
   }
 
-  function _testCannotExpressVoteAfterVotesHaveBeenCast(
+  function _testCanExpressVoteAfterVotesHaveBeenCast(
     address _userA,
     address _userB,
     uint8 _supportType
@@ -1577,16 +1503,11 @@ contract CastVote is AaveAtokenForkTest {
     vm.prank(_userA);
     aToken.expressVote(_proposalId, _supportType);
 
-    // Wait until after the voting period
-    // TODO set up a random wait period??
-
     // submit votes on behalf of the pool
     aToken.castVote(_proposalId);
 
-    // _userB should not be able to express his/her vote on the proposal since the
-    // vote was cast.
-    // TODO this isn't going to revert anymore
-    // vm.expectRevert(bytes("too late to express, votes already cast"));
+    // _userB should be able to express his/her vote on the proposal even though
+    // the vote was cast.
     vm.prank(_userB);
     aToken.expressVote(_proposalId, _supportType);
   }
@@ -1598,12 +1519,8 @@ contract CastVote is AaveAtokenForkTest {
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
-    // Wait until after the voting period
-    // TODO set up a random wait period??
-
     // Try to submit votes on behalf of the pool. It should fail.
-    // TODO this isn't going to fail anymore
-    // vm.expectRevert(bytes("no votes expressed"));
+    vm.expectRevert(bytes("no votes expressed"));
     aToken.castVote(_proposalId);
 
     // Express voting preference on the proposal.
@@ -1642,9 +1559,6 @@ contract CastVote is AaveAtokenForkTest {
     aToken.expressVote(_proposalId, _supportTypeA);
     vm.prank(_userB);
     aToken.expressVote(_proposalId, _supportTypeB);
-
-    // Wait until after the pool's voting period closes.
-    // TODO set up a random wait period??
 
     // Submit votes on behalf of the pool.
     aToken.castVote(_proposalId);
