@@ -1616,6 +1616,11 @@ contract CastVote is AaveAtokenForkTest {
     if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightA);
     if (_supportTypeA != uint8(VoteType.Abstain)) assertEq(_abstainVotes, 0);
 
+    // UserA should not be able to express votes again.
+    vm.prank(_userA);
+    vm.expectRevert("already voted");
+    aToken.expressVote(_proposalId, _supportTypeA);
+
     // UserB expresses a voting preference on the proposal.
     vm.prank(_userB);
     aToken.expressVote(_proposalId, _supportTypeB);
