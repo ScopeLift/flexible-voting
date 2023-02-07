@@ -818,12 +818,30 @@ contract CastVote is AaveAtokenForkTest {
     );
   }
 
-  function test_VotesCanBeCastIncrementally() public {
+  function test_VotesCanBeCastIncrementally1() public {
     _testVotesCanBeCastIncrementally(
       makeAddr("test_VotesCanBeCastIncrementally userA #1"),
       makeAddr("test_VotesCanBeCastIncrementally userB #1"),
       uint8(VoteType.For), // supportTypeA
       uint8(VoteType.Abstain) // supportTypeB
+    );
+  }
+
+  function test_VotesCanBeCastIncrementally2() public {
+    _testVotesCanBeCastIncrementally(
+      makeAddr("test_VotesCanBeCastIncrementally userA #2"),
+      makeAddr("test_VotesCanBeCastIncrementally userB #2"),
+      uint8(VoteType.For), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
+    );
+  }
+
+  function test_VotesCanBeCastIncrementally3() public {
+    _testVotesCanBeCastIncrementally(
+      makeAddr("test_VotesCanBeCastIncrementally userA #3"),
+      makeAddr("test_VotesCanBeCastIncrementally userB #3"),
+      uint8(VoteType.Against), // supportTypeA
+      uint8(VoteType.For) // supportTypeB
     );
   }
 
@@ -1582,13 +1600,13 @@ contract CastVote is AaveAtokenForkTest {
     }
   }
 
+  // TODO this should really just be a fuzz test.
   function _testVotesCanBeCastIncrementally(
     address _userA,
     address _userB,
     uint8 _supportTypeA,
     uint8 _supportTypeB
   ) private {
-    require(_supportTypeA != _supportTypeB, "This test assumes the support types are different");
     uint256 _weightA = 1 ether;
     uint256 _weightB = 3 ether;
 
@@ -1609,12 +1627,17 @@ contract CastVote is AaveAtokenForkTest {
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       governor.proposalVotes(_proposalId);
 
-    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weightA);
-    if (_supportTypeA != uint8(VoteType.For)) assertEq(_forVotes, 0);
-    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weightA);
-    if (_supportTypeA != uint8(VoteType.Against)) assertEq(_againstVotes, 0);
-    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightA);
-    if (_supportTypeA != uint8(VoteType.Abstain)) assertEq(_abstainVotes, 0);
+    uint256 _expectedForVotes;
+    uint256 _expectedAgainstVotes;
+    uint256 _expectedAbstainVotes;
+
+    if (_supportTypeA == uint256(VoteType.For)) _expectedForVotes += _weightA;
+    if (_supportTypeA == uint256(VoteType.Against)) _expectedAgainstVotes += _weightA;
+    if (_supportTypeA == uint256(VoteType.Abstain)) _expectedAbstainVotes += _weightA;
+
+    assertEq(_forVotes, _expectedForVotes);
+    assertEq(_againstVotes, _expectedAgainstVotes);
+    assertEq(_abstainVotes, _expectedAbstainVotes);
 
     // UserA should not be able to express votes again.
     vm.prank(_userA);
@@ -1630,12 +1653,13 @@ contract CastVote is AaveAtokenForkTest {
 
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
 
-    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _weightA);
-    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _weightA);
-    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightA);
-    if (_supportTypeB == uint8(VoteType.For)) assertEq(_forVotes, _weightB);
-    if (_supportTypeB == uint8(VoteType.Against)) assertEq(_againstVotes, _weightB);
-    if (_supportTypeB == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _weightB);
+    if (_supportTypeB == uint256(VoteType.For)) _expectedForVotes += _weightB;
+    if (_supportTypeB == uint256(VoteType.Against)) _expectedAgainstVotes += _weightB;
+    if (_supportTypeB == uint256(VoteType.Abstain)) _expectedAbstainVotes += _weightB;
+
+    assertEq(_forVotes, _expectedForVotes);
+    assertEq(_againstVotes, _expectedAgainstVotes);
+    assertEq(_abstainVotes, _expectedAbstainVotes);
   }
 }
 
