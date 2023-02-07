@@ -23,7 +23,7 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 /// proposals. When they do so, this extension records that preference with weight proportional to
 /// the users's AToken balance at the proposal snapshot.
 ///
-/// At any point after voting preferrences have been expressed, the AToken's public `castVote`
+/// At any point after voting preferences have been expressed, the AToken's public `castVote`
 /// function may be called to roll up all internal voting records into a single delegated vote to
 /// the Governor contract -- a vote which specifies the exact For/Abstain/Against totals expressed
 /// by AToken holders. Votes can be rolled up and cast in this manner multiple times for a given
@@ -189,7 +189,7 @@ contract ATokenFlexVoting is AToken {
 
   /// @notice Causes this contract to cast a vote to the Governor for all of the
   /// accumulated votes expressed by users. Uses the sum of all raw (unrebased) balances
-  /// to proportion and split its voting weight. Can be called by anyone. Can be called
+  /// to proportionally split its voting weight. Can be called by anyone. Can be called
   /// multiple times during the lifecycle of a given proposal.
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
@@ -205,7 +205,7 @@ contract ATokenFlexVoting is AToken {
     //   (1) We cannot use the proposalVote numbers alone, since some people with
     //       balances at the snapshot might never express their preferences. If a
     //       large holder never expressed a preference, but this contract nevertheless
-    //       cast votes to the governor with all of its weight, then other users would
+    //       cast votes to the governor with all of its weight, then other users may
     //       effectively have *increased* their voting weight because someone else
     //       didn't participate, which creates all kinds of bad incentives.
     //   (2) Other people might have already expressed their preferences on this
