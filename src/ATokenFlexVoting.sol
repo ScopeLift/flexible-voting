@@ -23,9 +23,11 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 /// proposals. When they do so, this extension records that preference with weight proportional to
 /// the users's AToken balance at the proposal snapshot.
 ///
-/// When the proposal deadline nears, the AToken's public `castVote` function is called to roll up
-/// all internal voting records into a single delegated vote to the Governor contract -- a vote
-/// which specifies the exact For/Abstain/Against totals expressed by AToken holders.
+/// At any point after voting preferences have been expressed, the AToken's public `castVote`
+/// function may be called to roll up all internal voting records into a single delegated vote to
+/// the Governor contract -- a vote which specifies the exact For/Abstain/Against totals expressed
+/// by AToken holders. Votes can be rolled up and cast in this manner multiple times for a given
+/// proposal.
 ///
 /// This extension has the following requirements:
 ///   (a) the underlying token be a governance token
@@ -55,17 +57,8 @@ contract ATokenFlexVoting is AToken {
     uint128 abstainVotes;
   }
 
-  /// @notice The number of blocks prior to the proposal deadline within which
-  /// `castVote` may be called. Prior to this window, `castVote` will revert so
-  /// as to give users time to call `expressVote` before votes are sent to the
-  /// governor contract.
-  uint32 public immutable CAST_VOTE_WINDOW;
-
   /// @notice Map proposalId to an address to whether they have voted on this proposal.
   mapping(uint256 => mapping(address => bool)) private proposalVotersHasVoted;
-
-  /// @notice Map proposalId to whether or not this contract has cast votes on it.
-  mapping(uint256 => bool) public hasCastVotesOnProposal;
 
   /// @notice Map proposalId to vote totals expressed on this proposal.
   mapping(uint256 => ProposalVote) public proposalVotes;
@@ -77,17 +70,14 @@ contract ATokenFlexVoting is AToken {
   /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
   mapping(address => Checkpoints.History) private balanceCheckpoints;
 
-  /// @notice History of total underlying asset balance.
+  /// @notice History of total stored (not rebased) balances.
   Checkpoints.History private totalDepositCheckpoints;
 
   /// @dev Constructor.
   /// @param _pool The address of the Pool contract
   /// @param _governor The address of the flex-voting-compatible governance contract.
-  /// @param _castVoteWindow The number of blocks that users have to express
-  /// their votes on a proposal before votes can be cast.
-  constructor(IPool _pool, address _governor, uint32 _castVoteWindow) AToken(_pool) {
+  constructor(IPool _pool, address _governor) AToken(_pool) {
     GOVERNOR = IFractionalGovernor(_governor);
-    CAST_VOTE_WINDOW = _castVoteWindow;
   }
 
   // forgefmt: disable-start
@@ -174,29 +164,12 @@ contract ATokenFlexVoting is AToken {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
 
-  /// @notice Method which returns the deadline (as a block number) by which
-  /// depositors must express their voting preferences to this Pool contract. It
-  /// will always be before the Governor's corresponding proposal deadline. The
-  /// deadline is exclusive, meaning: if this returns (say) block 424242, then the
-  /// internal voting period will be over on block 424242. The last block for
-  /// internal voting will be 424241.
-  /// @param proposalId The ID of the proposal in question.
-  function internalVotingPeriodEnd(uint256 proposalId)
-    public
-    view
-    returns (uint256 _lastVotingBlock)
-  {
-    _lastVotingBlock = GOVERNOR.proposalDeadline(proposalId) - CAST_VOTE_WINDOW;
-  }
-
   /// @notice Allow a depositor to express their voting preference for a given
   /// proposal. Their preference is recorded internally but not moved to the
-  /// Governor until `castVote` is called. We deliberately do NOT revert if the
-  /// internalVotingPeriodEnd has passed.
+  /// Governor until `castVote` is called.
   /// @param proposalId The proposalId in the associated Governor
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
-    require(!hasCastVotesOnProposal[proposalId], "too late to express, votes already cast");
     uint256 weight = getPastStoredBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
@@ -214,32 +187,35 @@ contract ATokenFlexVoting is AToken {
     }
   }
 
-  /// @notice Causes this contract to cast a vote to the Governor for all the
-  /// tokens it currently holds. Uses the sum of all depositor voting
-  /// expressions to decide how to split its voting weight. Can be called by
-  /// anyone, but _must_ be called within `CAST_VOTE_WINDOW` blocks before the
-  /// proposal deadline. We don't bother to check if the vote has already been
-  /// cast -- GovernorCountingFractional will revert if it has.
+  /// @notice Causes this contract to cast a vote to the Governor for all of the
+  /// accumulated votes expressed by users. Uses the sum of all raw (unrebased) balances
+  /// to proportionally split its voting weight. Can be called by anyone. Can be called
+  /// multiple times during the lifecycle of a given proposal.
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
-    require(
-      internalVotingPeriodEnd(proposalId) <= block.number,
-      "cannot castVote during internal voting period"
-    );
-
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
     require(
       _proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes > 0,
       "no votes expressed"
     );
-
     uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
-    // Use the snapshot of total raw balances to determine total voting weight.
-    // We cannot use the proposalVote numbers alone, since some people with
-    // balances at the snapshot might not have expressed votes. We don't want to
-    // make it possible for aToken holders to *increase* their voting power when
-    // other people don't express their votes. That'd be a terrible incentive.
+    // We use the snapshot of total raw balances to determine the weight with
+    // which to vote. We do this for two reasons:
+    //   (1) We cannot use the proposalVote numbers alone, since some people with
+    //       balances at the snapshot might never express their preferences. If a
+    //       large holder never expressed a preference, but this contract nevertheless
+    //       cast votes to the governor with all of its weight, then other users may
+    //       effectively have *increased* their voting weight because someone else
+    //       didn't participate, which creates all kinds of bad incentives.
+    //   (2) Other people might have already expressed their preferences on this
+    //       proposal and had those preferences submitted to the governor by an
+    //       earlier call to this function. The weight of those preferences
+    //       should still be taken into consideration when determining how much
+    //       weight to vote with this time.
+    // Using the total raw balance to proportion votes in this way means that in
+    // many circumstances this function will not cast votes with all of its
+    // weight.
     uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshotBlockNumber);
 
     // We need 256 bits because of the multiplication we're about to do.
@@ -266,7 +242,9 @@ contract ATokenFlexVoting is AToken {
     // weights. It makes no difference what vote type this is.
     uint8 unusedSupportParam = uint8(VoteType.Abstain);
 
-    hasCastVotesOnProposal[proposalId] = true;
+    // Clear the stored votes so that we don't double-cast them.
+    delete proposalVotes[proposalId];
+
     bytes memory fractionalizedVotes =
       abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(
