@@ -12,7 +12,7 @@ import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 /**
  * @notice Extension of {Governor} for 3 option fractional vote counting. When voting, a delegate may split their vote
- * weight between For/Against/Abstain. This is most useful when the delegate is itself a contract, implementing its own
+ * weight between Against/For/Abstain. This is most useful when the delegate is itself a contract, implementing its own
  * rules for voting. By allowing a contract-delegate to split its vote weight, the voting preferences of many disparate
  * token holders can be rolled up into a single vote to the Governor itself. Some example use cases include voting with
  * tokens that are held by a DeFi pool, voting from L2 with tokens held by a bridge, or voting privately from a
@@ -96,8 +96,8 @@ abstract contract GovernorCountingFractional is Governor {
      * which follows the `VoteType` enum from Governor Bravo.
      *
      * If the `voteData` bytes parameter is not zero, then it _must_ be three packed uint128s, totaling 48 bytes,
-     * representing the weight the delegate assigns to For, Against, and Abstain respectively, i.e.
-     * encodePacked(forVotes, againstVotes, abstainVotes). The sum total of the three decoded vote weights _must_ be
+     * representing the weight the delegate assigns to Against, For, and Abstain respectively, i.e.
+     * encodePacked(againstVotes, forVotes, abstainVotes). The sum total of the three decoded vote weights _must_ be
      * less than or equal to the delegate's total weight as check-pointed for the proposal being voted on.
      */
     function _countVote(
@@ -151,7 +151,7 @@ abstract contract GovernorCountingFractional is Governor {
     /**
      * @dev Count votes with fractional weight.
      *
-     * We expect `voteData` to be three packed uint128s, i.e. encodePacked(forVotes, againstVotes, abstainVotes)
+     * We expect `voteData` to be three packed uint128s, i.e. encodePacked(againstVotes, forVotes, abstainVotes)
      */
     function _countVoteFractional(
         uint256 proposalId,
@@ -161,10 +161,10 @@ abstract contract GovernorCountingFractional is Governor {
     ) internal {
         require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
 
-        (uint128 _forVotes, uint128 _againstVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
+        (uint128 _againstVotes, uint128 _forVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
 
         uint128 _existingWeight = _proposalVotersWeightCast[proposalId][account];
-        uint256 _newWeight = uint256(_forVotes) + _againstVotes + _abstainVotes + _existingWeight;
+        uint256 _newWeight = uint256(_againstVotes) + _forVotes + _abstainVotes + _existingWeight;
 
         require(_newWeight <= weight, "GovernorCountingFractional: vote would exceed weight");
 
@@ -192,14 +192,14 @@ abstract contract GovernorCountingFractional is Governor {
         internal
         pure
         returns (
-            uint128 forVotes,
             uint128 againstVotes,
+            uint128 forVotes,
             uint128 abstainVotes
         )
     {
         assembly {
-            forVotes := shr(128, mload(add(voteData, 0x20)))
-            againstVotes := and(_VOTEMASK, mload(add(voteData, 0x20)))
+            againstVotes := shr(128, mload(add(voteData, 0x20)))
+            forVotes := and(_VOTEMASK, mload(add(voteData, 0x20)))
             abstainVotes := shr(128, mload(add(voteData, 0x40)))
         }
     }
