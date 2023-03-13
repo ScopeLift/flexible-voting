@@ -279,8 +279,8 @@ contract GovernorCountingFractionalTest is Test {
 
     if (_isVotingFractionally(voteSplit)) {
       fractionalizedVotes = abi.encodePacked(
-        uint128(_voter.weight.mulWadDown(voteSplit.percentFor)),
         uint128(_voter.weight.mulWadDown(voteSplit.percentAgainst)),
+        uint128(_voter.weight.mulWadDown(voteSplit.percentFor)),
         uint128(_voter.weight.mulWadDown(voteSplit.percentAbstain))
       );
       vm.expectEmit(true, true, true, true);
@@ -431,7 +431,7 @@ contract GovernorCountingFractionalTest is Test {
     uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
     uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
     uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
-    bytes memory _fractionalizedVotes = abi.encodePacked(_forVotes, _againstVotes, _abstainVotes);
+    bytes memory _fractionalizedVotes = abi.encodePacked(_againstVotes, _forVotes, _abstainVotes);
 
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
@@ -560,8 +560,8 @@ contract GovernorCountingFractionalTest is Test {
     bytes memory fractionalizedVotes;
 
     fractionalizedVotes = abi.encodePacked(
-      uint128(voter.weight.mulWadDown(voteSplit.percentFor)),
       uint128(voter.weight.mulWadDown(voteSplit.percentAgainst)),
+      uint128(voter.weight.mulWadDown(voteSplit.percentFor)),
       uint128(voter.weight.mulWadDown(voteSplit.percentAbstain))
     );
 
@@ -611,7 +611,7 @@ contract GovernorCountingFractionalTest is Test {
     if (voteTypeToOverflow[1]) _againstVotes = voter.weight;
     if (voteTypeToOverflow[2]) _abstainVotes = voter.weight;
 
-    bytes memory fractionalizedVotes = abi.encodePacked(_forVotes, _againstVotes, _abstainVotes);
+    bytes memory fractionalizedVotes = abi.encodePacked(_againstVotes, _forVotes, _abstainVotes);
     vm.prank(voter.addr);
     vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", fractionalizedVotes);
@@ -695,8 +695,8 @@ contract GovernorCountingFractionalTest is Test {
 
     // Cast votes.
     bytes memory fractionalizedVotes = abi.encodePacked(
-      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor)),
       uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst)),
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor)),
       uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain))
     );
     vm.prank(_voter.addr);
@@ -739,7 +739,7 @@ contract GovernorCountingFractionalTest is Test {
     assertGt(_voter.weight - _forVotes - _againstVotes, _abstainVotes);
 
     // Cast votes.
-    bytes memory fractionalizedVotes = abi.encodePacked(_forVotes, _againstVotes, _abstainVotes);
+    bytes memory fractionalizedVotes = abi.encodePacked(_againstVotes, _forVotes, _abstainVotes);
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(
       _proposalId, _voter.support, "Lobster", fractionalizedVotes
@@ -806,7 +806,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 1st vote",
-      abi.encodePacked(_firstVote.forVotes, _firstVote.againstVotes, _firstVote.abstainVotes)
+      abi.encodePacked(_firstVote.againstVotes, _firstVote.forVotes, _firstVote.abstainVotes)
     );
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
@@ -832,7 +832,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 2nd vote",
-      abi.encodePacked(_secondVote.forVotes, _secondVote.againstVotes, _secondVote.abstainVotes)
+      abi.encodePacked(_secondVote.againstVotes, _secondVote.forVotes, _secondVote.abstainVotes)
     );
 
     (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
@@ -858,7 +858,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 3rd vote",
-      abi.encodePacked(_thirdVote.forVotes, _thirdVote.againstVotes, _thirdVote.abstainVotes)
+      abi.encodePacked(_thirdVote.againstVotes, _thirdVote.forVotes, _thirdVote.abstainVotes)
     );
 
     (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
@@ -914,7 +914,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 1st vote",
-      abi.encodePacked(_firstVote.forVotes, _firstVote.againstVotes, _firstVote.abstainVotes)
+      abi.encodePacked(_firstVote.againstVotes, _firstVote.forVotes, _firstVote.abstainVotes)
     );
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
@@ -937,7 +937,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 2nd vote",
-      abi.encodePacked(_secondVote.forVotes, _secondVote.againstVotes, _secondVote.abstainVotes)
+      abi.encodePacked(_secondVote.againstVotes, _secondVote.forVotes, _secondVote.abstainVotes)
     );
 
     (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
@@ -960,7 +960,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 3rd vote",
-      abi.encodePacked(_thirdVote.forVotes, _thirdVote.againstVotes, _thirdVote.abstainVotes)
+      abi.encodePacked(_thirdVote.againstVotes, _thirdVote.forVotes, _thirdVote.abstainVotes)
     );
 
     (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
@@ -1017,7 +1017,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 1st vote",
-      abi.encodePacked(_voteData.forVotes, _voteData.againstVotes, _voteData.abstainVotes)
+      abi.encodePacked(_voteData.againstVotes, _voteData.forVotes, _voteData.abstainVotes)
     );
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
@@ -1033,7 +1033,7 @@ contract GovernorCountingFractionalTest is Test {
       _proposalId,
       _voter.support,
       "My 2nd vote",
-      abi.encodePacked(_voteData.forVotes, _voteData.againstVotes, _voteData.abstainVotes)
+      abi.encodePacked(_voteData.againstVotes, _voteData.forVotes, _voteData.abstainVotes)
     );
   }
 
@@ -1083,8 +1083,8 @@ contract GovernorCountingFractionalTest is Test {
     // Build data for both types of vote.
     bytes memory _nominalVoteData;
     bytes memory _fractionalizedVoteData = abi.encodePacked(
-      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor)), // forVotes
       uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst)), // againstVotes
+      uint128(_voter.weight.mulWadDown(_voteSplit.percentFor)), // forVotes
       uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain)) // abstainVotes
     );
 
