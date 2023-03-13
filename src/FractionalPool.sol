@@ -152,7 +152,7 @@ contract FractionalPool {
     );
 
     bytes memory fractionalizedVotes =
-      abi.encodePacked(_forVotesToCast, _againstVotesToCast, _abstainVotesToCast);
+      abi.encodePacked(_againstVotesToCast, _forVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(
       proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
     );
