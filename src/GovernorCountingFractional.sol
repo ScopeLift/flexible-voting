@@ -11,12 +11,15 @@ import {GovernorCompatibilityBravo} from "openzeppelin-contracts/governance/comp
 import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 /**
- * @notice Extension of {Governor} for 3 option fractional vote counting. When voting, a delegate may split their vote
- * weight between Against/For/Abstain. This is most useful when the delegate is itself a contract, implementing its own
- * rules for voting. By allowing a contract-delegate to split its vote weight, the voting preferences of many disparate
- * token holders can be rolled up into a single vote to the Governor itself. Some example use cases include voting with
- * tokens that are held by a DeFi pool, voting from L2 with tokens held by a bridge, or voting privately from a
- * shielded pool using zero knowledge proofs.
+ * @notice Extension of {Governor} for 3 option fractional vote counting. When
+ * voting, a delegate may split their vote weight between Against/For/Abstain.
+ * This is most useful when the delegate is itself a contract, implementing its
+ * own rules for voting. By allowing a contract-delegate to split its vote
+ * weight, the voting preferences of many disparate token holders can be rolled
+ * up into a single vote to the Governor itself. Some example use cases include
+ * voting with tokens that are held by a DeFi pool, voting from L2 with tokens
+ * held by a bridge, or voting privately from a shielded pool using zero
+ * knowledge proofs.
  */
 abstract contract GovernorCountingFractional is Governor {
 
@@ -91,14 +94,19 @@ abstract contract GovernorCountingFractional is Governor {
     /**
      * @notice See {Governor-_countVote}.
      *
-     * If the `voteData` bytes parameter is empty, then this module behaves
-     * identically to GovernorBravo. That is, it assigns the full weight of the delegate to the `support` parameter,
-     * which follows the `VoteType` enum from Governor Bravo.
+     * @dev If the `voteData` bytes parameter is empty, then this module behaves
+     * identically to GovernorBravo. That is, it assigns the full weight of the
+     * delegate to the `support` parameter, which follows the `VoteType` enum
+     * from Governor Bravo.
      *
-     * If the `voteData` bytes parameter is not zero, then it _must_ be three packed uint128s, totaling 48 bytes,
-     * representing the weight the delegate assigns to Against, For, and Abstain respectively, i.e.
-     * encodePacked(againstVotes, forVotes, abstainVotes). The sum total of the three decoded vote weights _must_ be
-     * less than or equal to the delegate's total weight as check-pointed for the proposal being voted on.
+     * If the `voteData` bytes parameter is not zero, then it _must_ be three
+     * packed uint128s, totaling 48 bytes, representing the weight the delegate
+     * assigns to Against, For, and Abstain respectively, i.e.
+     * encodePacked(againstVotes, forVotes, abstainVotes). The sum total of
+     * the three decoded vote weights _must_ be less than or equal to the
+     * delegate's total weight as checkpointed by the proposal being voted on.
+     *
+     * See `_countVoteNominal` and `_countVoteFractional` for more details.
      */
     function _countVote(
         uint256 proposalId,
@@ -122,7 +130,8 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Count votes with full weight
+     * @dev Record votes with full weight cast for `support`. Reverts if partial
+     * votes have already been cast with _countVoteFractional.
      */
     function _countVoteNominal(
         uint256 proposalId,
@@ -151,7 +160,23 @@ abstract contract GovernorCountingFractional is Governor {
     /**
      * @dev Count votes with fractional weight.
      *
-     * We expect `voteData` to be three packed uint128s, i.e. encodePacked(againstVotes, forVotes, abstainVotes)
+     * `voteData` is expected to be three packed uint128s, i.e.
+     * encodePacked(againstVotes, forVotes, abstainVotes).
+     *
+     * This function can be called multiple times for the same account and
+     * proposal, i.e. partial/rolling votes are allowed. For example, an account
+     * with total weight of 10 could call this function three times with the
+     * following vote data:
+     *   - against: 1, for: 0, abstain: 2
+     *   - against: 3, for: 1, abstain: 0
+     *   - against: 1, for: 1, abstain: 1
+     * The result of these three calls would be that the account casts 5 votes
+     * AGAINST, 2 votes FOR, and 3 votes ABSTAIN on the proposal. Though
+     * partial, votes are still final once cast and cannot be changed or
+     * overidden. Subsequent partial votes simply add to existing totals.
+     *
+     * Note that if partial votes are cast, all remaining weight must be cast
+     * with _countVoteFractional: _countVoteNominal will revert.
      */
     function _countVoteFractional(
         uint256 proposalId,
@@ -185,8 +210,9 @@ abstract contract GovernorCountingFractional is Governor {
     uint256 constant internal _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
 
     /**
-     * @dev Decodes three packed uint128's. Uses assembly because of Solidity language limitation which prevents
-     * slicing bytes stored in memory, rather than calldata.
+     * @dev Decodes three packed uint128's. Uses assembly because of Solidity
+     * language limitation which prevents slicing bytes stored in memory, rather
+     * than calldata.
      */
     function _decodePackedVotes(bytes memory voteData)
         internal
