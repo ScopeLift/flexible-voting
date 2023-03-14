@@ -756,8 +756,7 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_againstVotes, _actualAgainstVotes);
     assertEq(_abstainVotes, _actualAbstainVotes);
     assertEq(
-      governor.voteWeightCast(_proposalId, _voter.addr),
-      _forVotes + _againstVotes + _abstainVotes
+      governor.voteWeightCast(_proposalId, _voter.addr), _forVotes + _againstVotes + _abstainVotes
     );
   }
 
@@ -856,8 +855,8 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes, _actualAbstainVotes);
     assertEq(
       governor.voteWeightCast(_proposalId, _voter.addr),
-      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes +
-      _secondVote.againstVotes + _secondVote.forVotes + _secondVote.abstainVotes
+      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes
+        + _secondVote.againstVotes + _secondVote.forVotes + _secondVote.abstainVotes
     );
 
     // If the entire weight was cast; further votes are not possible.
@@ -893,9 +892,9 @@ contract GovernorCountingFractionalTest is Test {
     );
     assertEq(
       governor.voteWeightCast(_proposalId, _voter.addr),
-      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes +
-      _secondVote.againstVotes + _secondVote.forVotes + _secondVote.abstainVotes +
-      _thirdVote.againstVotes + _thirdVote.forVotes + _thirdVote.abstainVotes
+      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes
+        + _secondVote.againstVotes + _secondVote.forVotes + _secondVote.abstainVotes
+        + _thirdVote.againstVotes + _thirdVote.forVotes + _thirdVote.abstainVotes
     );
   }
 
