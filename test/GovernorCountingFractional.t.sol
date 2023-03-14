@@ -134,7 +134,7 @@ contract GovernorCountingFractionalTest is Test {
       block.number + governor.votingDelay(),
       block.number + governor.votingDelay() + governor.votingPeriod(),
       _proposal.description
-      );
+    );
 
     // Submit the proposal.
     proposalId = governor.propose(
@@ -286,7 +286,7 @@ contract GovernorCountingFractionalTest is Test {
       vm.expectEmit(true, true, true, true);
       emit VoteCastWithParams(
         _voter.addr, _proposalId, _voter.support, _voter.weight, "Yay", fractionalizedVotes
-        );
+      );
     } else {
       vm.expectEmit(true, true, true, true);
       emit VoteCast(_voter.addr, _proposalId, _voter.support, _voter.weight, "Yay");
@@ -1120,7 +1120,7 @@ contract GovernorCountingFractionalTest is Test {
         _voter.weight,
         "Fractional vote",
         _fractionalizedVoteData
-        );
+      );
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
         _proposalId, _voter.support, "Fractional vote", _fractionalizedVoteData
