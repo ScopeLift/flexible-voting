@@ -22,6 +22,9 @@
 
 [fmt]
   bracket_spacing = false
+  ignore = [
+    'src/GovernorCountingFractional.sol', # Ignored b/c it follows OZ's styleguide.
+  ]
   int_types = "long"
   line_length = 100
   multiline_func_header = "attributes_first"
