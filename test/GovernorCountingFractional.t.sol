@@ -734,6 +734,7 @@ contract GovernorCountingFractionalTest is Test {
     // Mint, delegate, and propose.
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
+    assertEq(governor.voteWeightCast(_proposalId, _voter.addr), 0);
 
     // The important thing is just that the abstain votes *cannot* be inferred from
     // the for-votes and against-votes, e.g. by subtracting them from the total weight.
@@ -754,6 +755,10 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_forVotes, _actualForVotes);
     assertEq(_againstVotes, _actualAgainstVotes);
     assertEq(_abstainVotes, _actualAbstainVotes);
+    assertEq(
+      governor.voteWeightCast(_proposalId, _voter.addr),
+      _forVotes + _againstVotes + _abstainVotes
+    );
   }
 
   function test_CanCastPartialWeightMultipleTimesAddingToFullWeight() public {
@@ -794,6 +799,7 @@ contract GovernorCountingFractionalTest is Test {
     // Mint, delegate, and propose.
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
+    assertEq(governor.voteWeightCast(_proposalId, _voter.addr), 0);
 
     // Calculate the vote amounts for the first vote.
     VoteData memory _firstVote;
@@ -818,9 +824,13 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_firstVote.forVotes, _actualForVotes);
     assertEq(_firstVote.againstVotes, _actualAgainstVotes);
     assertEq(_firstVote.abstainVotes, _actualAbstainVotes);
+    assertEq(
+      governor.voteWeightCast(_proposalId, _voter.addr),
+      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes
+    );
 
     // If the entire weight was cast; further votes are not possible.
-    if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
+    if (_voter.weight == governor.voteWeightCast(_proposalId, _voter.addr)) return;
 
     // Now cast votes again.
     VoteData memory _secondVote;
@@ -844,11 +854,16 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_firstVote.forVotes + _secondVote.forVotes, _actualForVotes);
     assertEq(_firstVote.againstVotes + _secondVote.againstVotes, _actualAgainstVotes);
     assertEq(_firstVote.abstainVotes + _secondVote.abstainVotes, _actualAbstainVotes);
+    assertEq(
+      governor.voteWeightCast(_proposalId, _voter.addr),
+      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes +
+      _secondVote.againstVotes + _secondVote.forVotes + _secondVote.abstainVotes
+    );
 
     // If the entire weight was cast; further votes are not possible.
-    if (_voter.weight == _actualForVotes + _actualAgainstVotes + _actualAbstainVotes) return;
+    if (_voter.weight == governor.voteWeightCast(_proposalId, _voter.addr)) return;
 
-    // One more time!
+    // Once more unto the breach!
     VoteData memory _thirdVote;
     _thirdVote.forVotes =
       uint128(_voter.weight.mulWadDown(_voteSplit.percentFor).mulWadDown(_votePercentage3));
@@ -875,6 +890,12 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(
       _firstVote.abstainVotes + _secondVote.abstainVotes + _thirdVote.abstainVotes,
       _actualAbstainVotes
+    );
+    assertEq(
+      governor.voteWeightCast(_proposalId, _voter.addr),
+      _firstVote.againstVotes + _firstVote.forVotes + _firstVote.abstainVotes +
+      _secondVote.againstVotes + _secondVote.forVotes + _secondVote.abstainVotes +
+      _thirdVote.againstVotes + _thirdVote.forVotes + _thirdVote.abstainVotes
     );
   }
 

@@ -57,6 +57,14 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
+     * @dev Get the number of votes cast on proposal `proposalId` by account `account`.
+     * Useful if you intend to allow delegates to cast rolling, partial votes.
+     */
+    function voteWeightCast(uint256 proposalId, address account) public view returns (uint128) {
+      return _proposalVotersWeightCast[proposalId][account];
+    }
+
+    /**
      * @dev Accessor to the internal vote counts.
      */
     function proposalVotes(uint256 proposalId)
