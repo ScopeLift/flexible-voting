@@ -19,6 +19,10 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
     return 50_400; // 7 days assuming 12 second block times
   }
 
+  function exposed_quorumReached(uint256 _proposalId) public view returns (bool) {
+    return _quorumReached(_proposalId);
+  }
+
   function cancel(
     address[] memory targets,
     uint256[] memory values,
