@@ -324,7 +324,7 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(abstainVotes, abstainVotesCast);
 
     IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
-    if (forVotes > againstVotes && forVotes + abstainVotes >= governor.quorum(block.number)) {
+    if (forVotes > againstVotes && (forVotes + abstainVotes) >= governor.quorum(block.number)) {
       assertEq(uint8(status), uint8(IGovernor.ProposalState.Succeeded));
       _executeProposal();
     } else {
@@ -686,7 +686,7 @@ contract GovernorCountingFractionalTest is Test {
     address _voterAddr,
     uint256 _weight,
     FractionalVoteSplit memory _voteSplit,
-    bool _expectedQuorumReached
+    bool _isQuorumExpected
   ) internal {
     // Build the voter.
     Voter memory _voter;
@@ -709,7 +709,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Idaho", fractionalizedVotes);
 
-    assertEq(governor.exposed_quorumReached(_proposalId), _expectedQuorumReached);
+    assertEq(governor.exposed_quorumReached(_proposalId), _isQuorumExpected);
   }
 
   function testFuzz_CanCastWithPartialWeight(
