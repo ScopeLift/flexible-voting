@@ -57,8 +57,9 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Get the number of votes cast on proposal `proposalId` by account `account`.
-     * Useful if you intend to allow delegates to cast rolling, partial votes.
+     * @dev Get the number of votes cast thus far on proposal `proposalId` by
+     * account `account`. Useful for integrations that allow delegates to cast
+     * rolling, partial votes.
      */
     function voteWeightCast(uint256 proposalId, address account) public view returns (uint128) {
       return _proposalVotersWeightCast[proposalId][account];
@@ -102,7 +103,9 @@ abstract contract GovernorCountingFractional is Governor {
     /**
      * @notice See {Governor-_countVote}.
      *
-     * @dev If the `voteData` bytes parameter is empty, then this module behaves
+     * @dev Function that records the delegate's votes.
+     *
+     * If the `voteData` bytes parameter is empty, then this module behaves
      * identically to GovernorBravo. That is, it assigns the full weight of the
      * delegate to the `support` parameter, which follows the `VoteType` enum
      * from Governor Bravo.
@@ -110,9 +113,10 @@ abstract contract GovernorCountingFractional is Governor {
      * If the `voteData` bytes parameter is not zero, then it _must_ be three
      * packed uint128s, totaling 48 bytes, representing the weight the delegate
      * assigns to Against, For, and Abstain respectively, i.e.
-     * encodePacked(againstVotes, forVotes, abstainVotes). The sum total of
+     * `abi.encodePacked(againstVotes, forVotes, abstainVotes)`. The sum total of
      * the three decoded vote weights _must_ be less than or equal to the
-     * delegate's total weight as checkpointed by the proposal being voted on.
+     * delegate's remaining weight on the proposal, i.e. their checkpointed
+     * total weight minus votes already cast on the proposal.
      *
      * See `_countVoteNominal` and `_countVoteFractional` for more details.
      */
@@ -138,8 +142,11 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Record votes with full weight cast for `support`. Reverts if partial
-     * votes have already been cast with _countVoteFractional.
+     * @dev Record votes with full weight cast for `support`.
+     *
+     * Because this function votes with the delegate's full weight, it can only
+     * be called once per proposal. It will revert if combined with a fractional
+     * vote before or after.
      */
     function _countVoteNominal(
         uint256 proposalId,
@@ -169,7 +176,7 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev Count votes with fractional weight.
      *
      * `voteData` is expected to be three packed uint128s, i.e.
-     * encodePacked(againstVotes, forVotes, abstainVotes).
+     * `abi.encodePacked(againstVotes, forVotes, abstainVotes)`.
      *
      * This function can be called multiple times for the same account and
      * proposal, i.e. partial/rolling votes are allowed. For example, an account
@@ -181,7 +188,7 @@ abstract contract GovernorCountingFractional is Governor {
      * The result of these three calls would be that the account casts 5 votes
      * AGAINST, 2 votes FOR, and 3 votes ABSTAIN on the proposal. Though
      * partial, votes are still final once cast and cannot be changed or
-     * overidden. Subsequent partial votes simply add to existing totals.
+     * overidden. Subsequent partial votes simply increment existing totals.
      *
      * Note that if partial votes are cast, all remaining weight must be cast
      * with _countVoteFractional: _countVoteNominal will revert.
@@ -218,7 +225,7 @@ abstract contract GovernorCountingFractional is Governor {
     uint256 constant internal _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
 
     /**
-     * @dev Decodes three packed uint128's. Uses assembly because of Solidity
+     * @dev Decodes three packed uint128's. Uses assembly because of a Solidity
      * language limitation which prevents slicing bytes stored in memory, rather
      * than calldata.
      */
