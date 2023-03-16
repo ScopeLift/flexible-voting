@@ -324,7 +324,7 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(abstainVotes, abstainVotesCast);
 
     IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
-    if (forVotes > againstVotes && forVotes >= governor.quorum(block.number)) {
+    if (forVotes > againstVotes && (forVotes + abstainVotes) >= governor.quorum(block.number)) {
       assertEq(uint8(status), uint8(IGovernor.ProposalState.Succeeded));
       _executeProposal();
     } else {
@@ -355,7 +355,7 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(governor.votingDelay(), 4);
     assertEq(governor.votingPeriod(), 50_400);
     assertEq(governor.quorum(_blockNumber), 10e18);
-    assertEq(governor.COUNTING_MODE(), "support=bravo&quorum=bravo&params=fractional");
+    assertEq(governor.COUNTING_MODE(), "support=bravo&quorum=for,abstain&params=fractional");
   }
 
   function testFuzz_NominalBehaviorIsUnaffected(uint256[4] memory weights) public {
@@ -639,20 +639,31 @@ contract GovernorCountingFractionalTest is Test {
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", _invalidVoteData);
   }
 
-  function test_QuorumDoesNotIncludeAbstainVotes(address _voterAddr) public {
+  function test_QuorumDoesIncludeAbstainVotes(address _voterAddr) public {
     uint256 _weight = governor.quorum(block.number);
     FractionalVoteSplit memory _voteSplit;
     _voteSplit.percentAbstain = 1e18; // All votes go to ABSTAIN.
+    bool _quorumShouldBeReached = true;
 
-    _quorumTest(_voterAddr, _weight, _voteSplit, uint32(IGovernor.ProposalState.Defeated));
+    _quorumTest(_voterAddr, _weight, _voteSplit, _quorumShouldBeReached);
   }
 
   function test_QuorumDoesIncludeForVotes(address _voterAddr) public {
     uint256 _weight = governor.quorum(block.number);
     FractionalVoteSplit memory _voteSplit;
     _voteSplit.percentFor = 1e18; // All votes go to FOR.
+    bool _quorumShouldBeReached = true;
 
-    _quorumTest(_voterAddr, _weight, _voteSplit, uint32(IGovernor.ProposalState.Succeeded));
+    _quorumTest(_voterAddr, _weight, _voteSplit, _quorumShouldBeReached);
+  }
+
+  function test_QuorumDoesNotIncludeAgainstVotes(address _voterAddr) public {
+    uint256 _weight = governor.quorum(block.number);
+    FractionalVoteSplit memory _voteSplit;
+    _voteSplit.percentAgainst = 1e18; // All votes go to AGAINST.
+    bool _quorumShouldNotBeReached = false;
+
+    _quorumTest(_voterAddr, _weight, _voteSplit, _quorumShouldNotBeReached);
   }
 
   function testFuzz_Quorum(
@@ -665,23 +676,17 @@ contract GovernorCountingFractionalTest is Test {
     _voteSplit = _randomVoteSplit(_voteSplit);
 
     uint128 _forVotes = uint128(_weight.mulWadDown(_voteSplit.percentFor));
-    uint128 _againstVotes = uint128(_weight.mulWadDown(_voteSplit.percentAgainst));
+    uint128 _abstainVotes = uint128(_weight.mulWadDown(_voteSplit.percentAbstain));
 
-    uint32 _expectedState;
-    if (_forVotes >= _quorum && _forVotes > _againstVotes) {
-      _expectedState = uint32(IGovernor.ProposalState.Succeeded);
-    } else {
-      _expectedState = uint32(IGovernor.ProposalState.Defeated);
-    }
-
-    _quorumTest(_voterAddr, _weight, _voteSplit, _expectedState);
+    bool _wasQuorumReached = _forVotes + _abstainVotes >= _quorum;
+    _quorumTest(_voterAddr, _weight, _voteSplit, _wasQuorumReached);
   }
 
   function _quorumTest(
     address _voterAddr,
     uint256 _weight,
     FractionalVoteSplit memory _voteSplit,
-    uint32 _expectedState
+    bool _isQuorumExpected
   ) internal {
     // Build the voter.
     Voter memory _voter;
@@ -693,6 +698,8 @@ contract GovernorCountingFractionalTest is Test {
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
 
+    assertEq(governor.exposed_quorumReached(_proposalId), false);
+
     // Cast votes.
     bytes memory fractionalizedVotes = abi.encodePacked(
       uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst)),
@@ -702,10 +709,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.prank(_voter.addr);
     governor.castVoteWithReasonAndParams(_proposalId, _voter.support, "Idaho", fractionalizedVotes);
 
-    // Jump ahead so that we're outside of the proposal's voting period.
-    vm.roll(governor.proposalDeadline(_proposalId) + 1);
-    uint32 _state = uint32(governor.state(_proposalId));
-    assertEq(_state, _expectedState);
+    assertEq(governor.exposed_quorumReached(_proposalId), _isQuorumExpected);
   }
 
   function testFuzz_CanCastWithPartialWeight(

@@ -43,7 +43,7 @@ abstract contract GovernorCountingFractional is Governor {
      */
     // solhint-disable-next-line func-name-mixedcase
     function COUNTING_MODE() public pure virtual override returns (string memory) {
-        return "support=bravo&quorum=bravo&params=fractional";
+        return "support=bravo&quorum=for,abstain&params=fractional";
     }
 
     /**
@@ -76,7 +76,7 @@ abstract contract GovernorCountingFractional is Governor {
     function _quorumReached(uint256 proposalId) internal view virtual override returns (bool) {
         ProposalVote storage proposalvote = _proposalVotes[proposalId];
 
-        return quorum(proposalSnapshot(proposalId)) <= proposalvote.forVotes;
+        return quorum(proposalSnapshot(proposalId)) <= proposalvote.forVotes + proposalvote.abstainVotes;
     }
 
     /**
