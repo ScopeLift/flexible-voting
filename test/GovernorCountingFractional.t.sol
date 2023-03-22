@@ -4,12 +4,13 @@ pragma solidity >=0.8.10;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
-import "openzeppelin-contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
-import "solmate/utils/FixedPointMathLib.sol";
+import {GovernorCompatibilityBravo} from
+  "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
+import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
-import "./GovToken.sol";
-import "./FractionalGovernor.sol";
-import "./ProposalReceiverMock.sol";
+import {GovToken} from "./GovToken.sol";
+import {FractionalGovernor, IVotes, IGovernor} from "./FractionalGovernor.sol";
+import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
 
 contract GovernorCountingFractionalTest is Test {
   using FixedPointMathLib for uint256;

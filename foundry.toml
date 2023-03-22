@@ -4,7 +4,7 @@
   # auto-detect solc versions.
   optimizer = true
   optimizer_runs = 10_000_000
-  remappings = ["openzeppelin-contracts/=lib/openzeppelin-contracts/contracts"]
+  remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts"]
   verbosity = 3
 
 [profile.ci]
