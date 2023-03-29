@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.10;
+pragma solidity >=0.8.10;
 
 /// @dev The interface that flexible voting-compatbile governors are expected to support.
 interface IFractionalGovernor {
