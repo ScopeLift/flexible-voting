@@ -6,7 +6,7 @@ import { Vm } from "forge-std/Vm.sol";
 
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
-import { CTokenFlexVoting } from "src/CTokenFlexVoting.sol";
+import { CometFlexVoting } from "src/CometFlexVoting.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
 import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
 import { GovToken } from "test/GovToken.sol";
@@ -17,7 +17,7 @@ import { Comet } from "comet/Comet.sol";
 contract CometForkTest is Test, CometConfiguration {
   uint256 forkId;
 
-  CTokenFlexVoting cToken;
+  CometFlexVoting cToken;
   // The Compound governor, not to be confused with the govToken's governance system:
   address immutable COMPOUND_GOVERNOR = 0x6d903f6003cca6255D85CcA4D3B5E5146dC33925;
   GovToken govToken;
@@ -116,7 +116,9 @@ contract CometForkTest is Test, CometConfiguration {
       _assetConfigs
     );
 
-    cToken = new CTokenFlexVoting(_config, address(flexVotingGovernor));
+    cToken = new CometFlexVoting(_config, address(flexVotingGovernor));
+
+    cToken.initializeStorage();
     // ========= END DEPLOY NEW COMET ========================
 
     // TODO is there anything we need to do to make this an "official" Comet?
@@ -135,5 +137,23 @@ contract Setup is CometForkTest {
       // The CToken should be delegating to itself.
       "cToken is not delegating to itself"
     );
+  }
+
+  function testFork_SetupCanSupplyGovToCompound() public {
+    // Mint GOV and deposit into Compound.
+    assertEq(cToken.balanceOf(address(this)), 0);
+    assertEq(govToken.balanceOf(address(cToken)), 0);
+    govToken.exposed_mint(address(this), 42 ether);
+    govToken.approve(address(cToken), type(uint256).max);
+    cToken.supply(address(govToken), 2 ether);
+
+    assertEq(govToken.balanceOf(address(this)), 40 ether);
+    assertEq(govToken.balanceOf(address(cToken)), 2 ether);
+    assertEq(cToken.balanceOf(address(this)), 2 ether);
+
+    // We can withdraw our GOV when we want to.
+    cToken.withdraw(address(govToken), 2 ether);
+    assertEq(govToken.balanceOf(address(this)), 42 ether);
+    assertEq(cToken.balanceOf(address(this)), 0 ether);
   }
 }
