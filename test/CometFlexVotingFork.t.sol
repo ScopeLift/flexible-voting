@@ -31,6 +31,23 @@ contract CometForkTest is Test, CometConfiguration {
   // See CometMainInterface.sol.
   error NotCollateralized();
 
+  enum ProposalState {
+    Pending,
+    Active,
+    Canceled,
+    Defeated,
+    Succeeded,
+    Queued,
+    Expired,
+    Executed
+  }
+
+  enum VoteType {
+    Against,
+    For,
+    Abstain
+  }
+
   function setUp() public {
     // Compound v3 has been deployed to mainnet.
     // https://docs.compound.finance/#networks
@@ -129,6 +146,40 @@ contract CometForkTest is Test, CometConfiguration {
     // ========= END DEPLOY NEW COMET ========================
 
     // TODO is there anything we need to do to make this an "official" Comet?
+  }
+
+  // ------------------
+  // Helper functions
+  // ------------------
+
+  function _mintGovAndSupplyToCompound(address _who, uint256 _govAmount) internal {
+    govToken.exposed_mint(_who, _govAmount);
+    vm.startPrank(_who);
+    govToken.approve(address(cToken), type(uint256).max);
+    cToken.supply(address(govToken), _govAmount);
+    vm.stopPrank();
+  }
+
+  function _createAndSubmitProposal() internal returns (uint256 proposalId) {
+    // Proposal will underflow if we're on the zero block.
+    if (block.number == 0) vm.roll(42);
+
+    // Create a dummy proposal.
+    bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
+    address[] memory targets = new address[](1);
+    uint256[] memory values = new uint256[](1);
+    bytes[] memory calldatas = new bytes[](1);
+    targets[0] = address(receiver);
+    values[0] = 0; // no ETH will be sent
+    calldatas[0] = receiverCallData;
+
+    // Submit the proposal.
+    proposalId = flexVotingGovernor.propose(targets, values, calldatas, "A great proposal");
+    assertEq(uint256(flexVotingGovernor.state(proposalId)), uint256(ProposalState.Pending));
+
+    // advance proposal to active state
+    vm.roll(flexVotingGovernor.proposalSnapshot(proposalId) + 1);
+    assertEq(uint256(flexVotingGovernor.state(proposalId)), uint256(ProposalState.Active));
   }
 }
 
@@ -231,5 +282,60 @@ contract Setup is CometForkTest {
       govToken.balanceOf(_supplier) > _initSupply,
       "Supplier didn't actually earn yield"
     );
+  }
+}
+
+contract CastVote is CometForkTest {
+  function test_UserCanCastAgainstVotes() public {
+    _testUserCanCastVotes(
+      makeAddr("test_UserCanCastAgainstVotes address"),
+      4242 ether, // voteWeight
+      uint8(VoteType.Against) // vote type
+    );
+  }
+
+  function _testUserCanCastVotes(address _who, uint256 _voteWeight, uint8 _supportType) private {
+    // Deposit some funds.
+    _mintGovAndSupplyToCompound(_who, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+    assertEq(
+      govToken.getPastVotes(address(cToken), block.number - 1),
+      _voteWeight,
+      "getPastVotes returned unexpected result"
+    );
+
+    // _who should now be able to express his/her vote on the proposal.
+    vm.prank(_who);
+    cToken.expressVote(_proposalId, _supportType);
+
+    (
+      uint256 _againstVotesExpressed, // Expressed, not cast.
+      uint256 _forVotesExpressed,
+      uint256 _abstainVotesExpressed
+    ) = cToken.proposalVotes(_proposalId);
+
+    // Vote preferences have been expressed.
+    assertEq(_forVotesExpressed, _supportType == uint8(VoteType.For) ? _voteWeight : 0);
+    assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
+    assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
+
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      flexVotingGovernor.proposalVotes(_proposalId);
+
+    // But no actual votes have been cast yet.
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, 0);
+    assertEq(_abstainVotes, 0);
+
+    // Submit votes on behalf of the pool.
+    cToken.castVote(_proposalId);
+
+    // flexVotingGovernor should now record votes from the pool.
+    (_againstVotes, _forVotes, _abstainVotes) = flexVotingGovernor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _forVotesExpressed, "for votes not as expected");
+    assertEq(_againstVotes, _againstVotesExpressed, "against votes not as expected");
+    assertEq(_abstainVotes, _abstainVotesExpressed, "abstain votes not as expected");
   }
 }
