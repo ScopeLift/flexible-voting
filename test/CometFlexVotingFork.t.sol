@@ -173,9 +173,11 @@ contract Setup is CometForkTest {
     address _supplier = address(this);
     assertEq(cToken.balanceOf(_supplier), 0);
     assertEq(govToken.balanceOf(address(cToken)), 0);
-    govToken.exposed_mint(_supplier, 1_000 ether);
+    assertEq(govToken.balanceOf(_supplier), 0);
+    uint256 _initSupply = 1_000 ether;
+    govToken.exposed_mint(_supplier, _initSupply);
     govToken.approve(address(cToken), type(uint256).max);
-    cToken.supply(address(govToken), 1_000 ether);
+    cToken.supply(address(govToken), _initSupply);
     uint256 _initCTokenBalance = cToken.balanceOf(_supplier);
     assertGt(_initCTokenBalance, 0);
 
@@ -193,15 +195,41 @@ contract Setup is CometForkTest {
     cToken.supply(weth, 100 ether);
     assertEq(ERC20(weth).balanceOf(_borrower), 0);
 
-    // Borrow GOV against WETH position
+    // Borrow GOV against WETH position.
     vm.prank(_borrower);
     cToken.withdraw(address(govToken), 100 ether);
     assertEq(govToken.balanceOf(_borrower), 100 ether);
+    uint256 _initBorrowBalance = cToken.borrowBalanceOf(_borrower);
+    assertEq(_initBorrowBalance, 100 ether);
 
-    // Supplier earns yield.
+    // Supplier earns yield. Borrowerer owes interest.
     vm.roll(block.number + 1);
-    vm.warp(block.timestamp + 1 days);
+    vm.warp(block.timestamp + 100 days);
     uint256 _newCTokenBalance = cToken.balanceOf(_supplier);
     assertTrue(_newCTokenBalance > _initCTokenBalance, "Supplier has not earned yield");
+    uint256 _newBorrowBalance = cToken.borrowBalanceOf(_borrower);
+    assertTrue(_newBorrowBalance > _initBorrowBalance, "Borrower does not owe interest");
+
+    // The supplier can't claim the yield yet because the cToken doesn't have it.
+    vm.prank(_supplier);
+    vm.expectRevert("ERC20: transfer amount exceeds balance");
+    cToken.withdraw(address(govToken), _newCTokenBalance);
+    assertGt(_newCTokenBalance, govToken.balanceOf(address(cToken)));
+
+    // Repay the borrow so that the supplier can realize yield.
+    govToken.exposed_mint(_borrower, _newBorrowBalance - _initBorrowBalance);
+    vm.prank(_borrower);
+    govToken.approve(address(cToken), type(uint256).max);
+    vm.prank(_borrower);
+    cToken.supply(address(govToken), type(uint256).max);
+    assertGt(_newCTokenBalance, govToken.balanceOf(address(cToken)));
+
+    // Get that yield fool!
+    vm.prank(_supplier);
+    cToken.withdraw(address(govToken), govToken.balanceOf(address(cToken)));
+    assertTrue(
+      govToken.balanceOf(_supplier) > _initSupply,
+      "Supplier didn't actually earn yield"
+    );
   }
 }
