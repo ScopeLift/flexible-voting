@@ -5,6 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { Vm } from "forge-std/Vm.sol";
 
 import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { CometFlexVoting } from "src/CometFlexVoting.sol";
 import { FractionalGovernor } from "test/FractionalGovernor.sol";
@@ -23,6 +24,12 @@ contract CometForkTest is Test, CometConfiguration {
   GovToken govToken;
   FractionalGovernor flexVotingGovernor;
   ProposalReceiverMock receiver;
+
+  // Mainnet addresses.
+  address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+
+  // See CometMainInterface.sol.
+  error NotCollateralized();
 
   function setUp() public {
     // Compound v3 has been deployed to mainnet.
@@ -66,7 +73,7 @@ contract CometForkTest is Test, CometConfiguration {
       1200000000000 // supplyCap
     );
     _assetConfigs[2] = AssetConfig(
-      0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2, // asset, WETH
+      weth, // asset
       0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419, // priceFeed
       18, // decimals
       825000000000000000, // borrowCollateralFactor
@@ -155,5 +162,46 @@ contract Setup is CometForkTest {
     cToken.withdraw(address(govToken), 2 ether);
     assertEq(govToken.balanceOf(address(this)), 42 ether);
     assertEq(cToken.balanceOf(address(this)), 0 ether);
+  }
+
+  // TODO can you borrow against the base position?
+  function testFork_SetupCanBorrowAgainstGovCollateral() public {
+  }
+
+  function testFork_SetupCanBorrowGov() public {
+    // Mint GOV and deposit into Compound.
+    address _supplier = address(this);
+    assertEq(cToken.balanceOf(_supplier), 0);
+    assertEq(govToken.balanceOf(address(cToken)), 0);
+    govToken.exposed_mint(_supplier, 1_000 ether);
+    govToken.approve(address(cToken), type(uint256).max);
+    cToken.supply(address(govToken), 1_000 ether);
+    uint256 _initCTokenBalance = cToken.balanceOf(_supplier);
+    assertGt(_initCTokenBalance, 0);
+
+    // Someone else wants to borrow GOV.
+    address _borrower = makeAddr("_borrower");
+    deal(weth, _borrower, 100 ether);
+    vm.prank(_borrower);
+    vm.expectRevert(NotCollateralized.selector);
+    cToken.withdraw(address(govToken), 0.1 ether);
+
+    // Borrower deposits WETH to borrow GOV against.
+    vm.prank(_borrower);
+    ERC20(weth).approve(address(cToken), type(uint256).max);
+    vm.prank(_borrower);
+    cToken.supply(weth, 100 ether);
+    assertEq(ERC20(weth).balanceOf(_borrower), 0);
+
+    // Borrow GOV against WETH position
+    vm.prank(_borrower);
+    cToken.withdraw(address(govToken), 100 ether);
+    assertEq(govToken.balanceOf(_borrower), 100 ether);
+
+    // Supplier earns yield.
+    vm.roll(block.number + 1);
+    vm.warp(block.timestamp + 1 days);
+    uint256 _newCTokenBalance = cToken.balanceOf(_supplier);
+    assertTrue(_newCTokenBalance > _initCTokenBalance, "Supplier has not earned yield");
   }
 }
