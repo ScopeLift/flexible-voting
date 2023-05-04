@@ -6,12 +6,10 @@ import { CometConfiguration } from "comet/CometConfiguration.sol";
 
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {FlexVotingClient} from "src/FlexVotingClient.sol";
 
 // TODO add description
-contract CometFlexVoting is Comet {
-  /// @notice The governor contract associated with this contract's baseToken. It
-  /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
-  IFractionalGovernor public immutable GOVERNOR;
+contract CometFlexVoting is Comet, FlexVotingClient {
 
   /// @dev Constructor.
   /// @param _config The configuration struct for this Comet instance.
@@ -19,16 +17,14 @@ contract CometFlexVoting is Comet {
   constructor(
     CometConfiguration.Configuration memory _config,
     address _governor
-  ) Comet(_config) {
-    GOVERNOR = IFractionalGovernor(_governor);
+  ) Comet(_config) FlexVotingClient(_governor) {
     selfDelegate();
   }
 
-  // This is called within the constructor, but we want it to be publically
-  // available if/when existing cTokens are upgraded.
-  // TODO can cTokens be upgraded?
-  function selfDelegate() public {
-    IVotingToken(GOVERNOR.token()).delegate(address(this));
+  /// @notice Returns the _user's current balance in storage.
+  function _rawBalanceOf(address account) internal view override returns (uint256) {
+    int104 _principal = userBasic[account].principal;
+    return _principal > 0 ? uint256(int256(_principal)) : 0;
   }
 
   // forgefmt: disable-start
