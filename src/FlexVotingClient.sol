@@ -48,8 +48,8 @@ abstract contract FlexVotingClient {
     GOVERNOR = IFractionalGovernor(_governor);
   }
 
-  /// @notice Returns the _user's current balance in storage. If the balance is
-  /// rebasing this should return the non-rebased value, i.e. the value before
+  /// @notice Returns the _user's current balance in storage. If the balance
+  /// rebases this should return the non-rebased value, i.e. the value before
   /// any computations are run or interest is applied.
   function _rawBalanceOf(address _user) internal view virtual returns (uint256);
 
