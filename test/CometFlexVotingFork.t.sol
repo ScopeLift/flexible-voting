@@ -216,10 +216,6 @@ contract Setup is CometForkTest {
     assertEq(cToken.balanceOf(address(this)), 0 ether);
   }
 
-  // TODO can you borrow against the base position?
-  function testFork_SetupCanBorrowAgainstGovCollateral() public {
-  }
-
   function testFork_SetupCanBorrowGov() public {
     // Mint GOV and deposit into Compound.
     address _supplier = address(this);
@@ -882,80 +878,77 @@ contract CastVote is CometForkTest {
   function _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
     VotingWeightIsAbandonedVars memory _vars
   ) private {
-    // // This would be a vm.assume if we could do fuzz tests.
-    // assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
-    //
-    // // Deposit some funds.
-    // _mintGovAndSupplyToAave(_vars.voterA, _vars.voteWeightA);
-    // _mintGovAndSupplyToAave(_vars.voterB, _vars.voteWeightB);
-    // uint256 _initGovBalance = govToken.balanceOf(address(aToken));
-    //
-    // // Borrow GOV from the pool, decreasing its token balance.
-    // deal(weth, _vars.borrower, _vars.borrowerAssets);
-    // vm.startPrank(_vars.borrower);
-    // ERC20(weth).approve(address(pool), type(uint256).max);
-    // pool.supply(weth, _vars.borrowerAssets, _vars.borrower, 0);
-    // // Borrow GOV against WETH
-    // pool.borrow(
-    //   address(govToken),
-    //   (_vars.voteWeightA + _vars.voteWeightB) / 5, // amount of GOV to borrow
-    //   uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-    //   0, // referralCode
-    //   _vars.borrower // onBehalfOf
-    // );
-    // assertLt(govToken.balanceOf(address(aToken)), _initGovBalance);
-    // vm.stopPrank();
-    //
-    // // Create the proposal.
-    // uint256 _proposalId = _createAndSubmitProposal();
-    //
-    // // Jump ahead to the proposal snapshot to lock in the pool's balance.
-    // vm.roll(governor.proposalSnapshot(_proposalId) + 1);
-    // uint256 _totalPossibleVotingWeight = govToken.balanceOf(address(aToken));
-    //
-    // uint256 _fullVotingWeight = govToken.balanceOf(address(aToken));
-    // assert(_fullVotingWeight < _initGovBalance);
-    // uint256 _borrowedGov = govToken.balanceOf(address(_vars.borrower));
-    // assertEq(
-    //   _fullVotingWeight,
-    //   _vars.voteWeightA + _vars.voteWeightB - _borrowedGov,
-    //   "voting weight doesn't match calculated value"
-    // );
-    //
-    // // Only user A expresses a vote.
-    // vm.prank(_vars.voterA);
-    // aToken.expressVote(_proposalId, _vars.supportTypeA);
-    //
-    // // Submit votes on behalf of the pool.
-    // aToken.castVote(_proposalId);
-    //
-    // // Vote should be cast as a percentage of the depositer's expressed types, since
-    // // the actual weight is different from the deposit weight.
-    // (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
-    //   governor.proposalVotes(_proposalId);
-    //
-    // uint256 _expectedVotingWeightA = (_vars.voteWeightA * _fullVotingWeight) / _initGovBalance;
-    // uint256 _expectedVotingWeightB = (_vars.voteWeightB * _fullVotingWeight) / _initGovBalance;
-    //
-    // // The pool *could* have voted with this much weight.
-    // assertApproxEqAbs(
-    //   _totalPossibleVotingWeight, _expectedVotingWeightA + _expectedVotingWeightB, 1
-    // );
-    //
-    // // Actually, though, the pool did not vote with all of the weight it could have.
-    // // VoterB's votes were never cast because he/she did not express his/her preference.
-    // assertApproxEqAbs(
-    //   _againstVotes + _forVotes + _abstainVotes, // The total actual weight.
-    //   _expectedVotingWeightA, // VoterB's weight has been abandoned, only A's is counted.
-    //   1
-    // );
-    //
-    // // forgefmt: disable-start
-    // // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-    // if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-    // if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-    // if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-    // // forgefmt: disable-end
+    // This would be a vm.assume if we could do fuzz tests.
+    assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
+
+    // Deposit some funds.
+    _mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
+    _mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
+    uint256 _initGovBalance = govToken.balanceOf(address(cToken));
+
+    // Borrow GOV from the cToken, decreasing its token balance.
+    deal(weth, _vars.borrower, _vars.borrowerAssets);
+    vm.startPrank(_vars.borrower);
+    ERC20(weth).approve(address(cToken), type(uint256).max);
+    cToken.supply(weth, _vars.borrowerAssets);
+    // Borrow GOV against WETH
+    cToken.withdraw(
+      address(govToken),
+      (_vars.voteWeightA + _vars.voteWeightB) / 5 // amount of GOV to borrow
+    );
+    assertLt(govToken.balanceOf(address(cToken)), _initGovBalance);
+    vm.stopPrank();
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the cToken's balance.
+    vm.roll(flexVotingGovernor.proposalSnapshot(_proposalId) + 1);
+    uint256 _totalPossibleVotingWeight = govToken.balanceOf(address(cToken));
+
+    uint256 _fullVotingWeight = govToken.balanceOf(address(cToken));
+    assert(_fullVotingWeight < _initGovBalance);
+    uint256 _borrowedGov = govToken.balanceOf(address(_vars.borrower));
+    assertEq(
+      _fullVotingWeight,
+      _vars.voteWeightA + _vars.voteWeightB - _borrowedGov,
+      "voting weight doesn't match calculated value"
+    );
+
+    // Only user A expresses a vote.
+    vm.prank(_vars.voterA);
+    cToken.expressVote(_proposalId, _vars.supportTypeA);
+
+    // Submit votes on behalf of the cToken.
+    cToken.castVote(_proposalId);
+
+    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // the actual weight is different from the deposit weight.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      flexVotingGovernor.proposalVotes(_proposalId);
+
+    uint256 _expectedVotingWeightA = (_vars.voteWeightA * _fullVotingWeight) / _initGovBalance;
+    uint256 _expectedVotingWeightB = (_vars.voteWeightB * _fullVotingWeight) / _initGovBalance;
+
+    // The cToken *could* have voted with this much weight.
+    assertApproxEqAbs(
+      _totalPossibleVotingWeight, _expectedVotingWeightA + _expectedVotingWeightB, 1
+    );
+
+    // Actually, though, the cToken did not vote with all of the weight it could have.
+    // VoterB's votes were never cast because he/she did not express his/her preference.
+    assertApproxEqAbs(
+      _againstVotes + _forVotes + _abstainVotes, // The total actual weight.
+      _expectedVotingWeightA, // VoterB's weight has been abandoned, only A's is counted.
+      1
+    );
+
+    // forgefmt: disable-start
+    // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+    if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    // forgefmt: disable-end
   }
 
   function test_AgainstVotingWeightIsUnaffectedByDepositsAfterProposal() public {
@@ -1029,70 +1022,19 @@ contract CastVote is CometForkTest {
     if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeightA);
     if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
   }
-
-  function test_AgainstVotingWeightDoesNotGoDownWhenUsersBorrow() public {
-    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 1"),
-      4.242 ether, // GOV deposit amount
-      1 ether, // DAI borrow amount
-      uint8(VoteType.Against) // supportType
-    );
-  }
-
-  function test_ForVotingWeightDoesNotGoDownWhenUsersBorrow() public {
-    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 2"),
-      424.2 ether, // GOV deposit amount
-      4 ether, // DAI borrow amount
-      uint8(VoteType.For) // supportType
-    );
-  }
-
-  function test_AbstainVotingWeightDoesNotGoDownWhenUsersBorrow() public {
-    _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-      makeAddr("VotingWeightDoesNotGoDownWhenUsersBorrow address 3"),
-      0.4242 ether, // GOV deposit amount
-      0.0424 ether, // DAI borrow amount
-      uint8(VoteType.Abstain) // supportType
-    );
-  }
-
-  function _testVotingWeightDoesNotGoDownWhenUsersBorrow(
-    address _who,
-    uint256 _voteWeight,
-    uint256 _borrowAmount,
-    uint8 _supportType
-  ) private {
-    // TODO can this be done on compound?
-    // // Mint and deposit.
-    // _mintGovAndSupplyToCompound(_who, _voteWeight);
-    //
-    // // Borrow DAI against GOV position.
-    // vm.prank(_who);
-    // cToken.borrow(
-    //   dai,
-    //   _borrowAmount,
-    //   uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-    //   0, // referralCode
-    //   _who // onBehalfOf
-    // );
-    //
-    // // Create the proposal.
-    // uint256 _proposalId = _createAndSubmitProposal();
-    //
-    // // Express voting preference.
-    // vm.prank(_who);
-    // cToken.expressVote(_proposalId, _supportType);
-    //
-    // // Submit votes on behalf of the cToken.
-    // cToken.castVote(_proposalId);
-    //
-    // (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
-    //   flexVotingGovernor.proposalVotes(_proposalId);
-    //
-    // // Actual voting weight should match the initial deposit.
-    // if (_supportType == uint8(VoteType.For)) assertEq(_forVotes, _voteWeight);
-    // if (_supportType == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeight);
-    // if (_supportType == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeight);
-  }
 }
+
+// TODO
+// From https://docs.compound.finance/collateral-and-borrowing/
+//   Account balances for the base token are signed integers. An account balance
+//   greater than zero indicates the base asset is supplied and A BALANCE LESS
+//   THAN ZERO INDICATES THE BASE ASSET IS BORROWED (emphasis mine)
+// What happens if someone tries to expressVote when they have borrowed the base
+// asset? We need to make sure that they cannot.
+// This should be fine because the FlexVotingClient.expressVote function checks
+// that getPastStoredBalance > 0 and reverts otherwise. But we should have a
+// test to confirm.
+
+// TODO
+// If we want to be really thorough we should test that each of the cToken
+// supply/withdraw functions modifies the internal cToken checkpointing properly
