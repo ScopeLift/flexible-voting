@@ -18,8 +18,8 @@
   optimizer = false
 
 [rpc_endpoints]
-  optimism = "${OPTIMISM_RPC_URL}"
   mainnet = "${MAINNET_RPC_URL}"
+  optimism = "${OPTIMISM_RPC_URL}"
 
 [fmt]
   bracket_spacing = false

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.10;
 
-import { Comet } from "comet/Comet.sol";
-import { CometConfiguration } from "comet/CometConfiguration.sol";
+import {Comet} from "comet/Comet.sol";
+import {CometConfiguration} from "comet/CometConfiguration.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
 
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
@@ -16,10 +16,10 @@ contract CometFlexVoting is Comet, FlexVotingClient {
   /// @dev Constructor.
   /// @param _config The configuration struct for this Comet instance.
   /// @param _governor The address of the flex-voting-compatible governance contract.
-  constructor(
-    CometConfiguration.Configuration memory _config,
-    address _governor
-  ) Comet(_config) FlexVotingClient(_governor) {
+  constructor(CometConfiguration.Configuration memory _config, address _governor)
+    Comet(_config)
+    FlexVotingClient(_governor)
+  {
     selfDelegate();
   }
 
@@ -34,7 +34,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
   // BEGIN: Comet overrides
   //===========================================================================
   //
-  // This function is called any time the underlying balance is changed.
+// This function is called any time the underlying balance is changed.
   function updateBasePrincipal(
     address _account,
     UserBasic memory _userBasic,
@@ -45,7 +45,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
     FlexVotingClient.totalDepositCheckpoints.push(uint224(totalSupplyBase));
   }
   //
-  //===========================================================================
+//===========================================================================
   // END: Comet overrides
   //===========================================================================
   // forgefmt: disable-end

@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.10;
 
-import { Test } from "forge-std/Test.sol";
-import { Vm } from "forge-std/Vm.sol";
+import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 import "forge-std/console2.sol";
 
-import { IVotes } from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-import { CometFlexVoting } from "src/CometFlexVoting.sol";
-import { FractionalGovernor } from "test/FractionalGovernor.sol";
-import { ProposalReceiverMock } from "test/ProposalReceiverMock.sol";
-import { GovToken } from "test/GovToken.sol";
+import {CometFlexVoting} from "src/CometFlexVoting.sol";
+import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
+import {GovToken} from "test/GovToken.sol";
 
-import { CometConfiguration } from "comet/CometConfiguration.sol";
-import { Comet } from "comet/Comet.sol";
+import {CometConfiguration} from "comet/CometConfiguration.sol";
+import {Comet} from "comet/Comet.sol";
 
 contract CometForkTest is Test, CometConfiguration {
   uint256 forkId;
@@ -76,68 +76,69 @@ contract CometForkTest is Test, CometConfiguration {
       0xc00e94Cb662C3520282E6f5717214004A7f26888, // asset, COMP
       0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5, // priceFeed
       18, // decimals
-      650000000000000000, // borrowCollateralFactor
-      700000000000000000, // liquidateCollateralFactor
-      880000000000000000, // liquidationFactor
-      900000000000000000000000 // supplyCap
+      650_000_000_000_000_000, // borrowCollateralFactor
+      700_000_000_000_000_000, // liquidateCollateralFactor
+      880_000_000_000_000_000, // liquidationFactor
+      900_000_000_000_000_000_000_000 // supplyCap
     );
     _assetConfigs[1] = AssetConfig(
       0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, // asset, WBTC
       0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c, // priceFeed
       8, // decimals
-      700000000000000000, // borrowCollateralFactor
-      770000000000000000, // liquidateCollateralFactor
-      950000000000000000, // liquidationFactor
-      1200000000000 // supplyCap
+      700_000_000_000_000_000, // borrowCollateralFactor
+      770_000_000_000_000_000, // liquidateCollateralFactor
+      950_000_000_000_000_000, // liquidationFactor
+      1_200_000_000_000 // supplyCap
     );
     _assetConfigs[2] = AssetConfig(
       weth, // asset
       0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419, // priceFeed
       18, // decimals
-      825000000000000000, // borrowCollateralFactor
-      895000000000000000, // liquidateCollateralFactor
-      950000000000000000, // liquidationFactor
-      350000000000000000000000 // supplyCap
+      825_000_000_000_000_000, // borrowCollateralFactor
+      895_000_000_000_000_000, // liquidateCollateralFactor
+      950_000_000_000_000_000, // liquidationFactor
+      350_000_000_000_000_000_000_000 // supplyCap
     );
     _assetConfigs[3] = AssetConfig(
       0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984, // asset, UNI
       0x553303d460EE0afB37EdFf9bE42922D8FF63220e, // priceFeed
       18, // decimals
-      750000000000000000, // borrowCollateralFactor
-      810000000000000000, // liquidateCollateralFactor
-      930000000000000000, // liquidationFactor
-      2300000000000000000000000 // supplyCap
+      750_000_000_000_000_000, // borrowCollateralFactor
+      810_000_000_000_000_000, // liquidateCollateralFactor
+      930_000_000_000_000_000, // liquidationFactor
+      2_300_000_000_000_000_000_000_000 // supplyCap
     );
     _assetConfigs[4] = AssetConfig(
       0x514910771AF9Ca656af840dff83E8264EcF986CA, // asset, LINK
       0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c, // priceFeed
       18, // decimals
-      790000000000000000, // borrowCollateralFactor
-      850000000000000000, // liquidateCollateralFactor
-      930000000000000000, // liquidationFactor
-      1250000000000000000000000 // supplyCap
+      790_000_000_000_000_000, // borrowCollateralFactor
+      850_000_000_000_000_000, // liquidateCollateralFactor
+      930_000_000_000_000_000, // liquidationFactor
+      1_250_000_000_000_000_000_000_000 // supplyCap
     );
     Configuration memory _config = Configuration(
       COMPOUND_GOVERNOR,
       0xbbf3f1421D886E9b2c5D716B5192aC998af2012c, // pauseGuardian
       address(govToken), // baseToken
-      0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6, // baseTokenPriceFeed, using the chainlink USDC/USD price feed
+      0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6, // baseTokenPriceFeed, using the chainlink
+        // USDC/USD price feed
       0x285617313887d43256F852cAE0Ee4de4b68D45B0, // extensionDelegate
-      800000000000000000, // supplyKink
-      1030568239 * 60 * 60 * 24 * 365, // supplyPerYearInterestRateSlopeLow
-      12683916793 * 60 * 60 * 24 * 365, // supplyPerYearInterestRateSlopeHigh
+      800_000_000_000_000_000, // supplyKink
+      1_030_568_239 * 60 * 60 * 24 * 365, // supplyPerYearInterestRateSlopeLow
+      12_683_916_793 * 60 * 60 * 24 * 365, // supplyPerYearInterestRateSlopeHigh
       0, // supplyPerYearInterestRateBase
-      800000000000000000, // borrowKink
-      1109842719 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateSlopeLow
-      7927447995 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateSlopeHigh
-      475646879 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateBase
-      600000000000000000, // storeFrontPriceFactor
-      1000000000000000, // trackingIndexScale
+      800_000_000_000_000_000, // borrowKink
+      1_109_842_719 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateSlopeLow
+      7_927_447_995 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateSlopeHigh
+      475_646_879 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateBase
+      600_000_000_000_000_000, // storeFrontPriceFactor
+      1_000_000_000_000_000, // trackingIndexScale
       0, // baseTrackingSupplySpeed
-      3257060185185, // baseTrackingBorrowSpeed
-      1000000000000, // baseMinForRewards
-      100000000, // baseBorrowMin
-      5000000000000, // targetReserves
+      3_257_060_185_185, // baseTrackingBorrowSpeed
+      1_000_000_000_000, // baseMinForRewards
+      100_000_000, // baseBorrowMin
+      5_000_000_000_000, // targetReserves
       _assetConfigs
     );
 
@@ -222,7 +223,7 @@ contract Setup is CometForkTest {
     assertEq(cToken.balanceOf(_supplier), 0);
     assertEq(govToken.balanceOf(address(cToken)), 0);
     assertEq(govToken.balanceOf(_supplier), 0);
-    uint256 _initSupply = 1_000 ether;
+    uint256 _initSupply = 1000 ether;
     govToken.exposed_mint(_supplier, _initSupply);
     govToken.approve(address(cToken), type(uint256).max);
     cToken.supply(address(govToken), _initSupply);
@@ -275,10 +276,7 @@ contract Setup is CometForkTest {
     // Get that yield fool!
     vm.prank(_supplier);
     cToken.withdraw(address(govToken), govToken.balanceOf(address(cToken)));
-    assertTrue(
-      govToken.balanceOf(_supplier) > _initSupply,
-      "Supplier didn't actually earn yield"
-    );
+    assertTrue(govToken.balanceOf(_supplier) > _initSupply, "Supplier didn't actually earn yield");
   }
 }
 
@@ -731,9 +729,7 @@ contract CastVote is CometForkTest {
     );
   }
 
-  function _testVoteWeightIsScaledBasedOnPoolBalance(
-    VoteWeightIsScaledVars memory _vars
-  ) private {
+  function _testVoteWeightIsScaledBasedOnPoolBalance(VoteWeightIsScaledVars memory _vars) private {
     // This would be a vm.assume if we could do fuzz tests.
     assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
 
