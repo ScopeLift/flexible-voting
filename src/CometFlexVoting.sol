@@ -34,28 +34,15 @@ contract CometFlexVoting is Comet, FlexVotingClient {
   // BEGIN: Comet overrides
   //===========================================================================
   //
-  // This function is called anytime the underlying balance is changed.
+  // This function is called any time the underlying balance is changed.
   function updateBasePrincipal(
     address _account,
     UserBasic memory _userBasic,
     int104 _principalNew
   ) internal override {
-    int104 _principalInitial = userBasic[_account].principal;
-    int224 _initTotalDeposits = int224(FlexVotingClient.totalDepositCheckpoints.latest());
-
     Comet.updateBasePrincipal(_account, _userBasic, _principalNew);
-
-    // Checkpoint the account's balance.
     FlexVotingClient._checkpointRawBalanceOf(_account);
-
-    // TODO why not just do:
-    // baseToken.balanceOf(address(this)) ?
-
-    // Checkpoint the pool's total balance.
-    int104 _principalDelta = _principalNew - _principalInitial;
-    int224 _newTotalDeposits = _initTotalDeposits + _principalDelta;
-    // TODO Can _newTotalDeposits ever go negative?
-    FlexVotingClient.totalDepositCheckpoints.push(uint224(_newTotalDeposits));
+    FlexVotingClient.totalDepositCheckpoints.push(uint224(totalSupplyBase));
   }
   //
   //===========================================================================

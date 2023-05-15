@@ -735,98 +735,96 @@ contract CastVote is CometForkTest {
     );
   }
 
-  function _testVoteWeightIsScaledBasedOnPoolBalance(VoteWeightIsScaledVars memory _vars) private {
-    // TODO
-    // // This would be a vm.assume if we could do fuzz tests.
-    // assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
-    //
-    // // Deposit some funds.
-    // _mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
-    // _mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
-    // uint256 _initGovBalance = govToken.balanceOf(address(cToken));
-    //
-    // // Borrow GOV from the cToken, decreasing its token balance.
-    // deal(weth, _vars.borrower, _vars.borrowerAssets);
-    // vm.startPrank(_vars.borrower);
-    // ERC20(weth).approve(address(cToken), type(uint256).max);
-    // cToken.supply(weth, _vars.borrowerAssets, _vars.borrower, 0);
-    // // Borrow GOV against WETH
-    // cToken.borrow(
-    //   address(govToken),
-    //   (_vars.voteWeightA + _vars.voteWeightB) / 7, // amount of GOV to borrow
-    //   uint256(DataTypes.InterestRateMode.STABLE), // interestRateMode
-    //   0, // referralCode
-    //   _vars.borrower // onBehalfOf
-    // );
-    // assertLt(govToken.balanceOf(address(cToken)), _initGovBalance);
-    // govToken.delegate(_vars.borrower);
-    // vm.stopPrank();
-    //
-    // // Create the proposal.
-    // uint256 _proposalId = _createAndSubmitProposal();
-    //
-    // // Jump ahead to the proposal snapshot to lock in the cToken's balance.
-    // vm.roll(flexVotingGovernor.proposalSnapshot(_proposalId) + 1);
-    // uint256 _expectedVotingWeight = govToken.balanceOf(address(cToken));
-    // assert(_expectedVotingWeight < _initGovBalance);
-    //
-    // // A+B express votes
-    // vm.prank(_vars.voterA);
-    // cToken.expressVote(_proposalId, _vars.supportTypeA);
-    // vm.prank(_vars.voterB);
-    // cToken.expressVote(_proposalId, _vars.supportTypeB);
-    //
-    // // Submit votes on behalf of the cToken.
-    // cToken.castVote(_proposalId);
-    //
-    // // Vote should be cast as a percentage of the depositer's expressed types, since
-    // // the actual weight is different from the deposit weight.
-    // (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
-    //   flexVotingGovernor.proposalVotes(_proposalId);
-    //
-    // // These can differ because votes are rounded.
-    // assertApproxEqAbs(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
-    //
-    // // forgefmt: disable-start
-    // if (_vars.supportTypeA == _vars.supportTypeB) {
-    //   assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
-    //   assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
-    //   assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
-    // } else {
-    //   uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initGovBalance;
-    //   uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initGovBalance;
-    //
-    //   // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
-    //   if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-    //   if (_vars.supportTypeB == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
-    //   if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-    //   if (_vars.supportTypeB == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
-    //   if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-    //   if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
-    // }
-    // // forgefmt: disable-end
-    //
-    // // The borrower should also be able to submit votes!
-    // vm.prank(_vars.borrower);
-    // flexVotingGovernor.castVoteWithReasonAndParams(
-    //   _proposalId,
-    //   uint8(VoteType.For),
-    //   "Vote from the person that borrowed Gov from Aave",
-    //   new bytes(0) // Vote nominally so that all of the borrower's weight is used.
-    // );
-    //
-    // (_againstVotes, _forVotes, _abstainVotes) = flexVotingGovernor.proposalVotes(_proposalId);
-    // // The summed votes should now ~equal the amount of Gov initially supplied,
-    // // since the borrower also voted. There can be off-by-one errors because
-    // // the cToken rounds vote weights down before casting, but the total voting
-    // // weight expressed should be constrained by the amount of govToken injected into
-    // // the system. This ensures there's no double counting possible.
-    // assertApproxEqAbs(
-    //   _initGovBalance,
-    //   _againstVotes + _forVotes + _abstainVotes,
-    //   1,
-    //   "the number of votes cast does not match the amount of gov minted"
-    // );
+  function _testVoteWeightIsScaledBasedOnPoolBalance(
+    VoteWeightIsScaledVars memory _vars
+  ) private {
+    // This would be a vm.assume if we could do fuzz tests.
+    assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
+
+    // Deposit some funds.
+    _mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
+    _mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
+    uint256 _initGovBalance = govToken.balanceOf(address(cToken));
+
+    // Borrow GOV from the cToken, decreasing its token balance.
+    deal(weth, _vars.borrower, _vars.borrowerAssets);
+    vm.startPrank(_vars.borrower);
+    ERC20(weth).approve(address(cToken), type(uint256).max);
+    cToken.supply(weth, _vars.borrowerAssets);
+    // Borrow GOV against WETH
+    cToken.withdraw(
+      address(govToken),
+      (_vars.voteWeightA + _vars.voteWeightB) / 7 // amount of GOV to borrow
+    );
+    assertLt(govToken.balanceOf(address(cToken)), _initGovBalance);
+    govToken.delegate(_vars.borrower);
+    vm.stopPrank();
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the cToken's balance.
+    vm.roll(flexVotingGovernor.proposalSnapshot(_proposalId) + 1);
+    uint256 _expectedVotingWeight = govToken.balanceOf(address(cToken));
+    assert(_expectedVotingWeight < _initGovBalance);
+
+    // A+B express votes
+    vm.prank(_vars.voterA);
+    cToken.expressVote(_proposalId, _vars.supportTypeA);
+    vm.prank(_vars.voterB);
+    cToken.expressVote(_proposalId, _vars.supportTypeB);
+
+    // Submit votes on behalf of the cToken.
+    cToken.castVote(_proposalId);
+
+    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // the actual weight is different from the deposit weight.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      flexVotingGovernor.proposalVotes(_proposalId);
+
+    // These can differ because votes are rounded.
+    assertApproxEqAbs(_againstVotes + _forVotes + _abstainVotes, _expectedVotingWeight, 1);
+
+    // forgefmt: disable-start
+    if (_vars.supportTypeA == _vars.supportTypeB) {
+      assertEq(_forVotes, _vars.supportTypeA == uint8(VoteType.For) ? _expectedVotingWeight : 0);
+      assertEq(_againstVotes, _vars.supportTypeA == uint8(VoteType.Against) ? _expectedVotingWeight : 0);
+      assertEq(_abstainVotes, _vars.supportTypeA == uint8(VoteType.Abstain) ? _expectedVotingWeight : 0);
+    } else {
+      uint256 _expectedVotingWeightA = (_vars.voteWeightA * _expectedVotingWeight) / _initGovBalance;
+      uint256 _expectedVotingWeightB = (_vars.voteWeightB * _expectedVotingWeight) / _initGovBalance;
+
+      // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+      if (_vars.supportTypeA == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.For)) assertApproxEqAbs(_forVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Against)) assertApproxEqAbs(_againstVotes, _expectedVotingWeightB, 1);
+      if (_vars.supportTypeA == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+      if (_vars.supportTypeB == uint8(VoteType.Abstain)) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightB, 1);
+    }
+    // forgefmt: disable-end
+
+    // The borrower should also be able to submit votes!
+    vm.prank(_vars.borrower);
+    flexVotingGovernor.castVoteWithReasonAndParams(
+      _proposalId,
+      uint8(VoteType.For),
+      "Vote from the person that borrowed Gov from Aave",
+      new bytes(0) // Vote nominally so that all of the borrower's weight is used.
+    );
+
+    (_againstVotes, _forVotes, _abstainVotes) = flexVotingGovernor.proposalVotes(_proposalId);
+    // The summed votes should now ~equal the amount of Gov initially supplied,
+    // since the borrower also voted. There can be off-by-one errors because
+    // the cToken rounds vote weights down before casting, but the total voting
+    // weight expressed should be constrained by the amount of govToken injected into
+    // the system. This ensures there's no double counting possible.
+    assertApproxEqAbs(
+      _initGovBalance,
+      _againstVotes + _forVotes + _abstainVotes,
+      1,
+      "the number of votes cast does not match the amount of gov minted"
+    );
   }
 
   function test_AgainstVotingWeightIsAbandonedIfSomeoneDoesntExpress() public {
