@@ -37,7 +37,7 @@ jobs:
           version: nightly
 
       - name: Run tests
-        run: forge test
+        run: forge test -vvvv
   #
   # fmt:
   #   runs-on: ubuntu-latest
