@@ -13,7 +13,6 @@ import {FlexVotingClient} from "src/FlexVotingClient.sol";
 contract CometFlexVoting is Comet, FlexVotingClient {
   using Checkpoints for Checkpoints.History;
 
-  /// @dev Constructor.
   /// @param _config The configuration struct for this Comet instance.
   /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(CometConfiguration.Configuration memory _config, address _governor)
@@ -23,7 +22,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
     selfDelegate();
   }
 
-  /// @notice Returns the _user's current balance in storage.
+  /// @notice Returns the current balance in storage for the `account`.
   function _rawBalanceOf(address account) internal view override returns (uint256) {
     int104 _principal = userBasic[account].principal;
     return _principal > 0 ? uint256(int256(_principal)) : 0;
@@ -34,7 +33,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
   // BEGIN: Comet overrides
   //===========================================================================
   //
-// This function is called any time the underlying balance is changed.
+  // This function is called any time the underlying balance is changed.
   function updateBasePrincipal(
     address _account,
     UserBasic memory _userBasic,
@@ -45,7 +44,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
     FlexVotingClient.totalDepositCheckpoints.push(uint224(totalSupplyBase));
   }
   //
-//===========================================================================
+  //===========================================================================
   // END: Comet overrides
   //===========================================================================
   // forgefmt: disable-end

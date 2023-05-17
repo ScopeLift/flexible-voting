@@ -11,9 +11,9 @@ import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAave
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
+
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
-
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 // forgefmt: disable-end
 

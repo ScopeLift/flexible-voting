@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.10;
 
-import {Test} from "forge-std/Test.sol";
-import {Vm} from "forge-std/Vm.sol";
-import "forge-std/console2.sol";
+import {Test, console2} from "forge-std/Test.sol";
 
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -63,7 +61,7 @@ contract CometForkTest is Test, CometConfiguration {
     flexVotingGovernor = new FractionalGovernor("Governor", IVotes(govToken));
     vm.label(address(flexVotingGovernor), "flexVotingGovernor");
 
-    //Deploy the contract which will receive proposal calls.
+    // Deploy the contract which will receive proposal calls.
     receiver = new ProposalReceiverMock();
     vm.label(address(receiver), "receiver");
 
@@ -73,13 +71,13 @@ contract CometForkTest is Test, CometConfiguration {
     //   https://etherscan.io/address/0xc3d688B66703497DAA19211EEdff47f25384cdc3#readProxyContract
     AssetConfig[] memory _assetConfigs = new AssetConfig[](5);
     _assetConfigs[0] = AssetConfig(
-      0xc00e94Cb662C3520282E6f5717214004A7f26888, // asset, COMP
-      0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5, // priceFeed
-      18, // decimals
-      650_000_000_000_000_000, // borrowCollateralFactor
-      700_000_000_000_000_000, // liquidateCollateralFactor
-      880_000_000_000_000_000, // liquidationFactor
-      900_000_000_000_000_000_000_000 // supplyCap
+      asset: 0xc00e94Cb662C3520282E6f5717214004A7f26888, // COMP
+      priceFeed: 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5,
+      decimals: 18,
+      borrowCollateralFactor: 650_000_000_000_000_000, 
+      liquidateCollateralFactor: 700_000_000_000_000_000,
+      liquidationFactor: 880_000_000_000_000_000,
+      supplyCap: 900_000_000_000_000_000_000_000
     );
     _assetConfigs[1] = AssetConfig(
       0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, // asset, WBTC
@@ -167,7 +165,7 @@ contract CometForkTest is Test, CometConfiguration {
     if (block.number == 0) vm.roll(42);
 
     // Create a dummy proposal.
-    bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
+    bytes memory receiverCallData = abi.encodeWithSelector(ProposalReceiverMock.mockRecieverFunction.selector);
     address[] memory targets = new address[](1);
     uint256[] memory values = new uint256[](1);
     bytes[] memory calldatas = new bytes[](1);
@@ -181,7 +179,7 @@ contract CometForkTest is Test, CometConfiguration {
 
     // advance proposal to active state
     vm.roll(flexVotingGovernor.proposalSnapshot(proposalId) + 1);
-    assertEq(uint256(flexVotingGovernor.state(proposalId)), uint256(ProposalState.Active));
+    assertEq(uint256(flexVotingGovernor.state(proposalId)), uint256(ProposalState.Active), "createAndSubmitProposal: state mismatch");
   }
 }
 
@@ -251,7 +249,7 @@ contract Setup is CometForkTest {
     uint256 _initBorrowBalance = cToken.borrowBalanceOf(_borrower);
     assertEq(_initBorrowBalance, 100 ether);
 
-    // Supplier earns yield. Borrowerer owes interest.
+    // Supplier earns yield. Borrower owes interest.
     vm.roll(block.number + 1);
     vm.warp(block.timestamp + 100 days);
     uint256 _newCTokenBalance = cToken.balanceOf(_supplier);
@@ -276,7 +274,7 @@ contract Setup is CometForkTest {
     // Get that yield fool!
     vm.prank(_supplier);
     cToken.withdraw(address(govToken), govToken.balanceOf(address(cToken)));
-    assertTrue(govToken.balanceOf(_supplier) > _initSupply, "Supplier didn't actually earn yield");
+    assertGt(govToken.balanceOf(_supplier), _initSupply, "Supplier didn't actually earn yield");
   }
 }
 
@@ -656,7 +654,7 @@ contract CastVote is CometForkTest {
     assertEq(_againstVotesExpressed, _voteWeightA);
     assertEq(_abstainVotesExpressed, _voteWeightB);
 
-    // The governor should have not recieved any votes yet.
+    // The governor should have not received any votes yet.
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       flexVotingGovernor.proposalVotes(_proposalId);
     assertEq(_forVotes, 0);
@@ -769,7 +767,7 @@ contract CastVote is CometForkTest {
     // Submit votes on behalf of the cToken.
     cToken.castVote(_proposalId);
 
-    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // Vote should be cast as a percentage of the depositor's expressed types, since
     // the actual weight is different from the deposit weight.
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       flexVotingGovernor.proposalVotes(_proposalId);
@@ -918,7 +916,7 @@ contract CastVote is CometForkTest {
     // Submit votes on behalf of the cToken.
     cToken.castVote(_proposalId);
 
-    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // Vote should be cast as a percentage of the depositor's expressed types, since
     // the actual weight is different from the deposit weight.
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       flexVotingGovernor.proposalVotes(_proposalId);
