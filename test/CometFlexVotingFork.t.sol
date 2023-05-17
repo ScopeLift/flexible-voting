@@ -70,75 +70,75 @@ contract CometForkTest is Test, CometConfiguration {
     // These configs are all based on the cUSDCv3 token configs:
     //   https://etherscan.io/address/0xc3d688B66703497DAA19211EEdff47f25384cdc3#readProxyContract
     AssetConfig[] memory _assetConfigs = new AssetConfig[](5);
-    _assetConfigs[0] = AssetConfig(
+    _assetConfigs[0] = AssetConfig({
       asset: 0xc00e94Cb662C3520282E6f5717214004A7f26888, // COMP
       priceFeed: 0xdbd020CAeF83eFd542f4De03e3cF0C28A4428bd5,
       decimals: 18,
-      borrowCollateralFactor: 650_000_000_000_000_000, 
+      borrowCollateralFactor: 650_000_000_000_000_000,
       liquidateCollateralFactor: 700_000_000_000_000_000,
       liquidationFactor: 880_000_000_000_000_000,
       supplyCap: 900_000_000_000_000_000_000_000
-    );
-    _assetConfigs[1] = AssetConfig(
-      0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, // asset, WBTC
-      0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c, // priceFeed
-      8, // decimals
-      700_000_000_000_000_000, // borrowCollateralFactor
-      770_000_000_000_000_000, // liquidateCollateralFactor
-      950_000_000_000_000_000, // liquidationFactor
-      1_200_000_000_000 // supplyCap
-    );
-    _assetConfigs[2] = AssetConfig(
-      weth, // asset
-      0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419, // priceFeed
-      18, // decimals
-      825_000_000_000_000_000, // borrowCollateralFactor
-      895_000_000_000_000_000, // liquidateCollateralFactor
-      950_000_000_000_000_000, // liquidationFactor
-      350_000_000_000_000_000_000_000 // supplyCap
-    );
-    _assetConfigs[3] = AssetConfig(
-      0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984, // asset, UNI
-      0x553303d460EE0afB37EdFf9bE42922D8FF63220e, // priceFeed
-      18, // decimals
-      750_000_000_000_000_000, // borrowCollateralFactor
-      810_000_000_000_000_000, // liquidateCollateralFactor
-      930_000_000_000_000_000, // liquidationFactor
-      2_300_000_000_000_000_000_000_000 // supplyCap
-    );
-    _assetConfigs[4] = AssetConfig(
-      0x514910771AF9Ca656af840dff83E8264EcF986CA, // asset, LINK
-      0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c, // priceFeed
-      18, // decimals
-      790_000_000_000_000_000, // borrowCollateralFactor
-      850_000_000_000_000_000, // liquidateCollateralFactor
-      930_000_000_000_000_000, // liquidationFactor
-      1_250_000_000_000_000_000_000_000 // supplyCap
-    );
-    Configuration memory _config = Configuration(
-      COMPOUND_GOVERNOR,
-      0xbbf3f1421D886E9b2c5D716B5192aC998af2012c, // pauseGuardian
-      address(govToken), // baseToken
-      0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6, // baseTokenPriceFeed, using the chainlink
-        // USDC/USD price feed
-      0x285617313887d43256F852cAE0Ee4de4b68D45B0, // extensionDelegate
-      800_000_000_000_000_000, // supplyKink
-      1_030_568_239 * 60 * 60 * 24 * 365, // supplyPerYearInterestRateSlopeLow
-      12_683_916_793 * 60 * 60 * 24 * 365, // supplyPerYearInterestRateSlopeHigh
-      0, // supplyPerYearInterestRateBase
-      800_000_000_000_000_000, // borrowKink
-      1_109_842_719 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateSlopeLow
-      7_927_447_995 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateSlopeHigh
-      475_646_879 * 60 * 60 * 24 * 365, // borrowPerYearInterestRateBase
-      600_000_000_000_000_000, // storeFrontPriceFactor
-      1_000_000_000_000_000, // trackingIndexScale
-      0, // baseTrackingSupplySpeed
-      3_257_060_185_185, // baseTrackingBorrowSpeed
-      1_000_000_000_000, // baseMinForRewards
-      100_000_000, // baseBorrowMin
-      5_000_000_000_000, // targetReserves
-      _assetConfigs
-    );
+    });
+    _assetConfigs[1] = AssetConfig({
+      asset: 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599, // WBTC
+      priceFeed: 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c,
+      decimals: 8,
+      borrowCollateralFactor: 700_000_000_000_000_000,
+      liquidateCollateralFactor: 770_000_000_000_000_000,
+      liquidationFactor: 950_000_000_000_000_000,
+      supplyCap: 1_200_000_000_000
+    });
+    _assetConfigs[2] = AssetConfig({
+      asset: weth,
+      priceFeed: 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419,
+      decimals: 18,
+      borrowCollateralFactor: 825_000_000_000_000_000,
+      liquidateCollateralFactor: 895_000_000_000_000_000,
+      liquidationFactor: 950_000_000_000_000_000,
+      supplyCap: 350_000_000_000_000_000_000_000
+    });
+    _assetConfigs[3] = AssetConfig({
+      asset: 0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984,
+      priceFeed: 0x553303d460EE0afB37EdFf9bE42922D8FF63220e,
+      decimals: 18,
+      borrowCollateralFactor: 750_000_000_000_000_000,
+      liquidateCollateralFactor: 810_000_000_000_000_000,
+      liquidationFactor: 930_000_000_000_000_000,
+      supplyCap: 2_300_000_000_000_000_000_000_000
+    });
+    _assetConfigs[4] = AssetConfig({
+      asset: 0x514910771AF9Ca656af840dff83E8264EcF986CA,
+      priceFeed: 0x2c1d072e956AFFC0D435Cb7AC38EF18d24d9127c,
+      decimals: 18,
+      borrowCollateralFactor: 790_000_000_000_000_000,
+      liquidateCollateralFactor: 850_000_000_000_000_000,
+      liquidationFactor: 930_000_000_000_000_000,
+      supplyCap: 1_250_000_000_000_000_000_000_000
+    });
+    address _chainlinkUsdcUsdFeed = 0x8fFfFfd4AfB6115b954Bd326cbe7B4BA576818f6;
+    Configuration memory _config = Configuration({
+      governor: COMPOUND_GOVERNOR,
+      pauseGuardian: 0xbbf3f1421D886E9b2c5D716B5192aC998af2012c,
+      baseToken: address(govToken),
+      baseTokenPriceFeed: _chainlinkUsdcUsdFeed,
+      extensionDelegate: 0x285617313887d43256F852cAE0Ee4de4b68D45B0,
+      supplyKink: 800_000_000_000_000_000,
+      supplyPerYearInterestRateSlopeLow: 1_030_568_239 * 60 * 60 * 24 * 365,
+      supplyPerYearInterestRateSlopeHigh: 12_683_916_793 * 60 * 60 * 24 * 365,
+      supplyPerYearInterestRateBase: 0,
+      borrowKink: 800_000_000_000_000_000,
+      borrowPerYearInterestRateSlopeLow: 1_109_842_719 * 60 * 60 * 24 * 365,
+      borrowPerYearInterestRateSlopeHigh: 7_927_447_995 * 60 * 60 * 24 * 365,
+      borrowPerYearInterestRateBase: 475_646_879 * 60 * 60 * 24 * 365,
+      storeFrontPriceFactor: 600_000_000_000_000_000,
+      trackingIndexScale: 1_000_000_000_000_000,
+      baseTrackingSupplySpeed: 0,
+      baseTrackingBorrowSpeed: 3_257_060_185_185,
+      baseMinForRewards: 1_000_000_000_000,
+      baseBorrowMin: 100_000_000,
+      targetReserves: 5_000_000_000_000,
+      assetConfigs: _assetConfigs
+    });
 
     cToken = new CometFlexVoting(_config, address(flexVotingGovernor));
 
