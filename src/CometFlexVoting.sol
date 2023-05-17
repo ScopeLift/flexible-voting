@@ -37,7 +37,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
   {
     Comet.updateBasePrincipal(_account, _userBasic, _principalNew);
     FlexVotingClient._checkpointRawBalanceOf(_account);
-    FlexVotingClient.totalDepositCheckpoints.push(uint224(totalSupplyBase));
+    FlexVotingClient.totalBalanceCheckpoints.push(uint224(totalSupplyBase));
   }
   //===========================================================================
   // END: Comet overrides

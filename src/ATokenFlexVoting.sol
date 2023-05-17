@@ -88,8 +88,8 @@ contract ATokenFlexVoting is AToken, FlexVotingClient {
   function _burn(address account, uint128 amount) internal override {
     MintableIncentivizedERC20._burn(account, amount);
     FlexVotingClient._checkpointRawBalanceOf(account);
-    FlexVotingClient.totalDepositCheckpoints.push(
-      FlexVotingClient.totalDepositCheckpoints.latest() - amount
+    FlexVotingClient.totalBalanceCheckpoints.push(
+      FlexVotingClient.totalBalanceCheckpoints.latest() - amount
     );
   }
 
@@ -100,8 +100,8 @@ contract ATokenFlexVoting is AToken, FlexVotingClient {
   function _mint(address account, uint128 amount) internal override {
     MintableIncentivizedERC20._mint(account, amount);
     FlexVotingClient._checkpointRawBalanceOf(account);
-    FlexVotingClient.totalDepositCheckpoints.push(
-      FlexVotingClient.totalDepositCheckpoints.latest() + amount
+    FlexVotingClient.totalBalanceCheckpoints.push(
+      FlexVotingClient.totalBalanceCheckpoints.latest() + amount
     );
   }
 

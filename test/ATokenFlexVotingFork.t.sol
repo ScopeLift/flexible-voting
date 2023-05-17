@@ -1663,7 +1663,7 @@ contract CastVote is AaveAtokenForkTest {
   }
 }
 
-contract GetPastStoredBalanceTest is AaveAtokenForkTest {
+contract GetPastRawBalanceTest is AaveAtokenForkTest {
   function test_GetPastStoredBalanceCorrectlyReadsCheckpoints() public {
     _initiateRebasing();
 
@@ -1696,17 +1696,17 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     vm.roll(block.number + _blocksJumped);
     vm.warp(block.timestamp + 42 days);
 
-    // getPastStoredBalance should match the initial raw balance.
+    // getPastRawBalance should match the initial raw balance.
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumped + 1),
+      aToken.getPastRawBalance(_who, block.number - _blocksJumped + 1),
       _rawBalances[0],
-      "getPastStoredBalance does not match the initial raw balance"
+      "getPastRawBalance does not match the initial raw balance"
     );
 
-    // getPastStoredBalance should be able to give us the raw balance at an
+    // getPastRawBalance should be able to give us the raw balance at an
     // intermediate point.
     assertEq(
-      aToken.getPastStoredBalance(
+      aToken.getPastRawBalance(
         _who,
         block.number - (_blocksJumped / 3) // 1/3 is just an arbitrary point.
       ),
@@ -1725,28 +1725,28 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     // Rebasing should not affect the raw balance.
     assertGt(_rawBalances[1], _rawBalances[0], "raw balance did not increase");
 
-    // getPastStoredBalance should match historical balances.
+    // getPastRawBalance should match historical balances.
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumped - _blocksJumpedSecondTime + 1),
+      aToken.getPastRawBalance(_who, block.number - _blocksJumped - _blocksJumpedSecondTime + 1),
       _rawBalances[0],
-      "getPastStoredBalance did not match original raw balance"
+      "getPastRawBalance did not match original raw balance"
     );
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime + 1),
+      aToken.getPastRawBalance(_who, block.number - _blocksJumpedSecondTime + 1),
       _rawBalances[1],
-      "getPastStoredBalance did not match raw balance after second supply"
+      "getPastRawBalance did not match raw balance after second supply"
     );
-    // getPastStoredBalance should be able to give us the raw balance at intermediate points.
+    // getPastRawBalance should be able to give us the raw balance at intermediate points.
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3), // random point
+      aToken.getPastRawBalance(_who, block.number - _blocksJumpedSecondTime / 3), // random point
       _rawBalances[1]
     );
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedSecondTime / 3),
-      aToken.getPastStoredBalance(_who, block.number - 1)
+      aToken.getPastRawBalance(_who, block.number - _blocksJumpedSecondTime / 3),
+      aToken.getPastRawBalance(_who, block.number - 1)
     );
 
-    // Withdrawals should be reflected in getPastStoredBalance.
+    // Withdrawals should be reflected in getPastRawBalance.
     vm.startPrank(_who);
     pool.withdraw(
       address(govToken),
@@ -1761,13 +1761,13 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
     vm.warp(block.timestamp + 10 days);
 
     assertEq(
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime),
+      aToken.getPastRawBalance(_who, block.number - _blocksJumpedThirdTime),
       aToken.exposed_RawBalanceOf(_who)
     );
-    assertEq(aToken.getPastStoredBalance(_who, block.number - 1), aToken.exposed_RawBalanceOf(_who));
+    assertEq(aToken.getPastRawBalance(_who, block.number - 1), aToken.exposed_RawBalanceOf(_who));
     assertGt(
       _rawBalances[1], // The raw balance pre-withdrawal.
-      aToken.getPastStoredBalance(_who, block.number - _blocksJumpedThirdTime)
+      aToken.getPastRawBalance(_who, block.number - _blocksJumpedThirdTime)
     );
   }
 
@@ -1804,11 +1804,11 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     // Confirm voting weight has shifted.
     assertEq(
-      aToken.getPastStoredBalance(_userA, block.number - 1),
+      aToken.getPastRawBalance(_userA, block.number - 1),
       2 * _initRawBalanceUserA / 3 // 2/3rds of A's initial balance
     );
     assertEq(
-      aToken.getPastStoredBalance(_userB, block.number - 1),
+      aToken.getPastRawBalance(_userB, block.number - 1),
       1 * _initRawBalanceUserA / 3 // 1/3rd of A's initial balance
     );
   }
@@ -1847,11 +1847,11 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     // Confirm voting weight has shifted.
     assertEq(
-      aToken.getPastStoredBalance(_userA, block.number - 1),
+      aToken.getPastRawBalance(_userA, block.number - 1),
       2 * _initRawBalanceUserA / 3 // 2/3rds of A's initial balance
     );
     assertEq(
-      aToken.getPastStoredBalance(_userB, block.number - 1),
+      aToken.getPastRawBalance(_userB, block.number - 1),
       1 * _initRawBalanceUserA / 3 // 1/3rd of A's initial balance
     );
   }
@@ -1887,7 +1887,7 @@ contract GetPastStoredBalanceTest is AaveAtokenForkTest {
 
     assertGt(aToken.balanceOf(_treasury), _initTreasuryBalance);
 
-    assertGt(aToken.getPastStoredBalance(_treasury, block.number - 1), 0);
+    assertGt(aToken.getPastRawBalance(_treasury, block.number - 1), 0);
   }
 }
 

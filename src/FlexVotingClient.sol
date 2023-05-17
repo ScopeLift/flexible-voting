@@ -6,8 +6,43 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
-// TODO natspec
-// this is a contract to make it easy to build clients for flex voting governors.
+/// @notice This is an abstract contract to make it easy to build clients for
+/// governance systems that inherit from GovernorCountingFractional, a.k.a.
+/// "flexible voting" governors.
+///
+/// A "client" in this sense is a contract that:
+///   (a) receives deposits of governance tokens from its users,
+///   (b) gives said depositors the ability to express their voting preferences
+///       on governance proposals, and
+///   (c) casts votes on said proposals to flexible voting governors according
+///       to the expressed preferences of its depositors.
+///
+/// This contract assumes that a child contract will implement a mechanism for
+/// receiving and storing deposit balances, part (a). With that in place, this
+/// contract supplies features (b) and (c).
+///
+/// A key concept here is that of a user's "raw balance". The raw balance is the
+/// system's internal representation of a user's claim on the governance tokens
+/// that it custodies. Since different systems might represent such claims in
+/// different ways, this contract leaves the implementation of the `_rawBalance`
+/// function to the child contract.
+///
+/// The simplest such representation would be to directly store the cumulative
+/// balance of the governance token that the user has deposited. In such a
+/// system, the amount that the user deposits is the amount that the user has
+/// claim to. If the user has claim to 1e18 governance tokens, the internal
+/// representation is just 1e18.
+///
+/// In many systems, however, the raw balance will not be equivalent to the
+/// amount of governance tokens the user has claim to. In Aave, for example,
+/// deposit amounts are scaled down by an ever-increasing index that represents
+/// the cumulative amount of interest earned over the lifetime of deposits. The
+/// "raw balance" of a user in Aave's case is this scaled down amount, since it
+/// is the value that represents the user's claim on deposits.
+///
+/// If the raw balance can be identified and defined for a system, and
+/// `_rawBalance` implemented for it, then this contract will take care of the
+/// rest.
 abstract contract FlexVotingClient {
   using SafeCast for uint256;
   using Checkpoints for Checkpoints.History;
@@ -36,35 +71,38 @@ abstract contract FlexVotingClient {
   /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
   IFractionalGovernor public immutable GOVERNOR;
 
-  /// @notice Mapping from address to stored (not rebased) balance checkpoint history.
+  /// @notice Mapping from address to the checkpoint history of raw balances
+  /// of that address.
   mapping(address => Checkpoints.History) private balanceCheckpoints;
 
-  /// @notice History of total stored (not rebased) balances.
-  Checkpoints.History internal totalDepositCheckpoints;
+  /// @notice History of the sum total of raw balances in the system. May or may
+  /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
+  /// given time.
+  Checkpoints.History internal totalBalanceCheckpoints;
 
-  /// @dev Constructor.
   /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(address _governor) {
     GOVERNOR = IFractionalGovernor(_governor);
   }
 
-  /// @notice Returns the _user's current balance in storage. If the balance
-  /// rebases this should return the non-rebased value, i.e. the value before
-  /// any computations are run or interest is applied.
+  /// @notice Returns a representation of the current amount of `GOVERNOR`s
+  /// token that `_user` has claim to in this system. It may or may not be
+  /// equivalent to the withdrawable balance of `GOVERNOR`s token for `user`,
+  /// e.g. if the internal representation of balance has been scaled down.
   function _rawBalanceOf(address _user) internal view virtual returns (uint256);
 
-  // TODO add natspec
+  /// @notice Delegates the present contract's voting rights with `GOVERNOR` to itself.
   function _selfDelegate() internal {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
 
-  /// @notice Allow a depositor to express their voting preference for a given
+  /// @notice Allow the caller to express their voting preference for a given
   /// proposal. Their preference is recorded internally but not moved to the
   /// Governor until `castVote` is called.
   /// @param proposalId The proposalId in the associated Governor
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
-    uint256 weight = getPastStoredBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
+    uint256 weight = getPastRawBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
     require(weight > 0, "no weight");
 
     require(!proposalVotersHasVoted[proposalId][msg.sender], "already voted");
@@ -82,9 +120,9 @@ abstract contract FlexVotingClient {
   }
 
   /// @notice Causes this contract to cast a vote to the Governor for all of the
-  /// accumulated votes expressed by users. Uses the sum of all raw (unrebased) balances
-  /// to proportionally split its voting weight. Can be called by anyone. Can be called
-  /// multiple times during the lifecycle of a given proposal.
+  /// accumulated votes expressed by users. Uses the sum of all raw balances to
+  /// proportionally split its voting weight. Can be called by anyone. Can be
+  /// called multiple times during the lifecycle of a given proposal.
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
@@ -154,16 +192,16 @@ abstract contract FlexVotingClient {
     balanceCheckpoints[_user].push(_rawBalanceOf(_user));
   }
 
-  /// @notice Returns the _user's balance in storage at the _blockNumber.
-  /// @param _user The account that's historical balance will be looked up.
-  /// @param _blockNumber The block at which to lookup the _user's balance.
-  function getPastStoredBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
+  /// @notice Returns the `_user`'s raw balance at `_blockNumber`.
+  /// @param _user The account that's historical raw balance will be looked up.
+  /// @param _blockNumber The block at which to lookup the _user's raw balance.
+  function getPastRawBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
     return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
   }
 
-  /// @notice Returns the total stored balance of all users at _blockNumber.
-  /// @param _blockNumber The block at which to lookup the total stored balance.
+  /// @notice Returns the sum total of raw balances of all users at `_blockNumber`.
+  /// @param _blockNumber The block at which to lookup the total balance.
   function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
-    return totalDepositCheckpoints.getAtProbablyRecentBlock(_blockNumber);
+    return totalBalanceCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 }
