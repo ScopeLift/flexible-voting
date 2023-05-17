@@ -78,7 +78,7 @@ contract ATokenFlexVoting is AToken, FlexVotingClient {
       params
     );
 
-    FlexVotingClient.selfDelegate();
+    FlexVotingClient._selfDelegate();
   }
 
   /// Note: this has been modified from Aave v3's MintableIncentivizedERC20 to

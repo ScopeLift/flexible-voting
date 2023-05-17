@@ -165,7 +165,8 @@ contract CometForkTest is Test, CometConfiguration {
     if (block.number == 0) vm.roll(42);
 
     // Create a dummy proposal.
-    bytes memory receiverCallData = abi.encodeWithSelector(ProposalReceiverMock.mockRecieverFunction.selector);
+    bytes memory receiverCallData =
+      abi.encodeWithSelector(ProposalReceiverMock.mockRecieverFunction.selector);
     address[] memory targets = new address[](1);
     uint256[] memory values = new uint256[](1);
     bytes[] memory calldatas = new bytes[](1);
@@ -179,7 +180,11 @@ contract CometForkTest is Test, CometConfiguration {
 
     // advance proposal to active state
     vm.roll(flexVotingGovernor.proposalSnapshot(proposalId) + 1);
-    assertEq(uint256(flexVotingGovernor.state(proposalId)), uint256(ProposalState.Active), "createAndSubmitProposal: state mismatch");
+    assertEq(
+      uint256(flexVotingGovernor.state(proposalId)),
+      uint256(ProposalState.Active),
+      "createAndSubmitProposal: state mismatch"
+    );
   }
 }
 

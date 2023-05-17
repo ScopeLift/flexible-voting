@@ -5,8 +5,6 @@ import {Comet} from "comet/Comet.sol";
 import {CometConfiguration} from "comet/CometConfiguration.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
 
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
-import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 
 // TODO add description
@@ -19,7 +17,7 @@ contract CometFlexVoting is Comet, FlexVotingClient {
     Comet(_config)
     FlexVotingClient(_governor)
   {
-    selfDelegate();
+    _selfDelegate();
   }
 
   /// @notice Returns the current balance in storage for the `account`.
@@ -28,24 +26,20 @@ contract CometFlexVoting is Comet, FlexVotingClient {
     return _principal > 0 ? uint256(int256(_principal)) : 0;
   }
 
-  // forgefmt: disable-start
   //===========================================================================
   // BEGIN: Comet overrides
   //===========================================================================
   //
   // This function is called any time the underlying balance is changed.
-  function updateBasePrincipal(
-    address _account,
-    UserBasic memory _userBasic,
-    int104 _principalNew
-  ) internal override {
+  function updateBasePrincipal(address _account, UserBasic memory _userBasic, int104 _principalNew)
+    internal
+    override
+  {
     Comet.updateBasePrincipal(_account, _userBasic, _principalNew);
     FlexVotingClient._checkpointRawBalanceOf(_account);
     FlexVotingClient.totalDepositCheckpoints.push(uint224(totalSupplyBase));
   }
-  //
   //===========================================================================
   // END: Comet overrides
   //===========================================================================
-  // forgefmt: disable-end
 }

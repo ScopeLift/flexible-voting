@@ -54,7 +54,7 @@ abstract contract FlexVotingClient {
   function _rawBalanceOf(address _user) internal view virtual returns (uint256);
 
   // TODO add natspec
-  function selfDelegate() public {
+  function _selfDelegate() internal {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
 
