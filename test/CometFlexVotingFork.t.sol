@@ -2,9 +2,9 @@
 pragma solidity >=0.8.10;
 
 import {Test, console2} from "forge-std/Test.sol";
+import {IERC20} from "forge-std/interfaces/IERC20.sol";
 
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import {CometFlexVoting} from "src/CometFlexVoting.sol";
 import {FractionalGovernor} from "test/FractionalGovernor.sol";
@@ -12,6 +12,7 @@ import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 import {GovToken} from "test/GovToken.sol";
 
 import {CometConfiguration} from "comet/CometConfiguration.sol";
+import {CometMainInterface} from "comet/CometMainInterface.sol";
 import {Comet} from "comet/Comet.sol";
 
 contract CometForkTest is Test, CometConfiguration {
@@ -22,13 +23,10 @@ contract CometForkTest is Test, CometConfiguration {
   address immutable COMPOUND_GOVERNOR = 0x6d903f6003cca6255D85CcA4D3B5E5146dC33925;
   GovToken govToken;
   FractionalGovernor flexVotingGovernor;
-  ProposalReceiverMock receiver;
+  ProposalReceiverMock proposalTarget;
 
   // Mainnet addresses.
   address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-
-  // See CometMainInterface.sol.
-  error NotCollateralized();
 
   enum ProposalState {
     Pending,
@@ -50,7 +48,14 @@ contract CometForkTest is Test, CometConfiguration {
   function setUp() public {
     // Compound v3 has been deployed to mainnet.
     // https://docs.compound.finance/#networks
-    uint256 mainnetForkBlock = 17_146_483;
+    //
+    // This is just the most recent safe block on mainnet at the time these
+    // tests were written. There is no special reason to use this block and it
+    // probably can be safely updated as the chain grows. The things we
+    // interract with on-chain (e.g. token addresses, governance addresses,
+    // price feeds/oracles) are unlikely to change in ways that invalidate the
+    // assumptions of this test suite.
+    uint256 mainnetForkBlock = 17_288_576;
     forkId = vm.createSelectFork(vm.rpcUrl("mainnet"), mainnetForkBlock);
 
     // Deploy the GOV token.
@@ -62,8 +67,8 @@ contract CometForkTest is Test, CometConfiguration {
     vm.label(address(flexVotingGovernor), "flexVotingGovernor");
 
     // Deploy the contract which will receive proposal calls.
-    receiver = new ProposalReceiverMock();
-    vm.label(address(receiver), "receiver");
+    proposalTarget = new ProposalReceiverMock();
+    vm.label(address(proposalTarget), "proposalTarget");
 
     // ========= START DEPLOY NEW COMET ========================
     //
@@ -152,7 +157,7 @@ contract CometForkTest is Test, CometConfiguration {
   // Helper functions
   // ------------------
 
-  function _mintGovAndSupplyToCompound(address _who, uint256 _govAmount) internal {
+  function mintGovAndSupplyToCompound(address _who, uint256 _govAmount) internal {
     govToken.exposed_mint(_who, _govAmount);
     vm.startPrank(_who);
     govToken.approve(address(cToken), type(uint256).max);
@@ -160,21 +165,22 @@ contract CometForkTest is Test, CometConfiguration {
     vm.stopPrank();
   }
 
-  function _createAndSubmitProposal() internal returns (uint256 proposalId) {
-    // Proposal will underflow if we're on the zero block.
-    if (block.number == 0) vm.roll(42);
-
+  function createAndSubmitProposal() internal returns (uint256 proposalId) {
     // Create a dummy proposal.
-    bytes memory receiverCallData =
+    bytes memory targetCallData =
       abi.encodeWithSelector(ProposalReceiverMock.mockRecieverFunction.selector);
     address[] memory targets = new address[](1);
     uint256[] memory values = new uint256[](1);
     bytes[] memory calldatas = new bytes[](1);
-    targets[0] = address(receiver);
+    targets[0] = address(proposalTarget);
     values[0] = 0; // no ETH will be sent
-    calldatas[0] = receiverCallData;
+    calldatas[0] = targetCallData;
 
     // Submit the proposal.
+    //
+    // The proposer is the test contract for simplicity. This works because the
+    // default proposal threshold is 0, i.e. you don't have to have a govToken
+    // balance in order to propose.
     proposalId = flexVotingGovernor.propose(targets, values, calldatas, "A great proposal");
     assertEq(uint256(flexVotingGovernor.state(proposalId)), uint256(ProposalState.Pending));
 
@@ -189,7 +195,7 @@ contract CometForkTest is Test, CometConfiguration {
 }
 
 contract Setup is CometForkTest {
-  function testFork_SetupCTokenDeploy() public {
+  function testFork_CTokenDeploy() public {
     assertEq(cToken.governor(), COMPOUND_GOVERNOR);
     assertEq(cToken.baseToken(), address(govToken));
     assertEq(address(cToken.GOVERNOR()), address(flexVotingGovernor));
@@ -202,7 +208,7 @@ contract Setup is CometForkTest {
     );
   }
 
-  function testFork_SetupCanSupplyGovToCompound() public {
+  function testFork_CanSupplyGovToCompound() public {
     // Mint GOV and deposit into Compound.
     assertEq(cToken.balanceOf(address(this)), 0);
     assertEq(govToken.balanceOf(address(cToken)), 0);
@@ -220,7 +226,7 @@ contract Setup is CometForkTest {
     assertEq(cToken.balanceOf(address(this)), 0 ether);
   }
 
-  function testFork_SetupCanBorrowGov() public {
+  function testFork_CanBorrowGov() public {
     // Mint GOV and deposit into Compound.
     address _supplier = address(this);
     assertEq(cToken.balanceOf(_supplier), 0);
@@ -237,15 +243,15 @@ contract Setup is CometForkTest {
     address _borrower = makeAddr("_borrower");
     deal(weth, _borrower, 100 ether);
     vm.prank(_borrower);
-    vm.expectRevert(NotCollateralized.selector);
+    vm.expectRevert(CometMainInterface.NotCollateralized.selector);
     cToken.withdraw(address(govToken), 0.1 ether);
 
     // Borrower deposits WETH to borrow GOV against.
     vm.prank(_borrower);
-    ERC20(weth).approve(address(cToken), type(uint256).max);
+    IERC20(weth).approve(address(cToken), type(uint256).max);
     vm.prank(_borrower);
     cToken.supply(weth, 100 ether);
-    assertEq(ERC20(weth).balanceOf(_borrower), 0);
+    assertEq(IERC20(weth).balanceOf(_borrower), 0);
 
     // Borrow GOV against WETH position.
     vm.prank(_borrower);
@@ -258,9 +264,9 @@ contract Setup is CometForkTest {
     vm.roll(block.number + 1);
     vm.warp(block.timestamp + 100 days);
     uint256 _newCTokenBalance = cToken.balanceOf(_supplier);
-    assertTrue(_newCTokenBalance > _initCTokenBalance, "Supplier has not earned yield");
+    assertGt(_newCTokenBalance, _initCTokenBalance, "Supplier has not earned yield");
     uint256 _newBorrowBalance = cToken.borrowBalanceOf(_borrower);
-    assertTrue(_newBorrowBalance > _initBorrowBalance, "Borrower does not owe interest");
+    assertGt(_newBorrowBalance, _initBorrowBalance, "Borrower does not owe interest");
 
     // The supplier can't claim the yield yet because the cToken doesn't have it.
     vm.prank(_supplier);
@@ -304,10 +310,10 @@ contract CastVote is CometForkTest {
 
   function _testUserCanCastVotes(address _who, uint256 _voteWeight, uint8 _supportType) private {
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_who, _voteWeight);
+    mintGovAndSupplyToCompound(_who, _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
     assertEq(
       govToken.getPastVotes(address(cToken), block.number - 1),
       _voteWeight,
@@ -384,7 +390,7 @@ contract CastVote is CometForkTest {
     assertEq(govToken.balanceOf(_who), _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // _who should NOT be able to express his/her vote on the proposal
     vm.expectRevert(bytes("no weight"));
@@ -422,10 +428,10 @@ contract CastVote is CometForkTest {
     uint8 _supportType
   ) private {
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_who, _voteWeight);
+    mintGovAndSupplyToCompound(_who, _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Express vote preference.
     vm.prank(_who);
@@ -440,29 +446,29 @@ contract CastVote is CometForkTest {
   }
 
   function test_UserCannotDoubleVoteAfterVotingAgainst() public {
-    _tesNoDoubleVoting(
+    _testNoDoubleVoting(
       makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.Against)
     );
   }
 
   function test_UserCannotDoubleVoteAfterVotingFor() public {
-    _tesNoDoubleVoting(
+    _testNoDoubleVoting(
       makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.For)
     );
   }
 
   function test_UserCannotDoubleVoteAfterVotingAbstain() public {
-    _tesNoDoubleVoting(
+    _testNoDoubleVoting(
       makeAddr("test_UserCannotDoubleVoteAfterVoting address"), 0.042 ether, uint8(VoteType.Abstain)
     );
   }
 
-  function _tesNoDoubleVoting(address _who, uint256 _voteWeight, uint8 _supportType) private {
+  function _testNoDoubleVoting(address _who, uint256 _voteWeight, uint8 _supportType) private {
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_who, _voteWeight);
+    mintGovAndSupplyToCompound(_who, _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // _who should now be able to express his/her vote on the proposal.
     vm.prank(_who);
@@ -500,13 +506,13 @@ contract CastVote is CometForkTest {
     private
   {
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_who, _voteWeight);
+    mintGovAndSupplyToCompound(_who, _voteWeight);
 
     // Have someone else deposit as well so that _who isn't the only one.
-    _mintGovAndSupplyToCompound(makeAddr("testUserCannotCastVotesTwice"), _voteWeight);
+    mintGovAndSupplyToCompound(makeAddr("testUserCannotCastVotesTwice"), _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // _who should now be able to express his/her vote on the proposal.
     vm.prank(_who);
@@ -550,10 +556,10 @@ contract CastVote is CometForkTest {
     uint8 _supportType
   ) private {
     // Create the proposal *before* the user deposits anything.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_who, _voteWeight);
+    mintGovAndSupplyToCompound(_who, _voteWeight);
 
     // Now try to express a voting preference on the proposal.
     vm.expectRevert(bytes("no weight"));
@@ -595,14 +601,14 @@ contract CastVote is CometForkTest {
     uint8 _supportType
   ) private {
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_who, _voteWeightA);
+    mintGovAndSupplyToCompound(_who, _voteWeightA);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Sometime later the user deposits some more.
     vm.roll(flexVotingGovernor.proposalDeadline(_proposalId) - 1);
-    _mintGovAndSupplyToCompound(_who, _voteWeightB);
+    mintGovAndSupplyToCompound(_who, _voteWeightB);
 
     vm.prank(_who);
     cToken.expressVote(_proposalId, _supportType);
@@ -641,11 +647,11 @@ contract CastVote is CometForkTest {
     uint256 _voteWeightB
   ) private {
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_userA, _voteWeightA);
-    _mintGovAndSupplyToCompound(_userB, _voteWeightB);
+    mintGovAndSupplyToCompound(_userA, _voteWeightA);
+    mintGovAndSupplyToCompound(_userB, _voteWeightB);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Users should now be able to express their votes on the proposal.
     vm.prank(_userA);
@@ -733,18 +739,18 @@ contract CastVote is CometForkTest {
   }
 
   function _testVoteWeightIsScaledBasedOnPoolBalance(VoteWeightIsScaledVars memory _vars) private {
-    // This would be a vm.assume if we could do fuzz tests.
-    assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
+    // This would be a bound if we could do fuzz tests.
+    require(_vars.voteWeightA + _vars.voteWeightB < type(uint128).max, "test assumption not met");
 
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
-    _mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
+    mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
+    mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
     uint256 _initGovBalance = govToken.balanceOf(address(cToken));
 
     // Borrow GOV from the cToken, decreasing its token balance.
     deal(weth, _vars.borrower, _vars.borrowerAssets);
     vm.startPrank(_vars.borrower);
-    ERC20(weth).approve(address(cToken), type(uint256).max);
+    IERC20(weth).approve(address(cToken), type(uint256).max);
     cToken.supply(weth, _vars.borrowerAssets);
     // Borrow GOV against WETH
     cToken.withdraw(
@@ -756,7 +762,7 @@ contract CastVote is CometForkTest {
     vm.stopPrank();
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Jump ahead to the proposal snapshot to lock in the cToken's balance.
     vm.roll(flexVotingGovernor.proposalSnapshot(_proposalId) + 1);
@@ -877,18 +883,18 @@ contract CastVote is CometForkTest {
   function _testVotingWeightIsAbandonedIfSomeoneDoesntExpress(
     VotingWeightIsAbandonedVars memory _vars
   ) private {
-    // This would be a vm.assume if we could do fuzz tests.
-    assertLt(_vars.voteWeightA + _vars.voteWeightB, type(uint128).max);
+    // This would be a bound if we could do fuzz tests.
+    require(_vars.voteWeightA + _vars.voteWeightB < type(uint128).max, "test assumption not met");
 
     // Deposit some funds.
-    _mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
-    _mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
+    mintGovAndSupplyToCompound(_vars.voterA, _vars.voteWeightA);
+    mintGovAndSupplyToCompound(_vars.voterB, _vars.voteWeightB);
     uint256 _initGovBalance = govToken.balanceOf(address(cToken));
 
     // Borrow GOV from the cToken, decreasing its token balance.
     deal(weth, _vars.borrower, _vars.borrowerAssets);
     vm.startPrank(_vars.borrower);
-    ERC20(weth).approve(address(cToken), type(uint256).max);
+    IERC20(weth).approve(address(cToken), type(uint256).max);
     cToken.supply(weth, _vars.borrowerAssets);
     // Borrow GOV against WETH
     cToken.withdraw(
@@ -899,7 +905,7 @@ contract CastVote is CometForkTest {
     vm.stopPrank();
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Jump ahead to the proposal snapshot to lock in the cToken's balance.
     vm.roll(flexVotingGovernor.proposalSnapshot(_proposalId) + 1);
@@ -987,21 +993,21 @@ contract CastVote is CometForkTest {
     uint256 _voteWeightB,
     uint8 _supportTypeA
   ) private {
-    // This would be a vm.assume if we could do fuzz tests.
-    assertLt(_voteWeightA + _voteWeightB, type(uint128).max);
+    // This would be a bound if we could do fuzz tests.
+    require(_voteWeightA + _voteWeightB < type(uint128).max, "test assumption not met");
 
     // Mint and deposit for just userA.
-    _mintGovAndSupplyToCompound(_voterA, _voteWeightA);
+    mintGovAndSupplyToCompound(_voterA, _voteWeightA);
     uint256 _initGovBalance = govToken.balanceOf(address(cToken));
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = createAndSubmitProposal();
 
     // Jump ahead to the proposal snapshot to lock in the cToken's balance.
     vm.roll(flexVotingGovernor.proposalSnapshot(_proposalId) + 1);
 
     // Now mint and deposit for userB.
-    _mintGovAndSupplyToCompound(_voterB, _voteWeightB);
+    mintGovAndSupplyToCompound(_voterB, _voteWeightB);
 
     uint256 _fullVotingWeight = govToken.balanceOf(address(cToken));
     assert(_fullVotingWeight > _initGovBalance);
@@ -1037,3 +1043,6 @@ contract CastVote is CometForkTest {
 // TODO
 // If we want to be really thorough we should test that each of the cToken
 // supply/withdraw functions modifies the internal cToken checkpointing properly
+//
+// TODO
+// Test that people who supply collateral cannot express votes.
