@@ -38,11 +38,13 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 /// deposit amounts are scaled down by an ever-increasing index that represents
 /// the cumulative amount of interest earned over the lifetime of deposits. The
 /// "raw balance" of a user in Aave's case is this scaled down amount, since it
-/// is the value that represents the user's claim on deposits.
+/// is the value that represents the user's claim on deposits. Thus for Aave, a
+/// users's raw balance will always be less than the actual amount they have
+/// claim to.
 ///
 /// If the raw balance can be identified and defined for a system, and
-/// `_rawBalance` implemented for it, then this contract will take care of the
-/// rest.
+/// `_rawBalance` can be implemented for it, then this contract will take care
+/// of the rest.
 abstract contract FlexVotingClient {
   using SafeCast for uint256;
   using Checkpoints for Checkpoints.History;
@@ -61,7 +63,7 @@ abstract contract FlexVotingClient {
     uint128 abstainVotes;
   }
 
-  /// @notice Map proposalId to an address to whether they have voted on this proposal.
+  /// @dev Map proposalId to an address to whether they have voted on this proposal.
   mapping(uint256 => mapping(address => bool)) private proposalVotersHasVoted;
 
   /// @notice Map proposalId to vote totals expressed on this proposal.
@@ -71,11 +73,11 @@ abstract contract FlexVotingClient {
   /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
   IFractionalGovernor public immutable GOVERNOR;
 
-  /// @notice Mapping from address to the checkpoint history of raw balances
+  /// @dev Mapping from address to the checkpoint history of raw balances
   /// of that address.
   mapping(address => Checkpoints.History) private balanceCheckpoints;
 
-  /// @notice History of the sum total of raw balances in the system. May or may
+  /// @dev History of the sum total of raw balances in the system. May or may
   /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
   /// given time.
   Checkpoints.History internal totalBalanceCheckpoints;
@@ -85,13 +87,13 @@ abstract contract FlexVotingClient {
     GOVERNOR = IFractionalGovernor(_governor);
   }
 
-  /// @notice Returns a representation of the current amount of `GOVERNOR`s
+  /// @dev Returns a representation of the current amount of `GOVERNOR`s
   /// token that `_user` has claim to in this system. It may or may not be
   /// equivalent to the withdrawable balance of `GOVERNOR`s token for `user`,
   /// e.g. if the internal representation of balance has been scaled down.
   function _rawBalanceOf(address _user) internal view virtual returns (uint256);
 
-  /// @notice Delegates the present contract's voting rights with `GOVERNOR` to itself.
+  /// @dev Delegates the present contract's voting rights with `GOVERNOR` to itself.
   function _selfDelegate() internal {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
@@ -187,7 +189,7 @@ abstract contract FlexVotingClient {
     );
   }
 
-  /// @notice Checkpoints the _user's current raw balance.
+  /// @dev Checkpoints the _user's current raw balance.
   function _checkpointRawBalanceOf(address _user) internal {
     balanceCheckpoints[_user].push(_rawBalanceOf(_user));
   }
