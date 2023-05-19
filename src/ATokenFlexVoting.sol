@@ -4,16 +4,10 @@ pragma solidity 0.8.10;
 // forgefmt: disable-start
 import {AToken} from "aave-v3-core/contracts/protocol/tokenization/AToken.sol";
 import {MintableIncentivizedERC20} from "aave-v3-core/contracts/protocol/tokenization/base/MintableIncentivizedERC20.sol";
-import {Errors} from "aave-v3-core/contracts/protocol/libraries/helpers/Errors.sol";
-import {GPv2SafeERC20} from "aave-v3-core/contracts/dependencies/gnosis/contracts/GPv2SafeERC20.sol";
-import {IAToken} from "aave-v3-core/contracts/interfaces/IAToken.sol";
 import {IAaveIncentivesController} from "aave-v3-core/contracts/interfaces/IAaveIncentivesController.sol";
 import {IPool} from "aave-v3-core/contracts/interfaces/IPool.sol";
-import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
 
-import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 // forgefmt: disable-end
 
