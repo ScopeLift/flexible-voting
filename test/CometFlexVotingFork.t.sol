@@ -1047,21 +1047,3 @@ contract CastVote is CometForkTest {
     if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
   }
 }
-
-// TODO
-// From https://docs.compound.finance/collateral-and-borrowing/
-//   Account balances for the base token are signed integers. An account balance
-//   greater than zero indicates the base asset is supplied and A BALANCE LESS
-//   THAN ZERO INDICATES THE BASE ASSET IS BORROWED (emphasis mine)
-// What happens if someone tries to expressVote when they have borrowed the base
-// asset? We need to make sure that they cannot.
-// This should be fine because the FlexVotingClient.expressVote function checks
-// that getPastStoredBalance > 0 and reverts otherwise. But we should have a
-// test to confirm.
-
-// TODO
-// If we want to be really thorough we should test that each of the cToken
-// supply/withdraw functions modifies the internal cToken checkpointing properly
-//
-// TODO
-// Test that people who supply collateral cannot express votes.
