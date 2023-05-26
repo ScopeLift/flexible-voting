@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.10;
+pragma solidity >=0.8.10;
 
-/// @dev The interface that flexible voting-compatbile governors are expected to support.
+/// @dev The interface that flexible voting-compatible governors are expected to support.
 interface IFractionalGovernor {
   function token() external returns (address);
   function proposalSnapshot(uint256 proposalId) external view returns (uint256);

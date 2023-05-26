@@ -11,3 +11,6 @@
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
 	branch = v4.8.0
+[submodule "lib/comet"]
+	path = lib/comet
+	url = https://github.com/davidlaprade/comet
