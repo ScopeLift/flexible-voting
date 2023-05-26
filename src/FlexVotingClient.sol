@@ -93,6 +93,11 @@ abstract contract FlexVotingClient {
   /// e.g. if the internal representation of balance has been scaled down.
   function _rawBalanceOf(address _user) internal view virtual returns (uint256);
 
+  /// @dev Used as the `reason` param when submitting a vote to `GOVERNOR`.
+  function _castVoteReasonString() internal virtual returns (string memory) {
+    return "rolled-up vote from governance token holders";
+  }
+
   /// @dev Delegates the present contract's voting rights with `GOVERNOR` to itself.
   function _selfDelegate() internal {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
@@ -182,10 +187,7 @@ abstract contract FlexVotingClient {
     bytes memory fractionalizedVotes =
       abi.encodePacked(_againstVotesToCast, _forVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(
-      proposalId,
-      unusedSupportParam,
-      "rolled-up vote from governance token holders", // Reason string.
-      fractionalizedVotes
+      proposalId, unusedSupportParam, _castVoteReasonString(), fractionalizedVotes
     );
   }
 

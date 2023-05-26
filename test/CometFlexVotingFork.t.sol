@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity >=0.8.10;
 
-import {Test, console2} from "forge-std/Test.sol";
+import {Test, console2, Vm} from "forge-std/Test.sol";
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
 
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
@@ -344,7 +344,26 @@ contract CastVote is CometForkTest {
     assertEq(_abstainVotes, 0);
 
     // Submit votes on behalf of the pool.
+    vm.recordLogs();
     cToken.castVote(_proposalId);
+    Vm.Log[] memory _logs = vm.getRecordedLogs();
+
+    // Confirm the relevant events were emitted.
+    bytes32 _eventSig = keccak256("VoteCastWithParams(address,uint256,uint8,uint256,string,bytes)");
+    for (uint256 i; i < _logs.length; i++) {
+      Vm.Log memory _log = _logs[i];
+      if (_log.topics[0] == _eventSig) {
+        assertEq(address(uint160(uint256(_log.topics[1]))), address(cToken));
+        (uint256 _actualProposalId,,, string memory _reason,) =
+          abi.decode(_log.data, (uint256, uint8, uint256, string, bytes));
+        assertEq(_proposalId, _actualProposalId);
+        assertEq(
+          keccak256(bytes(_reason)),
+          keccak256("rolled-up vote from CometFlexVoting token holders"),
+          "Reason string is not: 'rolled-up vote from CometFlexVoting token holders'"
+        );
+      }
+    }
 
     // flexVotingGovernor should now record votes from the pool.
     (_againstVotes, _forVotes, _abstainVotes) = flexVotingGovernor.proposalVotes(_proposalId);

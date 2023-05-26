@@ -54,6 +54,10 @@ contract CometFlexVoting is Comet, FlexVotingClient {
     return _principal > 0 ? uint256(int256(_principal)) : 0;
   }
 
+  function _castVoteReasonString() internal override returns (string memory) {
+    return "rolled-up vote from CometFlexVoting token holders";
+  }
+
   //===========================================================================
   // BEGIN: Comet overrides
   //===========================================================================
