@@ -13,9 +13,9 @@ import {FlexVotingClient} from "src/FlexVotingClient.sol";
 /// yield on Compound and voting. They can do both.
 ///
 /// This extension has the following requirements:
-///   (a) the base token be a governance token
-///   (b) the base token's governor contract support flexible voting (see
-///       GovernorCountingFractional)
+///   (a) The base token must be a governance token.
+///   (b) The base token's governor contract must support flexible voting (see
+///       `GovernorCountingFractional`).
 ///
 /// If these requirements are met, base token depositors can call
 /// `Comet.expressVote` to signal their preference on open governance proposals.
