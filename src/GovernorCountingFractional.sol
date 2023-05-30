@@ -24,7 +24,7 @@ abstract contract GovernorCountingFractional is Governor {
     // We use this instead of EXTENDED_BALLOT_TYPEHASH to prevent the recasting
     // of signed partial votes.
     bytes32 public constant FRACTIONAL_BALLOT_TYPEHASH =
-        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params,uint256 nonce)");
+        keccak256("FractionalBallot(uint256 proposalId,uint8 support,string reason,bytes params,uint256 nonce)");
 
     struct ProposalVote {
         uint128 againstVotes;
@@ -255,13 +255,13 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev See {IGovernor-castVoteWithReasonAndParamsBySig}.
      */
     function castVoteWithReasonAndParamsBySig(
-        uint256 proposalId,
-        uint8 support,
-        string calldata reason,
-        bytes memory params,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
+        uint256,
+        uint8,
+        string calldata,
+        bytes memory,
+        uint8,
+        bytes32,
+        bytes32
     ) public virtual override returns (uint256) {
       // This function is not safe.
       revert("Missing voter param");

@@ -463,62 +463,90 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
-  function test_RevertIf_CastVoteWithReasonAndParamsBySig_SignatureIsReplayed() public {
-    Voter memory _voter;
-    uint256 _privateKey;
-    (_voter.addr, _privateKey) = makeAddrAndKey("voter");
-    vm.assume(_voter.addr != address(this));
+  struct CastVoteWithReasonAndParamsBySigReplayTestVars {
+    uint128 forVotes;
+    bytes fractionalizedVotes;
+    uint256 privateKey;
+    uint256 proposalId;
+    Voter voter;
+    bytes32 voteMessage;
+    bytes32 voteMessageHash;
+    uint8 v;
+    bytes32 r;
+    bytes32 s;
+    uint256 actualAgainstVotes;
+    uint256 actualForVotes;
+    uint256 actualAbstainVotes;
+  }
 
-    _voter.weight = 1e6;
+  function test_RevertIf_CastVoteWithReasonAndParamsBySig_SignatureIsReplayed() public {
+    CastVoteWithReasonAndParamsBySigReplayTestVars memory _vars;
+    (_vars.voter.addr, _vars.privateKey) = makeAddrAndKey("voter");
+    vm.assume(_vars.voter.addr != address(this));
+
+    _vars.voter.weight = 1e6;
 
     // Vote with 10% of the total weight. Any split <= 50% is fine since we're
     // only going to show that this can be replayed once.
-    uint128 _forVotes = uint128(_voter.weight.mulWadDown(1e17));
-    bytes memory _fractionalizedVotes = abi.encodePacked(uint128(0), _forVotes, uint128(0));
+    _vars.forVotes = uint128(_vars.voter.weight.mulWadDown(1e17));
+    _vars.fractionalizedVotes = abi.encodePacked(uint128(0), _vars.forVotes, uint128(0));
 
-    _mintAndDelegateToVoter(_voter);
-    uint256 _proposalId = _createAndSubmitProposal();
+    _mintAndDelegateToVoter(_vars.voter);
+    _vars.proposalId = _createAndSubmitProposal();
 
-    bytes32 _voteMessage = keccak256(
+    _vars.voteMessage = keccak256(
       abi.encode(
-        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
-        _proposalId,
+        keccak256("FractionalBallot(uint256 proposalId,uint8 support,string reason,bytes params,uint256 nonce)"),
+        _vars.proposalId,
         0, // support
-        _voter.addr,
+        _vars.voter.addr,
         keccak256(bytes("I have my reasons")),
-        keccak256(_fractionalizedVotes)
+        keccak256(_vars.fractionalizedVotes),
+        governor.nonce(address(this))
       )
     );
 
-    bytes32 _voteMessageHash =
-      keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _voteMessage));
+    _vars.voteMessageHash = keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
 
-    (uint8 _v, bytes32 _r, bytes32 _s) = vm.sign(_privateKey, _voteMessageHash);
+    (_vars.v, _vars.r, _vars.s) = vm.sign(_vars.privateKey, _vars.voteMessageHash);
 
     // First vote.
     governor.castVoteWithReasonAndParamsBySig(
-      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _voter.addr, _v, _r, _s
+      _vars.proposalId,
+      _vars.voter.support,
+      "I have my reasons",
+      _vars.fractionalizedVotes,
+      _vars.voter.addr,
+      _vars.v,
+      _vars.r,
+      _vars.s
     );
 
-    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
-      governor.proposalVotes(_proposalId);
+    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) = governor.proposalVotes(_vars.proposalId);
 
-    assertEq(_forVotes, _actualForVotes);
-    assertEq(0, _actualAgainstVotes);
-    assertEq(0, _actualAbstainVotes);
+    assertEq(_vars.forVotes, _vars.actualForVotes);
+    assertEq(0, _vars.actualAgainstVotes);
+    assertEq(0, _vars.actualAbstainVotes);
 
     // Second vote, which should revert.
     governor.castVoteWithReasonAndParamsBySig(
-      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _voter.addr, _v, _r, _s
+      _vars.proposalId,
+      _vars.voter.support,
+      "I have my reasons",
+      _vars.fractionalizedVotes,
+      _vars.voter.addr,
+      _vars.v,
+      _vars.r,
+      _vars.s
     );
 
     // It doesn't revert, so we check that vote counts should be unchanged, but these assertions
     // fail.
-    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
-      governor.proposalVotes(_proposalId);
-    assertEq(_forVotes, _actualForVotes);
-    assertEq(0, _actualAgainstVotes);
-    assertEq(0, _actualAbstainVotes);
+    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
+      governor.proposalVotes(_vars.proposalId);
+    assertEq(_vars.forVotes, _vars.actualForVotes);
+    assertEq(0, _vars.actualAgainstVotes);
+    assertEq(0, _vars.actualAbstainVotes);
 
     // TODO confirm the old version reverts
   }
