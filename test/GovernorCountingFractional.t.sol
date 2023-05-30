@@ -484,6 +484,7 @@ contract GovernorCountingFractionalTest is Test {
         keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
         _proposalId,
         0, // support
+        _voter.addr,
         keccak256(bytes("I have my reasons")),
         keccak256(_fractionalizedVotes)
       )
@@ -496,7 +497,7 @@ contract GovernorCountingFractionalTest is Test {
 
     // First vote.
     governor.castVoteWithReasonAndParamsBySig(
-      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _v, _r, _s
+      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _voter.addr, _v, _r, _s
     );
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
@@ -508,7 +509,7 @@ contract GovernorCountingFractionalTest is Test {
 
     // Second vote, which should revert.
     governor.castVoteWithReasonAndParamsBySig(
-      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _v, _r, _s
+      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _voter.addr, _v, _r, _s
     );
 
     // It doesn't revert, so we check that vote counts should be unchanged, but these assertions
@@ -518,6 +519,8 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_forVotes, _actualForVotes);
     assertEq(0, _actualAgainstVotes);
     assertEq(0, _actualAbstainVotes);
+
+    // TODO confirm the old version reverts
   }
 
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {

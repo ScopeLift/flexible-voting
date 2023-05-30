@@ -3,6 +3,7 @@
 
 pragma solidity ^0.8.0;
 
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {GovernorCompatibilityBravo} from "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
@@ -19,6 +20,11 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
  * knowledge proofs.
  */
 abstract contract GovernorCountingFractional is Governor {
+
+    // We use this instead of EXTENDED_BALLOT_TYPEHASH to prevent the recasting
+    // of signed partial votes.
+    bytes32 public constant FRACTIONAL_BALLOT_TYPEHASH =
+        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params,uint256 nonce)");
 
     struct ProposalVote {
         uint128 againstVotes;
@@ -37,6 +43,8 @@ abstract contract GovernorCountingFractional is Governor {
      * would tell you the number of votes that 0xBEEF has cast on proposal 42.
      */
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
+
+    mapping(address => uint256) public nonce;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -240,5 +248,56 @@ abstract contract GovernorCountingFractional is Governor {
             forVotes := and(_VOTEMASK, mload(add(voteData, 0x20)))
             abstainVotes := shr(128, mload(add(voteData, 0x40)))
         }
+    }
+
+
+    /**
+     * @dev See {IGovernor-castVoteWithReasonAndParamsBySig}.
+     */
+    function castVoteWithReasonAndParamsBySig(
+        uint256 proposalId,
+        uint8 support,
+        string calldata reason,
+        bytes memory params,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual override returns (uint256) {
+      // This function is not safe.
+      revert("Missing voter param");
+    }
+
+    function castVoteWithReasonAndParamsBySig(
+        uint256 proposalId,
+        uint8 support,
+        string calldata reason,
+        bytes memory params,
+        address voter,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) public virtual returns (uint256) {
+        address _recoveredVoter = ECDSA.recover(
+            _hashTypedDataV4(
+                keccak256(
+                    abi.encode(
+                        FRACTIONAL_BALLOT_TYPEHASH,
+                        proposalId,
+                        support,
+                        keccak256(bytes(reason)),
+                        keccak256(params),
+                        nonce[voter]
+                    )
+                )
+            ),
+            v,
+            r,
+            s
+        );
+
+        if (_recoveredVoter != voter) revert("Message signature mismatch");
+
+        nonce[voter]++;
+        return _castVote(proposalId, voter, support, reason, params);
     }
 }
