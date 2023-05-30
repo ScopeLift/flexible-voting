@@ -463,6 +463,63 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_abstainVotes, _actualAbstainVotes);
   }
 
+  function test_RevertIf_CastVoteWithReasonAndParamsBySig_SignatureIsReplayed() public {
+    Voter memory _voter;
+    uint256 _privateKey;
+    (_voter.addr, _privateKey) = makeAddrAndKey("voter");
+    vm.assume(_voter.addr != address(this));
+
+    _voter.weight = 1e6;
+
+    // Vote with 10% of the total weight. Any split <= 50% is fine since we're
+    // only going to show that this can be replayed once.
+    uint128 _forVotes = uint128(_voter.weight.mulWadDown(1e17));
+    bytes memory _fractionalizedVotes = abi.encodePacked(uint128(0), _forVotes, uint128(0));
+
+    _mintAndDelegateToVoter(_voter);
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    bytes32 _voteMessage = keccak256(
+      abi.encode(
+        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
+        _proposalId,
+        0, // support
+        keccak256(bytes("I have my reasons")),
+        keccak256(_fractionalizedVotes)
+      )
+    );
+
+    bytes32 _voteMessageHash =
+      keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _voteMessage));
+
+    (uint8 _v, bytes32 _r, bytes32 _s) = vm.sign(_privateKey, _voteMessageHash);
+
+    // First vote.
+    governor.castVoteWithReasonAndParamsBySig(
+      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _v, _r, _s
+    );
+
+    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
+      governor.proposalVotes(_proposalId);
+
+    assertEq(_forVotes, _actualForVotes);
+    assertEq(0, _actualAgainstVotes);
+    assertEq(0, _actualAbstainVotes);
+
+    // Second vote, which should revert.
+    governor.castVoteWithReasonAndParamsBySig(
+      _proposalId, _voter.support, "I have my reasons", _fractionalizedVotes, _v, _r, _s
+    );
+
+    // It doesn't revert, so we check that vote counts should be unchanged, but these assertions
+    // fail.
+    (_actualAgainstVotes, _actualForVotes, _actualAbstainVotes) =
+      governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, _actualForVotes);
+    assertEq(0, _actualAgainstVotes);
+    assertEq(0, _actualAbstainVotes);
+  }
+
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
     Voter[4] memory _voters = _setupNominalVoters(_weights);
 
