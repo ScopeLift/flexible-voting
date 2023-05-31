@@ -489,24 +489,29 @@ contract GovernorCountingFractionalTest is Test {
     // Vote with 10% of the total weight. Any split <= 50% is fine since we're
     // only going to show that this can be replayed once.
     _vars.forVotes = uint128(_vars.voter.weight.mulWadDown(1e17));
-    _vars.fractionalizedVotes = abi.encodePacked(uint128(0), _vars.forVotes, uint128(0));
+
+    _vars.fractionalizedVotes = abi.encodePacked(
+      uint128(0), // against
+      _vars.forVotes, // for
+      uint128(0), // abstain
+      governor.nonces(_vars.voter.addr)
+    );
 
     _mintAndDelegateToVoter(_vars.voter);
     _vars.proposalId = _createAndSubmitProposal();
 
     _vars.voteMessage = keccak256(
       abi.encode(
-        keccak256("FractionalBallot(uint256 proposalId,uint8 support,string reason,bytes params,uint256 nonce)"),
+        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
         _vars.proposalId,
         0, // support
-        _vars.voter.addr,
         keccak256(bytes("I have my reasons")),
-        keccak256(_vars.fractionalizedVotes),
-        governor.nonce(address(this))
+        keccak256(_vars.fractionalizedVotes)
       )
     );
 
-    _vars.voteMessageHash = keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
+    bytes32 _voteMessageHash =
+      keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
 
     (_vars.v, _vars.r, _vars.s) = vm.sign(_vars.privateKey, _vars.voteMessageHash);
 
@@ -516,7 +521,6 @@ contract GovernorCountingFractionalTest is Test {
       _vars.voter.support,
       "I have my reasons",
       _vars.fractionalizedVotes,
-      _vars.voter.addr,
       _vars.v,
       _vars.r,
       _vars.s
@@ -534,7 +538,6 @@ contract GovernorCountingFractionalTest is Test {
       _vars.voter.support,
       "I have my reasons",
       _vars.fractionalizedVotes,
-      _vars.voter.addr,
       _vars.v,
       _vars.r,
       _vars.s
@@ -547,8 +550,6 @@ contract GovernorCountingFractionalTest is Test {
     assertEq(_vars.forVotes, _vars.actualForVotes);
     assertEq(0, _vars.actualAgainstVotes);
     assertEq(0, _vars.actualAbstainVotes);
-
-    // TODO confirm the old version reverts
   }
 
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {

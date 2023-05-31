@@ -21,11 +21,6 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
  */
 abstract contract GovernorCountingFractional is Governor {
 
-    // We use this instead of EXTENDED_BALLOT_TYPEHASH to prevent the recasting
-    // of signed partial votes.
-    bytes32 public constant FRACTIONAL_BALLOT_TYPEHASH =
-        keccak256("FractionalBallot(uint256 proposalId,uint8 support,string reason,bytes params,uint256 nonce)");
-
     struct ProposalVote {
         uint128 againstVotes;
         uint128 forVotes;
@@ -44,7 +39,8 @@ abstract contract GovernorCountingFractional is Governor {
      */
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
-    mapping(address => uint256) public nonce;
+    // TODO add natspec
+    mapping(address => uint128) public nonces;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -253,40 +249,56 @@ abstract contract GovernorCountingFractional is Governor {
 
     /**
      * @dev See {IGovernor-castVoteWithReasonAndParamsBySig}.
+     * TODO add new docs
+     * the final 128bits of the params should contain the nonce.
      */
-    function castVoteWithReasonAndParamsBySig(
-        uint256,
-        uint8,
-        string calldata,
-        bytes memory,
-        uint8,
-        bytes32,
-        bytes32
-    ) public virtual override returns (uint256) {
-      // This function is not safe.
-      revert("Missing voter param");
-    }
-
     function castVoteWithReasonAndParamsBySig(
         uint256 proposalId,
         uint8 support,
         string calldata reason,
         bytes memory params,
-        address voter,
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public virtual returns (uint256) {
-        address _recoveredVoter = ECDSA.recover(
+    ) public virtual override returns (uint256) {
+        // Signature-based voting requires `params` be two full words in length:
+        //   16 bytes for againstVotes.
+        //   16 bytes for forVotes.
+        //   16 bytes for abstainVotes.
+        //   16 bytes for the signature nonce.
+        require(
+          params.length == 64,
+          "GovernorCountingFractional: invalid params for signature-based vote"
+        );
+
+        // Get the nonce out of the params. It is the last half-word.
+        uint128 nonce;
+        assembly {
+          nonce := and(
+            // Perform bitwise AND operation on the data in the second word of
+            // `params` with a mask of 128 zeros followed by 128 ones, i.e. take
+            // the last 128 bits of `params`.
+            _VOTEMASK, // TODO rename this to something more general.
+            // Load the data from memory at the returned address.
+            mload(
+              // Skip the first 64 bytes (i.e. 0x40):
+              //   32 bytes for the length of the bytes array.
+              //   32 bytes for the first word in the params
+              // Return the memory address for the last word in params.
+              add(params, 0x40)
+            )
+          )
+        }
+
+        address voter = ECDSA.recover(
             _hashTypedDataV4(
                 keccak256(
                     abi.encode(
-                        FRACTIONAL_BALLOT_TYPEHASH,
+                        EXTENDED_BALLOT_TYPEHASH,
                         proposalId,
                         support,
                         keccak256(bytes(reason)),
-                        keccak256(params),
-                        nonce[voter]
+                        keccak256(params)
                     )
                 )
             ),
@@ -295,9 +307,17 @@ abstract contract GovernorCountingFractional is Governor {
             s
         );
 
-        if (_recoveredVoter != voter) revert("Message signature mismatch");
+        require(
+          nonces[voter] == nonce,
+          "GovernorCountingFractional: signature has already been used"
+        );
 
-        nonce[voter]++;
+        nonces[voter]++;
+        // Trim params to only keep the first 48 bytes, which are the voting params.
+        assembly {
+          mstore(params, 48)
+        }
         return _castVote(proposalId, voter, support, reason, params);
     }
+
 }
