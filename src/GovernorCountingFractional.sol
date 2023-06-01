@@ -223,7 +223,7 @@ abstract contract GovernorCountingFractional is Governor {
         _proposalVotes[proposalId] = _proposalVote;
     }
 
-    uint256 constant internal _VOTEMASK = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
+    uint256 constant internal _HALF_WORD_RIGHT = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
 
     /**
      * @dev Decodes three packed uint128's. Uses assembly because of a Solidity
@@ -241,7 +241,7 @@ abstract contract GovernorCountingFractional is Governor {
     {
         assembly {
             againstVotes := shr(128, mload(add(voteData, 0x20)))
-            forVotes := and(_VOTEMASK, mload(add(voteData, 0x20)))
+            forVotes := and(_HALF_WORD_RIGHT, mload(add(voteData, 0x20)))
             abstainVotes := shr(128, mload(add(voteData, 0x40)))
         }
     }
@@ -261,34 +261,17 @@ abstract contract GovernorCountingFractional is Governor {
         bytes32 r,
         bytes32 s
     ) public virtual override returns (uint256) {
-        // Signature-based voting requires `params` be two full words in length:
+        // Signature-based fractional voting requires `params` be two full words
+        // in length:
         //   16 bytes for againstVotes.
         //   16 bytes for forVotes.
         //   16 bytes for abstainVotes.
         //   16 bytes for the signature nonce.
+        // Signature-based nominal voting requires `params` be 0 bytes.
         require(
-          params.length == 64,
+          params.length == 64 || params.length == 0,
           "GovernorCountingFractional: invalid params for signature-based vote"
         );
-
-        // Get the nonce out of the params. It is the last half-word.
-        uint128 nonce;
-        assembly {
-          nonce := and(
-            // Perform bitwise AND operation on the data in the second word of
-            // `params` with a mask of 128 zeros followed by 128 ones, i.e. take
-            // the last 128 bits of `params`.
-            _VOTEMASK, // TODO rename this to something more general.
-            // Load the data from memory at the returned address.
-            mload(
-              // Skip the first 64 bytes (i.e. 0x40):
-              //   32 bytes for the length of the bytes array.
-              //   32 bytes for the first word in the params
-              // Return the memory address for the last word in params.
-              add(params, 0x40)
-            )
-          )
-        }
 
         address voter = ECDSA.recover(
             _hashTypedDataV4(
@@ -307,16 +290,41 @@ abstract contract GovernorCountingFractional is Governor {
             s
         );
 
-        require(
-          nonces[voter] == nonce,
-          "GovernorCountingFractional: signature has already been used"
-        );
+        // If params are zero-length all of the voter's weight will be cast so
+        // we don't have to worry about checking/incrementing a nonce.
+        if (params.length == 64) {
+          // Get the nonce out of the params. It is the last half-word.
+          uint128 nonce;
+          assembly {
+            nonce := and(
+              // Perform bitwise AND operation on the data in the second word of
+              // `params` with a mask of 128 zeros followed by 128 ones, i.e. take
+              // the last 128 bits of `params`.
+              _HALF_WORD_RIGHT,
+              // Load the data from memory at the returned address.
+              mload(
+                // Skip the first 64 bytes (i.e. 0x40):
+                //   32 bytes for the length of the bytes array.
+                //   32 bytes for the first word in the params
+                // Return the memory address for the last word in params.
+                add(params, 0x40)
+              )
+            )
+          }
 
-        nonces[voter]++;
-        // Trim params to only keep the first 48 bytes, which are the voting params.
-        assembly {
-          mstore(params, 48)
+          require(
+            nonces[voter] == nonce,
+            "GovernorCountingFractional: signature has already been used"
+          );
+
+          nonces[voter]++;
+
+          // Trim params to only keep the first 48 bytes, which are the voting params.
+          assembly {
+            mstore(params, 48)
+          }
         }
+
         return _castVote(proposalId, voter, support, reason, params);
     }
 
