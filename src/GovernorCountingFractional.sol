@@ -39,7 +39,12 @@ abstract contract GovernorCountingFractional is Governor {
      */
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
-    // TODO add natspec
+    /**
+     * @dev Mapping from voter address to signature-based vote nonce. The
+     * voter's nonce increments each time a signature-based vote is cast with
+     * fractional voting params and must be included in the `params` as the last
+     * 32 bytes when signing for a fractional vote.
+     */
     mapping(address => uint128) public nonces;
 
     /**
@@ -248,9 +253,19 @@ abstract contract GovernorCountingFractional is Governor {
 
 
     /**
-     * @dev See {IGovernor-castVoteWithReasonAndParamsBySig}.
-     * TODO add new docs
-     * the final 128bits of the params should contain the nonce.
+     * @notice Cast a vote with a reason and additional encoded parameters using
+     * the user's cryptographic signature.
+     *
+     * Emits a {VoteCast} or {VoteCastWithParams} event depending on the length
+     * of params.
+     *
+     * @dev If casting a fractional vote via `params`, the voter's current nonce
+     * must be appended to the `params` and included in the signature. I.e., the
+     * params used when constructing the signature would be:
+     *
+     *   abi.encodePacked(againstVotes, forVotes, abstainVotes, nonce)
+     *
+     * See {nonces} and {_castVote} for more information.
      */
     function castVoteWithReasonAndParamsBySig(
         uint256 proposalId,
