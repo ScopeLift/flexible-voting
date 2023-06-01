@@ -405,10 +405,7 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce should not have updated.
-    assertEq(
-      _initNonce,
-      governor.nonces(_voter.addr)
-    );
+    assertEq(_initNonce, governor.nonces(_voter.addr));
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
       governor.proposalVotes(_proposalId);
@@ -445,12 +442,8 @@ contract GovernorCountingFractionalTest is Test {
     uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
     uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
     uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
-    bytes memory _fractionalizedVotes = abi.encodePacked(
-      _againstVotes,
-      _forVotes,
-      _abstainVotes,
-      governor.nonces(_voter.addr)
-    );
+    bytes memory _fractionalizedVotes =
+      abi.encodePacked(_againstVotes, _forVotes, _abstainVotes, governor.nonces(_voter.addr));
 
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
@@ -525,10 +518,7 @@ contract GovernorCountingFractionalTest is Test {
     _vars.againstVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentAgainst));
     _vars.abstainVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentAbstain));
     _vars.fractionalizedVotes = abi.encodePacked(
-      _vars.againstVotes,
-      _vars.forVotes,
-      _vars.abstainVotes,
-      governor.nonces(_vars.voter.addr)
+      _vars.againstVotes, _vars.forVotes, _vars.abstainVotes, governor.nonces(_vars.voter.addr)
     );
 
     _mintAndDelegateToVoter(_vars.voter);
@@ -562,17 +552,11 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce should have incremented.
-    assertEq(
-      _vars.lastNonce + 1,
-      governor.nonces(_vars.voter.addr)
-    );
+    assertEq(_vars.lastNonce + 1, governor.nonces(_vars.voter.addr));
     _vars.lastNonce = governor.nonces(_vars.voter.addr);
 
-    (
-      _vars.actualAgainstVotes,
-      _vars.actualForVotes,
-      _vars.actualAbstainVotes
-    ) = governor.proposalVotes(_vars.proposalId);
+    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
+      governor.proposalVotes(_vars.proposalId);
 
     assertEq(_vars.forVotes, _vars.actualForVotes);
     assertEq(_vars.againstVotes, _vars.actualAgainstVotes);
@@ -599,10 +583,7 @@ contract GovernorCountingFractionalTest is Test {
     _vars.againstVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentAgainst));
     _vars.abstainVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentAbstain));
     _vars.fractionalizedVotes = abi.encodePacked(
-      _vars.againstVotes,
-      _vars.forVotes,
-      _vars.abstainVotes,
-      governor.nonces(_vars.voter.addr)
+      _vars.againstVotes, _vars.forVotes, _vars.abstainVotes, governor.nonces(_vars.voter.addr)
     );
     _vars.voteMessage = keccak256(
       abi.encode(
@@ -629,21 +610,19 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce should have incremented again.
-    assertEq(
-      _vars.lastNonce + 1,
-      governor.nonces(_vars.voter.addr)
-    );
+    assertEq(_vars.lastNonce + 1, governor.nonces(_vars.voter.addr));
 
-    (
-      _vars.actualAgainstVotes,
-      _vars.actualForVotes,
-      _vars.actualAbstainVotes
-    ) = governor.proposalVotes(_vars.proposalId);
+    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
+      governor.proposalVotes(_vars.proposalId);
 
     // Actual weights can differ by up to 1 because of rounding during division.
     assertApproxEqAbs(_vars.voter.weight.mulWadDown(_voteSplit.percentFor), _vars.actualForVotes, 1);
-    assertApproxEqAbs(_vars.voter.weight.mulWadDown(_voteSplit.percentAgainst), _vars.actualAgainstVotes, 1);
-    assertApproxEqAbs(_vars.voter.weight.mulWadDown(_voteSplit.percentAbstain), _vars.actualAbstainVotes, 1);
+    assertApproxEqAbs(
+      _vars.voter.weight.mulWadDown(_voteSplit.percentAgainst), _vars.actualAgainstVotes, 1
+    );
+    assertApproxEqAbs(
+      _vars.voter.weight.mulWadDown(_voteSplit.percentAbstain), _vars.actualAbstainVotes, 1
+    );
   }
 
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
