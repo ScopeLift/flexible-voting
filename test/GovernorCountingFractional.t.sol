@@ -432,14 +432,19 @@ contract GovernorCountingFractionalTest is Test {
     uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
     uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
     uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
-    bytes memory _fractionalizedVotes = abi.encodePacked(_againstVotes, _forVotes, _abstainVotes);
+    bytes memory _fractionalizedVotes = abi.encodePacked(
+      _againstVotes,
+      _forVotes,
+      _abstainVotes,
+      governor.nonces(_voter.addr)
+    );
 
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
 
     bytes32 _voteMessage = keccak256(
       abi.encode(
-        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
+        governor.EXTENDED_BALLOT_TYPEHASH(),
         _proposalId,
         _voter.support,
         keccak256(bytes("I have my reasons")),
@@ -502,15 +507,15 @@ contract GovernorCountingFractionalTest is Test {
 
     _vars.voteMessage = keccak256(
       abi.encode(
-        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
+        governor.EXTENDED_BALLOT_TYPEHASH(),
         _vars.proposalId,
-        0, // support
+        _vars.voter.support,
         keccak256(bytes("I have my reasons")),
         keccak256(_vars.fractionalizedVotes)
       )
     );
 
-    bytes32 _voteMessageHash =
+    _vars.voteMessageHash =
       keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
 
     (_vars.v, _vars.r, _vars.s) = vm.sign(_vars.privateKey, _vars.voteMessageHash);
@@ -526,13 +531,18 @@ contract GovernorCountingFractionalTest is Test {
       _vars.s
     );
 
-    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) = governor.proposalVotes(_vars.proposalId);
+    (
+      _vars.actualAgainstVotes,
+      _vars.actualForVotes,
+      _vars.actualAbstainVotes
+    ) = governor.proposalVotes(_vars.proposalId);
 
     assertEq(_vars.forVotes, _vars.actualForVotes);
     assertEq(0, _vars.actualAgainstVotes);
     assertEq(0, _vars.actualAbstainVotes);
 
-    // Second vote, which should revert.
+    // Re-use signature, which should revert.
+    vm.expectRevert("GovernorCountingFractional: signature has already been used");
     governor.castVoteWithReasonAndParamsBySig(
       _vars.proposalId,
       _vars.voter.support,
@@ -542,14 +552,6 @@ contract GovernorCountingFractionalTest is Test {
       _vars.r,
       _vars.s
     );
-
-    // It doesn't revert, so we check that vote counts should be unchanged, but these assertions
-    // fail.
-    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
-      governor.proposalVotes(_vars.proposalId);
-    assertEq(_vars.forVotes, _vars.actualForVotes);
-    assertEq(0, _vars.actualAgainstVotes);
-    assertEq(0, _vars.actualAbstainVotes);
   }
 
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
