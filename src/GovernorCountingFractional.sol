@@ -43,9 +43,9 @@ abstract contract GovernorCountingFractional is Governor {
      * @dev Mapping from voter address to signature-based vote nonce. The
      * voter's nonce increments each time a signature-based vote is cast with
      * fractional voting params and must be included in the `params` as the last
-     * 32 bytes when signing for a fractional vote.
+     * 16 bytes when signing for a fractional vote.
      */
-    mapping(address => uint128) public nonces;
+    mapping(address => uint128) public fractionalVoteNonce;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -194,7 +194,7 @@ abstract contract GovernorCountingFractional is Governor {
      * The result of these three calls would be that the account casts 5 votes
      * AGAINST, 2 votes FOR, and 3 votes ABSTAIN on the proposal. Though
      * partial, votes are still final once cast and cannot be changed or
-     * overidden. Subsequent partial votes simply increment existing totals.
+     * overridden. Subsequent partial votes simply increment existing totals.
      *
      * Note that if partial votes are cast, all remaining weight must be cast
      * with _countVoteFractional: _countVoteNominal will revert.
@@ -228,7 +228,7 @@ abstract contract GovernorCountingFractional is Governor {
         _proposalVotes[proposalId] = _proposalVote;
     }
 
-    uint256 constant internal _HALF_WORD_RIGHT = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
+    uint256 constant internal _MASK_HALF_WORD_RIGHT = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
 
     /**
      * @dev Decodes three packed uint128's. Uses assembly because of a Solidity
@@ -246,11 +246,10 @@ abstract contract GovernorCountingFractional is Governor {
     {
         assembly {
             againstVotes := shr(128, mload(add(voteData, 0x20)))
-            forVotes := and(_HALF_WORD_RIGHT, mload(add(voteData, 0x20)))
+            forVotes := and(_MASK_HALF_WORD_RIGHT, mload(add(voteData, 0x20)))
             abstainVotes := shr(128, mload(add(voteData, 0x40)))
         }
     }
-
 
     /**
      * @notice Cast a vote with a reason and additional encoded parameters using
@@ -260,12 +259,12 @@ abstract contract GovernorCountingFractional is Governor {
      * of params.
      *
      * @dev If casting a fractional vote via `params`, the voter's current nonce
-     * must be appended to the `params` and included in the signature. I.e., the
-     * params used when constructing the signature would be:
+     * must be appended to the `params` as the last 16 bytes and included in the
+     * signature. I.e., the params used when constructing the signature would be:
      *
      *   abi.encodePacked(againstVotes, forVotes, abstainVotes, nonce)
      *
-     * See {nonces} and {_castVote} for more information.
+     * See {fractionalVoteNonce} and {_castVote} for more information.
      */
     function castVoteWithReasonAndParamsBySig(
         uint256 proposalId,
@@ -315,7 +314,7 @@ abstract contract GovernorCountingFractional is Governor {
               // Perform bitwise AND operation on the data in the second word of
               // `params` with a mask of 128 zeros followed by 128 ones, i.e. take
               // the last 128 bits of `params`.
-              _HALF_WORD_RIGHT,
+              _MASK_HALF_WORD_RIGHT,
               // Load the data from memory at the returned address.
               mload(
                 // Skip the first 64 bytes (i.e. 0x40):
@@ -328,13 +327,13 @@ abstract contract GovernorCountingFractional is Governor {
           }
 
           require(
-            nonces[voter] == nonce,
+            fractionalVoteNonce[voter] == nonce,
             "GovernorCountingFractional: signature has already been used"
           );
 
-          nonces[voter]++;
+          fractionalVoteNonce[voter]++;
 
-          // Trim params to only keep the first 48 bytes, which are the voting params.
+          // Trim params to keep only the first 48 bytes, which are the voting params.
           assembly {
             mstore(params, 48)
           }

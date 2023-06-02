@@ -377,7 +377,7 @@ contract GovernorCountingFractionalTest is Test {
     uint256 _privateKey;
     (_voter.addr, _privateKey) = makeAddrAndKey("voter");
     vm.assume(_voter.addr != address(this));
-    uint128 _initNonce = governor.nonces(_voter.addr);
+    uint128 _initNonce = governor.fractionalVoteNonce(_voter.addr);
 
     _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
     _voter.support = _randomSupportType(_weight);
@@ -405,7 +405,7 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce should not have updated.
-    assertEq(_initNonce, governor.nonces(_voter.addr));
+    assertEq(_initNonce, governor.fractionalVoteNonce(_voter.addr));
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
       governor.proposalVotes(_proposalId);
@@ -442,8 +442,9 @@ contract GovernorCountingFractionalTest is Test {
     uint128 _forVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentFor));
     uint128 _againstVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAgainst));
     uint128 _abstainVotes = uint128(_voter.weight.mulWadDown(_voteSplit.percentAbstain));
-    bytes memory _fractionalizedVotes =
-      abi.encodePacked(_againstVotes, _forVotes, _abstainVotes, governor.nonces(_voter.addr));
+    bytes memory _fractionalizedVotes = abi.encodePacked(
+      _againstVotes, _forVotes, _abstainVotes, governor.fractionalVoteNonce(_voter.addr)
+    );
 
     _mintAndDelegateToVoter(_voter);
     uint256 _proposalId = _createAndSubmitProposal();
@@ -518,7 +519,10 @@ contract GovernorCountingFractionalTest is Test {
     _vars.againstVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentAgainst));
     _vars.abstainVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentAbstain));
     _vars.fractionalizedVotes = abi.encodePacked(
-      _vars.againstVotes, _vars.forVotes, _vars.abstainVotes, governor.nonces(_vars.voter.addr)
+      _vars.againstVotes,
+      _vars.forVotes,
+      _vars.abstainVotes,
+      governor.fractionalVoteNonce(_vars.voter.addr)
     );
 
     _mintAndDelegateToVoter(_vars.voter);
@@ -538,7 +542,7 @@ contract GovernorCountingFractionalTest is Test {
       keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
 
     (_vars.v, _vars.r, _vars.s) = vm.sign(_vars.privateKey, _vars.voteMessageHash);
-    _vars.lastNonce = governor.nonces(_vars.voter.addr);
+    _vars.lastNonce = governor.fractionalVoteNonce(_vars.voter.addr);
 
     // First vote.
     governor.castVoteWithReasonAndParamsBySig(
@@ -552,8 +556,8 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce should have incremented.
-    assertEq(_vars.lastNonce + 1, governor.nonces(_vars.voter.addr));
-    _vars.lastNonce = governor.nonces(_vars.voter.addr);
+    assertEq(_vars.lastNonce + 1, governor.fractionalVoteNonce(_vars.voter.addr));
+    _vars.lastNonce = governor.fractionalVoteNonce(_vars.voter.addr);
 
     (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
       governor.proposalVotes(_vars.proposalId);
@@ -575,7 +579,7 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce shouldn't have changed since the first successful vote.
-    assertEq(_vars.lastNonce, governor.nonces(_vars.voter.addr));
+    assertEq(_vars.lastNonce, governor.fractionalVoteNonce(_vars.voter.addr));
 
     // Sign a new message.
     _vars.remainingWeight = _vars.voter.weight - _partialVoteWeight;
@@ -583,7 +587,10 @@ contract GovernorCountingFractionalTest is Test {
     _vars.againstVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentAgainst));
     _vars.abstainVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentAbstain));
     _vars.fractionalizedVotes = abi.encodePacked(
-      _vars.againstVotes, _vars.forVotes, _vars.abstainVotes, governor.nonces(_vars.voter.addr)
+      _vars.againstVotes,
+      _vars.forVotes,
+      _vars.abstainVotes,
+      governor.fractionalVoteNonce(_vars.voter.addr)
     );
     _vars.voteMessage = keccak256(
       abi.encode(
@@ -610,7 +617,7 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     // Nonce should have incremented again.
-    assertEq(_vars.lastNonce + 1, governor.nonces(_vars.voter.addr));
+    assertEq(_vars.lastNonce + 1, governor.fractionalVoteNonce(_vars.voter.addr));
 
     (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
       governor.proposalVotes(_vars.proposalId);
