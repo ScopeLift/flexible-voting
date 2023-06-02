@@ -37,6 +37,10 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
     return _quorumReached(_proposalId);
   }
 
+  function exposed_setFractionalVoteNonce(address _voter, uint128 _newNonce) public {
+    fractionalVoteNonce[_voter] = _newNonce;
+  }
+
   function cancel(
     address[] memory targets,
     uint256[] memory values,
