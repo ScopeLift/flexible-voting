@@ -317,11 +317,11 @@ abstract contract GovernorCountingFractional is Governor {
               _MASK_HALF_WORD_RIGHT,
               // Load the data from memory at the returned address.
               mload(
-                // Skip the first 64 bytes:
+                // Skip the first 64 bytes (0x40):
                 //   32 bytes encoding the length of the bytes array.
                 //   32 bytes for the first word in the params
                 // Return the memory address for the last word in params.
-                add(params, 64)
+                add(params, 0x40)
               )
             )
           }
@@ -336,7 +336,7 @@ abstract contract GovernorCountingFractional is Governor {
           // Trim params in place to keep only the first 48 bytes (which are
           // the voting params) and save gas.
           assembly {
-            mstore(params, 48)
+            mstore(params, 0x30)
           }
         }
 
