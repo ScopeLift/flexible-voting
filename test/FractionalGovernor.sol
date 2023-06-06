@@ -7,6 +7,20 @@ import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
   constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}
 
+  function castVoteWithReasonAndParamsBySig(
+    uint256 proposalId,
+    uint8 support,
+    string calldata reason,
+    bytes memory params,
+    uint8 v,
+    bytes32 r,
+    bytes32 s
+  ) public virtual override(GovernorCountingFractional, Governor) returns (uint256) {
+    return GovernorCountingFractional.castVoteWithReasonAndParamsBySig(
+      proposalId, support, reason, params, v, r, s
+    );
+  }
+
   function quorum(uint256) public pure override returns (uint256) {
     return 10 ether;
   }
@@ -21,6 +35,10 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
 
   function exposed_quorumReached(uint256 _proposalId) public view returns (bool) {
     return _quorumReached(_proposalId);
+  }
+
+  function exposed_setFractionalVoteNonce(address _voter, uint128 _newNonce) public {
+    fractionalVoteNonce[_voter] = _newNonce;
   }
 
   function cancel(
