@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
 /// @dev The interface that flexible voting-compatible governors are expected to support.
