@@ -6,16 +6,17 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
-/// @notice This is an abstract contract to make it easy to build clients for
-/// governance systems that inherit from GovernorCountingFractional, a.k.a.
-/// "flexible voting" governors.
+/// @notice This is an abstract contract designed to make it easy to build clients
+/// for governance systems that inherit from GovernorCountingFractional, a.k.a.
+/// Flexible Voting governors.
 ///
 /// A "client" in this sense is a contract that:
-///   (a) receives deposits of governance tokens from its users,
-///   (b) gives said depositors the ability to express their voting preferences
-///       on governance proposals, and
-///   (c) casts votes on said proposals to flexible voting governors according
-///       to the expressed preferences of its depositors.
+
+/// - (a) receives deposits of governance tokens from its users,
+/// - (b) gives said depositors the ability to express their voting preferences
+///   on governance proposals, and
+/// - (c) casts votes on said proposals to flexible voting governors according
+///   to the expressed preferences of its depositors.
 ///
 /// This contract assumes that a child contract will implement a mechanism for
 /// receiving and storing deposit balances, part (a). With that in place, this
