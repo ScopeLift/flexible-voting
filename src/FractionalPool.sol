@@ -3,8 +3,8 @@ pragma solidity ^0.8.10;
 
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
+import {IFractionalGovernor} from "./interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
 ///  @notice A proof-of-concept implementation demonstrating how Flexible Voting can be used to
 ///  allow holders of governance tokens to use them in DeFi but still participate in governance. The

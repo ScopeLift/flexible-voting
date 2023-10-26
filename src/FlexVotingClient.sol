@@ -3,8 +3,8 @@ pragma solidity >=0.8.10;
 
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
-import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
+import {IFractionalGovernor} from "./interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
 /// @notice This is an abstract contract designed to make it easy to build clients
 /// for governance systems that inherit from GovernorCountingFractional, a.k.a.
