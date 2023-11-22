@@ -46,7 +46,7 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
     uint256[] memory values,
     bytes[] memory calldatas,
     bytes32 salt
-  ) public returns (uint256 proposalId) {
+  ) public override returns (uint256 proposalId) {
     return _cancel(targets, values, calldatas, salt);
   }
 }
