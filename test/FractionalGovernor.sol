@@ -4,7 +4,7 @@ pragma solidity >=0.8.10;
 import {GovernorCountingFractional} from "../src/GovernorCountingFractional.sol";
 import {GovernorVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {Governor} from "@openzeppelin/contracts/governance//Governor.sol";
+import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 
 contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
   constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}

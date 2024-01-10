@@ -41,12 +41,10 @@ contract GovernorCountingFractionalTest is Test {
   );
 
   enum VoteType {
-      Against,
-      For,
-      Abstain
+    Against,
+    For,
+    Abstain
   }
-
-
 
   // We use a min of 1e4 to avoid flooring votes to 0.
   uint256 constant MIN_VOTE_WEIGHT = 1e4;
@@ -261,15 +259,9 @@ contract GovernorCountingFractionalTest is Test {
         againstVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAgainst));
         abstainVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAbstain));
       } else {
-        if (voter.support == uint8(VoteType.For)) {
-          forVotes += voter.weight;
-        }
-        if (voter.support == uint8(VoteType.Against)) {
-          againstVotes += voter.weight;
-        }
-        if (voter.support == uint8(VoteType.Abstain)) {
-          abstainVotes += voter.weight;
-        }
+        if (voter.support == uint8(VoteType.For)) forVotes += voter.weight;
+        if (voter.support == uint8(VoteType.Against)) againstVotes += voter.weight;
+        if (voter.support == uint8(VoteType.Abstain)) abstainVotes += voter.weight;
       }
     }
   }
@@ -425,15 +417,9 @@ contract GovernorCountingFractionalTest is Test {
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
       governor.proposalVotes(_proposalId);
-    if (_voter.support == uint8(VoteType.For)) {
-      assertEq(_voter.weight, _actualForVotes);
-    }
-    if (_voter.support == uint8(VoteType.Against)) {
-      assertEq(_voter.weight, _actualAgainstVotes);
-    }
-    if (_voter.support == uint8(VoteType.Abstain)) {
-      assertEq(_voter.weight, _actualAbstainVotes);
-    }
+    if (_voter.support == uint8(VoteType.For)) assertEq(_voter.weight, _actualForVotes);
+    if (_voter.support == uint8(VoteType.Against)) assertEq(_voter.weight, _actualAgainstVotes);
+    if (_voter.support == uint8(VoteType.Abstain)) assertEq(_voter.weight, _actualAbstainVotes);
 
     // The signature cannot be re-used.
     vm.expectRevert("GovernorCountingFractional: all weight cast");
