@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
-import {GovernorCompatibilityBravo} from "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /**
@@ -19,6 +18,15 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
  * knowledge proofs.
  */
 abstract contract GovernorCountingFractional is Governor {
+
+    /**
+     * @dev Supported vote types. Matches Governor Bravo ordering.
+     */
+    enum VoteType {
+        Against,
+        For,
+        Abstain
+    }
 
     struct ProposalVote {
         uint128 againstVotes;
@@ -37,14 +45,6 @@ abstract contract GovernorCountingFractional is Governor {
      * would tell you the number of votes that 0xBEEF has cast on proposal 42.
      */
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
-
-    /**
-     * @dev Mapping from voter address to signature-based vote nonce. The
-     * voter's nonce increments each time a signature-based vote is cast with
-     * fractional voting params and must be included in the `params` as the last
-     * 16 bytes when signing for a fractional vote.
-     */
-    mapping(address => uint128) public fractionalVoteNonce;
 
     /**
      * @dev See {IGovernor-COUNTING_MODE}.
@@ -166,11 +166,11 @@ abstract contract GovernorCountingFractional is Governor {
 
         _proposalVotersWeightCast[proposalId][account] = totalWeight;
 
-        if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
+        if (support == uint8(VoteType.Against)) {
             _proposalVotes[proposalId].againstVotes += totalWeight;
-        } else if (support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
+        } else if (support == uint8(VoteType.For)) {
             _proposalVotes[proposalId].forVotes += totalWeight;
-        } else if (support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
+        } else if (support == uint8(VoteType.Abstain)) {
             _proposalVotes[proposalId].abstainVotes += totalWeight;
         } else {
             revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
@@ -248,98 +248,6 @@ abstract contract GovernorCountingFractional is Governor {
             forVotes := and(_MASK_HALF_WORD_RIGHT, mload(add(voteData, 0x20)))
             abstainVotes := shr(128, mload(add(voteData, 0x40)))
         }
-    }
-
-    /**
-     * @notice Cast a vote with a reason and additional encoded parameters using
-     * the user's cryptographic signature.
-     *
-     * Emits a {VoteCast} or {VoteCastWithParams} event depending on the length
-     * of params.
-     *
-     * @dev If casting a fractional vote via `params`, the voter's current nonce
-     * must be appended to the `params` as the last 16 bytes and included in the
-     * signature. I.e., the params used when constructing the signature would be:
-     *
-     *   abi.encodePacked(againstVotes, forVotes, abstainVotes, nonce)
-     *
-     * See {fractionalVoteNonce} and {_castVote} for more information.
-     */
-    function castVoteWithReasonAndParamsBySig(
-        uint256 proposalId,
-        uint8 support,
-        string calldata reason,
-        bytes memory params,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) public virtual override returns (uint256) {
-        // Signature-based fractional voting requires `params` be two full words
-        // in length:
-        //   16 bytes for againstVotes.
-        //   16 bytes for forVotes.
-        //   16 bytes for abstainVotes.
-        //   16 bytes for the signature nonce.
-        // Signature-based nominal voting requires `params` be 0 bytes.
-        require(
-          params.length == 64 || params.length == 0,
-          "GovernorCountingFractional: invalid params for signature-based vote"
-        );
-
-        address voter = ECDSA.recover(
-            _hashTypedDataV4(
-                keccak256(
-                    abi.encode(
-                        EXTENDED_BALLOT_TYPEHASH,
-                        proposalId,
-                        support,
-                        keccak256(bytes(reason)),
-                        keccak256(params)
-                    )
-                )
-            ),
-            v,
-            r,
-            s
-        );
-
-        // If params are zero-length all of the voter's weight will be cast so
-        // we don't have to worry about checking/incrementing a nonce.
-        if (params.length == 64) {
-          // Get the nonce out of the params. It is the last half-word.
-          uint128 nonce;
-          assembly {
-            nonce := and(
-              // Perform bitwise AND operation on the data in the second word of
-              // `params` with a mask of 128 zeros followed by 128 ones, i.e. take
-              // the last 128 bits of `params`.
-              _MASK_HALF_WORD_RIGHT,
-              // Load the data from memory at the returned address.
-              mload(
-                // Skip the first 64 bytes (0x40):
-                //   32 bytes encoding the length of the bytes array.
-                //   32 bytes for the first word in the params
-                // Return the memory address for the last word in params.
-                add(params, 0x40)
-              )
-            )
-          }
-
-          require(
-            fractionalVoteNonce[voter] == nonce,
-            "GovernorCountingFractional: signature has already been used"
-          );
-
-          fractionalVoteNonce[voter]++;
-
-          // Trim params in place to keep only the first 48 bytes (which are
-          // the voting params) and save gas.
-          assembly {
-            mstore(params, 0x30)
-          }
-        }
-
-        return _castVote(proposalId, voter, support, reason, params);
     }
 
 }

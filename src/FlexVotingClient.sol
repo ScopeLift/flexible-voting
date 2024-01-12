@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 import {IFractionalGovernor} from "./interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
@@ -48,7 +48,7 @@ import {IVotingToken} from "./interfaces/IVotingToken.sol";
 /// of the rest.
 abstract contract FlexVotingClient {
   using SafeCast for uint256;
-  using Checkpoints for Checkpoints.History;
+  using Checkpoints for Checkpoints.Trace224;
 
   /// @notice The voting options corresponding to those used in the Governor.
   enum VoteType {
@@ -76,12 +76,12 @@ abstract contract FlexVotingClient {
 
   /// @dev Mapping from address to the checkpoint history of raw balances
   /// of that address.
-  mapping(address => Checkpoints.History) private balanceCheckpoints;
+  mapping(address => Checkpoints.Trace224) private balanceCheckpoints;
 
   /// @dev History of the sum total of raw balances in the system. May or may
   /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
   /// given time.
-  Checkpoints.History internal totalBalanceCheckpoints;
+  Checkpoints.Trace224 internal totalBalanceCheckpoints;
 
   /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(address _governor) {
@@ -92,7 +92,7 @@ abstract contract FlexVotingClient {
   /// token that `_user` has claim to in this system. It may or may not be
   /// equivalent to the withdrawable balance of `GOVERNOR`s token for `user`,
   /// e.g. if the internal representation of balance has been scaled down.
-  function _rawBalanceOf(address _user) internal view virtual returns (uint256);
+  function _rawBalanceOf(address _user) internal view virtual returns (uint224);
 
   /// @dev Used as the `reason` param when submitting a vote to `GOVERNOR`.
   function _castVoteReasonString() internal virtual returns (string memory) {
@@ -194,19 +194,21 @@ abstract contract FlexVotingClient {
 
   /// @dev Checkpoints the _user's current raw balance.
   function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(_rawBalanceOf(_user));
+    balanceCheckpoints[_user].push(SafeCast.toUint32(block.number), _rawBalanceOf(_user));
   }
 
   /// @notice Returns the `_user`'s raw balance at `_blockNumber`.
   /// @param _user The account that's historical raw balance will be looked up.
   /// @param _blockNumber The block at which to lookup the _user's raw balance.
   function getPastRawBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
-    return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
+    uint32 key = SafeCast.toUint32(_blockNumber);
+    return balanceCheckpoints[_user].upperLookup(key);
   }
 
   /// @notice Returns the sum total of raw balances of all users at `_blockNumber`.
   /// @param _blockNumber The block at which to lookup the total balance.
   function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
-    return totalBalanceCheckpoints.getAtProbablyRecentBlock(_blockNumber);
+    uint32 key = SafeCast.toUint32(_blockNumber);
+    return totalBalanceCheckpoints.upperLookup(key);
   }
 }
