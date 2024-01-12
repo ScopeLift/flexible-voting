@@ -9,20 +9,6 @@ import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
   constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}
 
-  function castVoteWithReasonAndParamsBySig(
-    uint256 proposalId,
-    uint8 support,
-    string calldata reason,
-    bytes memory params,
-    uint8 v,
-    bytes32 r,
-    bytes32 s
-  ) public virtual override(GovernorCountingFractional) returns (uint256) {
-    return GovernorCountingFractional.castVoteWithReasonAndParamsBySig(
-      proposalId, support, reason, params, v, r, s
-    );
-  }
-
   function quorum(uint256) public pure override returns (uint256) {
     return 10 ether;
   }
