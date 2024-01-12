@@ -49,9 +49,9 @@ contract FractionalPoolTest is Test {
 
   function _mintGovAndApprovePool(address _holder, uint256 _amount) public {
     vm.assume(_holder != address(0));
-	console2.logUint(token.totalSupply());
-	console2.logUint(token.exposed_maxSupply());
-	console2.logUint(_amount);
+    console2.logUint(token.totalSupply());
+    console2.logUint(token.exposed_maxSupply());
+    console2.logUint(_amount);
     token.exposed_mint(_holder, _amount);
     vm.prank(_holder);
     token.approve(address(pool), type(uint256).max);
@@ -254,7 +254,14 @@ contract Vote is FractionalPoolTest {
 
     // We should not be able to castVote at this point.
     // vm.expectRevert(bytes("Governor: vote not currently active"));
-      vm.expectRevert(abi.encodeWithSelector(IGovernor.GovernorUnexpectedProposalState.selector, _proposalId, status, bytes32(1 << uint8(IGovernor.ProposalState.Active))));
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IGovernor.GovernorUnexpectedProposalState.selector,
+        _proposalId,
+        status,
+        bytes32(1 << uint8(IGovernor.ProposalState.Active))
+      )
+    );
     pool.castVote(_proposalId);
   }
 

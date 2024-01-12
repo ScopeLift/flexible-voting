@@ -158,7 +158,7 @@ contract GovernorCountingFractionalTest is Test {
   function _executeProposal() internal {
     Proposal memory _rawProposalInfo = _getSimpleProposal();
 
-    // TODO: This had to be re-arranged 
+    // TODO: This had to be re-arranged
     vm.expectEmit(true, true, true, true);
     emit MockFunctionCalled();
 
@@ -333,7 +333,15 @@ contract GovernorCountingFractionalTest is Test {
       assertEq(uint8(status), uint8(IGovernor.ProposalState.Defeated));
 
       Proposal memory _rawProposalInfo = _getSimpleProposal();
-      vm.expectRevert(abi.encodeWithSelector(IGovernor.GovernorUnexpectedProposalState.selector, _proposalId, status, bytes32(1 << uint8(IGovernor.ProposalState.Succeeded)) | bytes32(1 << uint8(IGovernor.ProposalState.Queued))));
+      vm.expectRevert(
+        abi.encodeWithSelector(
+          IGovernor.GovernorUnexpectedProposalState.selector,
+          _proposalId,
+          status,
+          bytes32(1 << uint8(IGovernor.ProposalState.Succeeded))
+            | bytes32(1 << uint8(IGovernor.ProposalState.Queued))
+        )
+      );
       governor.execute(
         _rawProposalInfo.targets,
         _rawProposalInfo.values,
@@ -392,7 +400,6 @@ contract GovernorCountingFractionalTest is Test {
     uint256 actualAbstainVotes;
     uint256 remainingWeight;
   }
-
 
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
     Voter[4] memory _voters = _setupNominalVoters(_weights);
@@ -517,7 +524,9 @@ contract GovernorCountingFractionalTest is Test {
 
     bytes memory emptyVotingParams;
     vm.prank(voter.addr);
-    vm.expectRevert(abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, voter.weight));
+    vm.expectRevert(
+      abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, voter.weight)
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Yay", emptyVotingParams);
   }
 
@@ -545,7 +554,9 @@ contract GovernorCountingFractionalTest is Test {
 
     bytes memory fractionalizedVotes = abi.encodePacked(_againstVotes, _forVotes, _abstainVotes);
     vm.prank(voter.addr);
-    vm.expectRevert(abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, voter.weight));
+    vm.expectRevert(
+      abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, voter.weight)
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", fractionalizedVotes);
   }
 
