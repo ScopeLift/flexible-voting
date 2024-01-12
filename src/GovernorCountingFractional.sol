@@ -47,14 +47,6 @@ abstract contract GovernorCountingFractional is Governor {
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
     /**
-     * @dev Mapping from voter address to signature-based vote nonce. The
-     * voter's nonce increments each time a signature-based vote is cast with
-     * fractional voting params and must be included in the `params` as the last
-     * 16 bytes when signing for a fractional vote.
-     */
-    mapping(address => uint128) public fractionalVoteNonce;
-
-    /**
      * @dev See {IGovernor-COUNTING_MODE}.
      */
     // solhint-disable-next-line func-name-mixedcase

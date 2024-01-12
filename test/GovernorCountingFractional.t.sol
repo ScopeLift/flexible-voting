@@ -380,26 +380,6 @@ contract GovernorCountingFractionalTest is Test {
     _fractionalGovernorHappyPathTest(voters);
   }
 
-  struct CastVoteWithReasonAndParamsBySigTestVars {
-    uint128 forVotes;
-    uint128 againstVotes;
-    uint128 abstainVotes;
-    uint128 lastNonce;
-    bytes fractionalizedVotes;
-    uint256 privateKey;
-    uint256 proposalId;
-    Voter voter;
-    bytes32 voteMessage;
-    bytes32 voteMessageHash;
-    uint8 v;
-    bytes32 r;
-    bytes32 s;
-    uint256 actualAgainstVotes;
-    uint256 actualForVotes;
-    uint256 actualAbstainVotes;
-    uint256 remainingWeight;
-  }
-
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
     Voter[4] memory _voters = _setupNominalVoters(_weights);
 
