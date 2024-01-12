@@ -158,7 +158,6 @@ contract GovernorCountingFractionalTest is Test {
   function _executeProposal() internal {
     Proposal memory _rawProposalInfo = _getSimpleProposal();
 
-    // TODO: This had to be re-arranged
     vm.expectEmit(true, true, true, true);
     emit MockFunctionCalled();
 

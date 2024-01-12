@@ -3,7 +3,6 @@ pragma solidity ^0.8.10;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
-import {console2} from "forge-std/console2.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
 import "./GovToken.sol";
@@ -49,9 +48,6 @@ contract FractionalPoolTest is Test {
 
   function _mintGovAndApprovePool(address _holder, uint256 _amount) public {
     vm.assume(_holder != address(0));
-    console2.logUint(token.totalSupply());
-    console2.logUint(token.exposed_maxSupply());
-    console2.logUint(_amount);
     token.exposed_mint(_holder, _amount);
     vm.prank(_holder);
     token.approve(address(pool), type(uint256).max);
@@ -253,7 +249,6 @@ contract Vote is FractionalPoolTest {
     IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
 
     // We should not be able to castVote at this point.
-    // vm.expectRevert(bytes("Governor: vote not currently active"));
     vm.expectRevert(
       abi.encodeWithSelector(
         IGovernor.GovernorUnexpectedProposalState.selector,
