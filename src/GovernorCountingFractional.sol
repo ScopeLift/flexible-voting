@@ -3,7 +3,7 @@
 pragma solidity ^0.8.0;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
+import {Governor, IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /**
@@ -20,12 +20,18 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
  */
 abstract contract GovernorCountingFractional is Governor {
 
+    /// @notice Thrown when casting a vote would exceed the weight delegated to the voting account.
     error GovernorCountingFractional__VoteWeightExceeded();
+
+    /// @notice Thrown when params data submitted with a vote does not match the convention expected for fractional voting.
     error GovernorCountingFractional__InvalidVoteData();
+
+    /// @notice Thrown when vote is cast by an account that has no voting weight.
     error GovernorCountingFractional_NoVoteWeight();
 
     /**
-     * @dev Supported vote types. Matches Governor Bravo ordering.
+     * @notice Supported vote types.
+     * @dev Matches Governor Bravo ordering.
      */
     enum VoteType {
         Against,
@@ -33,6 +39,12 @@ abstract contract GovernorCountingFractional is Governor {
         Abstain
     }
 
+    /**
+     * @notice Metadata about how votes were cast for a given proposal.
+     * @param againstVotes The number of votes cast Against a proposal.
+     * @param forVotes The number of votes cast For a proposal.
+     * @param abstainVotes The number of votes that Abstain from voting for a proposal.
+     */
     struct ProposalVote {
         uint128 againstVotes;
         uint128 forVotes;
@@ -40,43 +52,45 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Mapping from proposal ID to vote tallies for that proposal.
+     * @notice Mapping from proposal ID to vote tallies for that proposal.
      */
     mapping(uint256 => ProposalVote) private _proposalVotes;
 
     /**
-     * @dev Mapping from proposal ID and address to the weight the address
+     * @notice Mapping from proposal ID and address to the weight the address
      * has cast on that proposal, e.g. _proposalVotersWeightCast[42][0xBEEF]
      * would tell you the number of votes that 0xBEEF has cast on proposal 42.
      */
     mapping(uint256 => mapping(address => uint128)) private _proposalVotersWeightCast;
 
-    /**
-     * @dev See {IGovernor-COUNTING_MODE}.
-     */
-    // solhint-disable-next-line func-name-mixedcase
+    /// @inheritdoc IGovernor
     function COUNTING_MODE() public pure virtual override returns (string memory) {
         return "support=bravo&quorum=for,abstain&params=fractional";
     }
 
-    /**
-     * @dev See {IGovernor-hasVoted}.
-     */
+    /// @inheritdoc IGovernor
     function hasVoted(uint256 proposalId, address account) public view virtual override returns (bool) {
         return _proposalVotersWeightCast[proposalId][account] > 0;
     }
 
     /**
-     * @dev Get the number of votes cast thus far on proposal `proposalId` by
+     * @notice Get the number of votes cast thus far on proposal `proposalId` by
      * account `account`. Useful for integrations that allow delegates to cast
      * rolling, partial votes.
+     * @param proposalId Identifier of any past or present proposal.
+     * @param account The voting account in question.
+     * @return The total voting weight cast so far for this proposal by this account
      */
     function voteWeightCast(uint256 proposalId, address account) public view returns (uint128) {
       return _proposalVotersWeightCast[proposalId][account];
     }
 
     /**
-     * @dev Accessor to the internal vote counts.
+     * @notice Accessor to the internal vote counts.
+     * @param proposalId Identifier of any past or present proposal.
+     * @return againstVotes The Against votes cast so far for the given proposal.
+     * @return forVotes The For votes cast so far for given proposal.
+     * @return abstainVotes The Abstain votes cast so far for the given proposal.
      */
     function proposalVotes(uint256 proposalId)
         public
@@ -92,9 +106,7 @@ abstract contract GovernorCountingFractional is Governor {
         return (proposalVote.againstVotes, proposalVote.forVotes, proposalVote.abstainVotes);
     }
 
-    /**
-     * @dev See {Governor-_quorumReached}.
-     */
+    /// @inheritdoc Governor
     function _quorumReached(uint256 proposalId) internal view virtual override returns (bool) {
         ProposalVote storage proposalVote = _proposalVotes[proposalId];
 
@@ -102,7 +114,8 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev See {Governor-_voteSucceeded}. In this module, forVotes must be > againstVotes.
+     * @inheritdoc Governor
+     * @dev In this module, forVotes must be > againstVotes.
      */
     function _voteSucceeded(uint256 proposalId) internal view virtual override returns (bool) {
         ProposalVote storage proposalVote = _proposalVotes[proposalId];
@@ -111,11 +124,8 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @notice See {Governor-_countVote}.
-     *
-     * @dev Function that records the delegate's votes.
-     *
-     * If the `voteData` bytes parameter is empty, then this module behaves
+     * @inheritdoc Governor
+     * @dev If the `voteData` bytes parameter is empty, then this module behaves
      * identically to GovernorBravo. That is, it assigns the full weight of the
      * delegate to the `support` parameter, which follows the `VoteType` enum
      * from Governor Bravo.
@@ -155,9 +165,8 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Record votes with full weight cast for `support`.
-     *
-     * Because this function votes with the delegate's full weight, it can only
+     * @notice Record votes with full weight cast for `support`.
+     * @dev Because this function votes with the delegate's full weight, it can only
      * be called once per proposal. It will revert if combined with a fractional
      * vote before or after.
      */
@@ -185,9 +194,8 @@ abstract contract GovernorCountingFractional is Governor {
     }
 
     /**
-     * @dev Count votes with fractional weight.
-     *
-     * `voteData` is expected to be three packed uint128s, i.e.
+     * @notice Count votes with fractional weight.
+     * @dev `voteData` is expected to be three packed uint128s, i.e.
      * `abi.encodePacked(againstVotes, forVotes, abstainVotes)`.
      *
      * This function can be called multiple times for the same account and
@@ -241,7 +249,7 @@ abstract contract GovernorCountingFractional is Governor {
     uint256 constant internal _MASK_HALF_WORD_RIGHT = 0xffffffffffffffffffffffffffffffff; // 128 bits of 0's, 128 bits of 1's
 
     /**
-     * @dev Decodes three packed uint128's. Uses assembly because of a Solidity
+     * @notice Decodes three packed uint128's. Uses assembly because of a Solidity
      * language limitation which prevents slicing bytes stored in memory, rather
      * than calldata.
      */
