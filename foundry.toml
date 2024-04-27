@@ -1,10 +1,8 @@
 [profile.default]
-  # We don't specify a solc version because Aave contracts are pinned to 0.8.10,
-  # but we use more recent solc versions for other contracts, so we let forge
-  # auto-detect solc versions.
   optimizer = true
   optimizer_runs = 10_000_000
   remappings = ["@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts"]
+  solc_version = '0.8.25'
   verbosity = 3
 
 [profile.ci]

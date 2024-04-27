@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 /// @dev The interface that flexible voting-compatible governors are expected to support.
 interface IFractionalGovernor {
