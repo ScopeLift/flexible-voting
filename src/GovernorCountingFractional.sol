@@ -7,6 +7,7 @@ import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /**
+ * @author [ScopeLift](https://scopelift.co)
  * @notice Extension of {Governor} for 3 option fractional vote counting. When
  * voting, a delegate may split their vote weight between Against/For/Abstain.
  * This is most useful when the delegate is itself a contract, implementing its
@@ -18,6 +19,10 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
  * knowledge proofs.
  */
 abstract contract GovernorCountingFractional is Governor {
+
+    error GovernorCountingFractional__VoteWeightExceeded();
+    error GovernorCountingFractional__InvalidVoteData();
+    error GovernorCountingFractional_NoVoteWeight();
 
     /**
      * @dev Supported vote types. Matches Governor Bravo ordering.
@@ -132,9 +137,12 @@ abstract contract GovernorCountingFractional is Governor {
         uint256 totalWeight,
         bytes memory voteData
     ) internal virtual override {
-        require(totalWeight > 0, "GovernorCountingFractional: no weight");
+        if (totalWeight == 0) {
+            revert GovernorCountingFractional_NoVoteWeight();
+        }
+
         if (_proposalVotersWeightCast[proposalId][account] >= totalWeight) {
-          revert("GovernorCountingFractional: all weight cast");
+          revert GovernorCountingFractional__VoteWeightExceeded();
         }
 
         uint128 safeTotalWeight = SafeCast.toUint128(totalWeight);
@@ -159,10 +167,9 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 totalWeight,
         uint8 support
     ) internal {
-        require(
-            _proposalVotersWeightCast[proposalId][account] == 0,
-            "GovernorCountingFractional: vote would exceed weight"
-        );
+        if (_proposalVotersWeightCast[proposalId][account] != 0) {
+            revert GovernorCountingFractional__VoteWeightExceeded();
+        }
 
         _proposalVotersWeightCast[proposalId][account] = totalWeight;
 
@@ -173,7 +180,7 @@ abstract contract GovernorCountingFractional is Governor {
         } else if (support == uint8(VoteType.Abstain)) {
             _proposalVotes[proposalId].abstainVotes += totalWeight;
         } else {
-            revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
+            revert GovernorInvalidVoteType();
         }
     }
 
@@ -204,14 +211,18 @@ abstract contract GovernorCountingFractional is Governor {
         uint128 totalWeight,
         bytes memory voteData
     ) internal {
-        require(voteData.length == 48, "GovernorCountingFractional: invalid voteData");
+        if (voteData.length != 48) {
+            revert GovernorCountingFractional__InvalidVoteData();
+        }
 
         (uint128 _againstVotes, uint128 _forVotes, uint128 _abstainVotes) = _decodePackedVotes(voteData);
 
         uint128 _existingWeight = _proposalVotersWeightCast[proposalId][account];
         uint256 _newWeight = uint256(_againstVotes) + _forVotes + _abstainVotes + _existingWeight;
 
-        require(_newWeight <= totalWeight, "GovernorCountingFractional: vote would exceed weight");
+        if (_newWeight > totalWeight) {
+            revert GovernorCountingFractional__VoteWeightExceeded();
+        }
 
         // It's safe to downcast here because we've just confirmed that
         // _newWeight <= totalWeight, and totalWeight is a uint128.

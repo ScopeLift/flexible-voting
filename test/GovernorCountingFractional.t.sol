@@ -7,7 +7,7 @@ import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/Fraction
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {GovToken} from "./GovToken.sol";
-import {FractionalGovernor} from "./FractionalGovernor.sol";
+import {FractionalGovernor, GovernorCountingFractional} from "./FractionalGovernor.sol";
 import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
@@ -410,7 +410,11 @@ contract GovernorCountingFractionalTest is Test {
 
     // Attempt to cast nominal votes.
     vm.prank(_voterAddr);
-    vm.expectRevert("GovernorCountingFractional: no weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional_NoVoteWeight.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId,
       uint8(VoteType.For),
@@ -420,7 +424,11 @@ contract GovernorCountingFractionalTest is Test {
 
     // Attempt to cast fractional votes.
     vm.prank(_voterAddr);
-    vm.expectRevert("GovernorCountingFractional: no weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional_NoVoteWeight.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId,
       uint8(VoteType.For),
@@ -484,7 +492,11 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     vm.prank(voter.addr);
-    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Yay", fractionalizedVotes);
   }
 
@@ -557,7 +569,11 @@ contract GovernorCountingFractionalTest is Test {
     uint256 _proposalId = _createAndSubmitProposal();
 
     vm.prank(voter.addr);
-    vm.expectRevert("GovernorCountingFractional: invalid voteData");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__InvalidVoteData.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", _invalidVoteData);
   }
 
@@ -974,7 +990,11 @@ contract GovernorCountingFractionalTest is Test {
 
     // Attempt to cast votes again. This should revert.
     vm.prank(_voter.addr);
-    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId,
       _voter.support,
@@ -1001,7 +1021,11 @@ contract GovernorCountingFractionalTest is Test {
 
     // It should not be possible to vote again.
     vm.prank(_voter.addr);
-    vm.expectRevert("GovernorCountingFractional: all weight cast");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally
     );
@@ -1048,7 +1072,11 @@ contract GovernorCountingFractionalTest is Test {
       );
 
       // Now attempt to vote fractionally. It should fail.
-      vm.expectRevert("GovernorCountingFractional: all weight cast");
+      vm.expectRevert(
+        abi.encodeWithSelector(
+          GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+        )
+      );
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
         _proposalId, _voter.support, "Fractional vote", _fractionalizedVoteData
@@ -1069,7 +1097,11 @@ contract GovernorCountingFractionalTest is Test {
       );
 
       vm.prank(_voter.addr);
-      vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+      vm.expectRevert(
+        abi.encodeWithSelector(
+          GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+        )
+      );
       governor.castVoteWithReasonAndParams(
         _proposalId, _voter.support, "Nominal vote", _nominalVoteData
       );
