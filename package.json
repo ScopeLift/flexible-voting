@@ -4,7 +4,7 @@
   "description": "Flexible Voting is an extension to the widely used OpenZeppelin DAO Governor that enables delegates to split their voting weight across For/Against/Abstain options and cast rolling votes for a given proposal. This file is included for compatibility with npm based development frameworks such as Hardhat.",
   "author": "Contributors to https://github.com/ScopeLift/flexible-voting",
   "files": [
-    "src/*"
+    "src/**/*"
   ],
   "repository": {
     "type": "git",
