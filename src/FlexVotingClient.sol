@@ -200,13 +200,13 @@ abstract contract FlexVotingClient {
   /// @notice Returns the `_user`'s raw balance at `_blockNumber`.
   /// @param _user The account that's historical raw balance will be looked up.
   /// @param _blockNumber The block at which to lookup the _user's raw balance.
-  function getPastRawBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
+  function getPastRawBalance(address _user, uint256 _blockNumber) public virtual view returns (uint256) {
     return balanceCheckpoints[_user].getAtProbablyRecentBlock(_blockNumber);
   }
 
   /// @notice Returns the sum total of raw balances of all users at `_blockNumber`.
   /// @param _blockNumber The block at which to lookup the total balance.
-  function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
+  function getPastTotalBalance(uint256 _blockNumber) public virtual view returns (uint256) {
     return totalBalanceCheckpoints.getAtProbablyRecentBlock(_blockNumber);
   }
 }
