@@ -148,13 +148,18 @@ contract Deposit is FractionalPoolTest {
     assertEq(
       pool.getPastDeposits(_holderA, block.number - 1),
       _amountA,
-      "user's first deposit was not properly checkpointed"
+      "_holderA's first deposit was not properly checkpointed"
     );
     // We don't mix up user's balances.
     assertEq(
       pool.getPastDeposits(_holderB, block.number - 1),
       _amountB,
-      "user's first deposit was not properly checkpointed"
+      "_holderB's first deposit was not properly checkpointed"
+    );
+    assertEq(
+      pool.getPastTotalDeposits(block.number - 1),
+      _amountA + _amountB,
+      "total deposits were not properly checkpointed"
     );
 
     uint256 newBlockNum = block.number + _depositDelay;
@@ -167,12 +172,17 @@ contract Deposit is FractionalPoolTest {
     assertEq(
       pool.getPastDeposits(_holderA, block.number - 1),
       _amountA + _amountB,
-      "user's second deposit was not properly checkpointed"
+      "_holderA's second deposit was not properly checkpointed"
     );
     assertEq(
       pool.getPastDeposits(_holderB, block.number - 1),
       _amountB,
-      "user's second deposit was not properly checkpointed"
+      "_holderB's second deposit was not properly checkpointed"
+    );
+    assertEq(
+      pool.getPastTotalDeposits(block.number - 1),
+      _amountA + _amountB + _amountB,
+      "total deposits were not properly checkpointed"
     );
   }
 }
