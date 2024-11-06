@@ -185,7 +185,7 @@ contract GovernorCountingFractionalTest is Test {
     returns (address)
   {
     vm.assume(_addr > address(0));
-    assumeNoPrecompiles(_addr);
+    assumeNotPrecompile(_addr);
     vm.label(_addr, _name);
     return _addr;
   }
@@ -195,13 +195,13 @@ contract GovernorCountingFractionalTest is Test {
     nextUser = keccak256(abi.encodePacked(_addr));
   }
 
-  function _randomSupportType(uint256 salt) public view returns (uint8) {
+  function _randomSupportType(uint256 salt) public pure returns (uint8) {
     return uint8(bound(salt, 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
   }
 
   function _randomVoteSplit(FractionalVoteSplit memory _voteSplit)
     public
-    view
+    pure
     returns (FractionalVoteSplit memory)
   {
     _voteSplit.percentFor = bound(_voteSplit.percentFor, 0, 1e18);
@@ -350,7 +350,7 @@ contract GovernorCountingFractionalTest is Test {
   /// END HELPER FUNCTIONS
   /// --------------------
 
-  function testFuzz_Deployment(uint256 _blockNumber) public {
+  function testFuzz_Deployment(uint256 _blockNumber) public view {
     assertEq(governor.name(), "Governor");
     assertEq(address(governor.token()), address(token));
     assertEq(governor.votingDelay(), 4);
