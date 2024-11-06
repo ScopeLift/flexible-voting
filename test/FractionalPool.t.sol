@@ -187,7 +187,67 @@ contract Deposit is FractionalPoolTest {
   }
 }
 
-// TODO: Withdraw testing
+contract Withdraw is FractionalPoolTest {
+  function testFuzz_UserCanWithdrawTokens(
+    address _holderA,
+    address _holderB,
+    uint256 _amountA,
+    uint256 _amountB,
+    uint256 _withdrawAmt,
+  ) public {
+    vm.assume(_holderA != _holderB);
+
+    _amountA = bound(_amountA, 1, type(uint128).max);
+    _amountB = bound(_amountB, 1, type(uint128).max);
+    _withdrawAmt = bound(_withdrawAmt, 1, _amountA)
+
+    // Deposit some gov.
+    _mintGovAndDepositIntoPool(_holderA, _amountA);
+    _mintGovAndDepositIntoPool(_holderB, _amountB);
+
+    // Set checkpoints.
+    vm.roll(block.number + 42);
+
+    uint256 _holderABalanceBefore = token.balanceOf(_holderA);
+    uint256 _holderBBalanceBefore = token.balanceOf(_holderB);
+
+    // Cannot withdraw more than you deposited even though the pool contains more.
+    vm.prank(_holderA);
+    vm.expectRevert();
+    pool.withdraw(_amountA + 1);
+    assertEq(token.balanceOf(address(pool)), _amountA + _amountB)
+
+    // Can withdraw a valid amount.
+    vm.prank(_holderA);
+    vm.expectRevert();
+    pool.withdraw(_withdrawAmt);
+
+    // Token balances change.
+    uint256 _holderABalanceAfter = token.balanceOf(_holderA);
+    assertEq(_holderABalanceBefore + _withdrawAmt, _holderABalanceAfter)
+    assertEq(token.balanceOf(address(pool)), _amountA + _amountB - _withdrawAmt)
+    assertEq(token.balanceOf(_holderB), _holderBBalanceBefore)
+
+    // Set checkpoints.
+    vm.roll(block.number + 42);
+
+    // Checkpoints are updated.
+
+    // deposit into pool
+    // fastforward block
+    // withdrawl from pool
+    // user gov balance should be incremented
+    // pool gov balance should be decremented
+    // checkpoints should be decremented
+  }
+
+  // TODO the token balance changes
+  // TODO cannot withdraw more than was deposited
+  // TODO checkpoints updated after withdrawals (both total and per-address)
+  // TODO can not vote after withdrawal
+  // TODO can vote after withdrawal if vote snapshot was before withdrawal
+  // TODO can deposit and withdraw in the same transaction (why??)
+}
 
 contract Vote is FractionalPoolTest {
   function testFuzz_UserCanCastVotes(address _hodler, uint256 _voteWeight, uint8 _supportType)
