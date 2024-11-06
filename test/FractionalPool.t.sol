@@ -193,13 +193,13 @@ contract Withdraw is FractionalPoolTest {
     address _holderB,
     uint256 _amountA,
     uint256 _amountB,
-    uint256 _withdrawAmt,
+    uint256 _withdrawAmt
   ) public {
     vm.assume(_holderA != _holderB);
 
     _amountA = bound(_amountA, 1, type(uint128).max);
     _amountB = bound(_amountB, 1, type(uint128).max);
-    _withdrawAmt = bound(_withdrawAmt, 1, _amountA)
+    _withdrawAmt = bound(_withdrawAmt, 1, _amountA);
 
     // Deposit some gov.
     _mintGovAndDepositIntoPool(_holderA, _amountA);
@@ -215,7 +215,7 @@ contract Withdraw is FractionalPoolTest {
     vm.prank(_holderA);
     vm.expectRevert();
     pool.withdraw(_amountA + 1);
-    assertEq(token.balanceOf(address(pool)), _amountA + _amountB)
+    assertEq(token.balanceOf(address(pool)), _amountA + _amountB);
 
     // Can withdraw a valid amount.
     vm.prank(_holderA);
@@ -224,9 +224,9 @@ contract Withdraw is FractionalPoolTest {
 
     // Token balances change.
     uint256 _holderABalanceAfter = token.balanceOf(_holderA);
-    assertEq(_holderABalanceBefore + _withdrawAmt, _holderABalanceAfter)
-    assertEq(token.balanceOf(address(pool)), _amountA + _amountB - _withdrawAmt)
-    assertEq(token.balanceOf(_holderB), _holderBBalanceBefore)
+    assertEq(_holderABalanceBefore + _withdrawAmt, _holderABalanceAfter);
+    assertEq(token.balanceOf(address(pool)), _amountA + _amountB - _withdrawAmt);
+    assertEq(token.balanceOf(_holderB), _holderBBalanceBefore);
 
     // Set checkpoints.
     vm.roll(block.number + 42);
