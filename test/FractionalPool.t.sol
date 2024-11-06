@@ -127,23 +127,33 @@ contract Deposit is FractionalPoolTest {
   }
 
   function testFuzz_DepositsAreCheckpointed(
-    address _holder,
+    address _holderA,
+    address _holderB,
     uint256 _amountA,
     uint256 _amountB,
     uint24 _depositDelay
   ) public {
+    vm.assume(_holderA != _holderB);
+
     _amountA = bound(_amountA, 1, type(uint128).max);
     _amountB = bound(_amountB, 1, type(uint128).max);
 
     // Deposit some gov.
-    _mintGovAndDepositIntoPool(_holder, _amountA);
+    _mintGovAndDepositIntoPool(_holderA, _amountA);
+    _mintGovAndDepositIntoPool(_holderB, _amountB);
 
     vm.roll(block.number + 42); // advance so that we can look at checkpoints
 
     // We can still retrieve the user's balance at the given time.
     assertEq(
-      pool.getPastDeposits(_holder, block.number - 1),
+      pool.getPastDeposits(_holderA, block.number - 1),
       _amountA,
+      "user's first deposit was not properly checkpointed"
+    );
+    // We don't mix up user's balances.
+    assertEq(
+      pool.getPastDeposits(_holderB, block.number - 1),
+      _amountB,
       "user's first deposit was not properly checkpointed"
     );
 
@@ -151,12 +161,17 @@ contract Deposit is FractionalPoolTest {
     vm.roll(newBlockNum);
 
     // Deposit some more.
-    _mintGovAndDepositIntoPool(_holder, _amountB);
+    _mintGovAndDepositIntoPool(_holderA, _amountB);
 
     vm.roll(block.number + 42); // advance so that we can look at checkpoints
     assertEq(
-      pool.getPastDeposits(_holder, block.number - 1),
+      pool.getPastDeposits(_holderA, block.number - 1),
       _amountA + _amountB,
+      "user's second deposit was not properly checkpointed"
+    );
+    assertEq(
+      pool.getPastDeposits(_holderB, block.number - 1),
+      _amountB,
       "user's second deposit was not properly checkpointed"
     );
   }
