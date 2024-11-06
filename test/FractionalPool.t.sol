@@ -101,7 +101,7 @@ contract FractionalPoolTest is Test {
 }
 
 contract Deployment is FractionalPoolTest {
-  function test_FractionalPoolDeployment() view public {
+  function test_FractionalPoolDeployment() public view {
     assertEq(token.name(), "Governance Token");
     assertEq(token.symbol(), "GOV");
 

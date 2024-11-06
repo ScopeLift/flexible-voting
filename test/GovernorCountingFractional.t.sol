@@ -350,7 +350,7 @@ contract GovernorCountingFractionalTest is Test {
   /// END HELPER FUNCTIONS
   /// --------------------
 
-  function testFuzz_Deployment(uint256 _blockNumber) view public {
+  function testFuzz_Deployment(uint256 _blockNumber) public view {
     assertEq(governor.name(), "Governor");
     assertEq(address(governor.token()), address(token));
     assertEq(governor.votingDelay(), 4);
