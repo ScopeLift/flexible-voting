@@ -185,7 +185,7 @@ contract GovernorCountingFractionalTest is Test {
     returns (address)
   {
     vm.assume(_addr > address(0));
-    assumeNoPrecompiles(_addr);
+    assumeNotPrecompile(_addr);
     vm.label(_addr, _name);
     return _addr;
   }
