@@ -4,13 +4,13 @@ pragma solidity >=0.8.10;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
-import {GovernorCompatibilityBravo} from
-  "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {GovToken} from "./GovToken.sol";
-import {FractionalGovernor, IVotes, IGovernor} from "./FractionalGovernor.sol";
+import {FractionalGovernor} from "./FractionalGovernor.sol";
 import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 
 contract GovernorCountingFractionalTest is Test {
   using FixedPointMathLib for uint256;
@@ -39,6 +39,14 @@ contract GovernorCountingFractionalTest is Test {
     uint256 endBlock,
     string description
   );
+
+  enum VoteType {
+      Against,
+      For,
+      Abstain
+  }
+
+
 
   // We use a min of 1e4 to avoid flooring votes to 0.
   uint256 constant MIN_VOTE_WEIGHT = 1e4;
@@ -196,7 +204,7 @@ contract GovernorCountingFractionalTest is Test {
   }
 
   function _randomSupportType(uint256 salt) public pure returns (uint8) {
-    return uint8(bound(salt, 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
+    return uint8(bound(salt, 0, uint8(VoteType.Abstain)));
   }
 
   function _randomVoteSplit(FractionalVoteSplit memory _voteSplit)
@@ -253,13 +261,13 @@ contract GovernorCountingFractionalTest is Test {
         againstVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAgainst));
         abstainVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAbstain));
       } else {
-        if (voter.support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
+        if (voter.support == uint8(VoteType.For)) {
           forVotes += voter.weight;
         }
-        if (voter.support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
+        if (voter.support == uint8(VoteType.Against)) {
           againstVotes += voter.weight;
         }
-        if (voter.support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
+        if (voter.support == uint8(VoteType.Abstain)) {
           abstainVotes += voter.weight;
         }
       }
@@ -417,13 +425,13 @@ contract GovernorCountingFractionalTest is Test {
 
     (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
       governor.proposalVotes(_proposalId);
-    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
+    if (_voter.support == uint8(VoteType.For)) {
       assertEq(_voter.weight, _actualForVotes);
     }
-    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
+    if (_voter.support == uint8(VoteType.Against)) {
       assertEq(_voter.weight, _actualAgainstVotes);
     }
-    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
+    if (_voter.support == uint8(VoteType.Abstain)) {
       assertEq(_voter.weight, _actualAbstainVotes);
     }
 
@@ -641,7 +649,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.expectRevert("GovernorCountingFractional: no weight");
     governor.castVoteWithReasonAndParams(
       _proposalId,
-      uint8(GovernorCompatibilityBravo.VoteType.For),
+      uint8(VoteType.For),
       "I hope no one catches me doing this!",
       new bytes(0) // No data, this is a nominal vote.
     );
@@ -651,7 +659,7 @@ contract GovernorCountingFractionalTest is Test {
     vm.expectRevert("GovernorCountingFractional: no weight");
     governor.castVoteWithReasonAndParams(
       _proposalId,
-      uint8(GovernorCompatibilityBravo.VoteType.For),
+      uint8(VoteType.For),
       "I'm so bad",
       abi.encodePacked(type(uint128).max, type(uint128).max, type(uint128).max)
     );

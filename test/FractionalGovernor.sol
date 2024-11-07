@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.10;
 
-import "../src/GovernorCountingFractional.sol";
-import "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import {GovernorCountingFractional} from "../src/GovernorCountingFractional.sol";
+import {GovernorVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {Governor} from "@openzeppelin/contracts/governance//Governor.sol";
 
 contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
   constructor(string memory name_, IVotes token_) Governor(name_) GovernorVotes(token_) {}
@@ -15,7 +17,7 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
     uint8 v,
     bytes32 r,
     bytes32 s
-  ) public virtual override(GovernorCountingFractional, Governor) returns (uint256) {
+  ) public virtual override(GovernorCountingFractional) returns (uint256) {
     return GovernorCountingFractional.castVoteWithReasonAndParamsBySig(
       proposalId, support, reason, params, v, r, s
     );

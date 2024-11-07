@@ -4,7 +4,6 @@ pragma solidity ^0.8.0;
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
-import {GovernorCompatibilityBravo} from "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 /**
@@ -19,6 +18,15 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
  * knowledge proofs.
  */
 abstract contract GovernorCountingFractional is Governor {
+
+    /**
+     * @dev Supported vote types. Matches Governor Bravo ordering.
+     */
+    enum VoteType {
+        Against,
+        For,
+        Abstain
+    }
 
     struct ProposalVote {
         uint128 againstVotes;
@@ -166,11 +174,11 @@ abstract contract GovernorCountingFractional is Governor {
 
         _proposalVotersWeightCast[proposalId][account] = totalWeight;
 
-        if (support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
+        if (support == uint8(VoteType.Against)) {
             _proposalVotes[proposalId].againstVotes += totalWeight;
-        } else if (support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
+        } else if (support == uint8(VoteType.For)) {
             _proposalVotes[proposalId].forVotes += totalWeight;
-        } else if (support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
+        } else if (support == uint8(VoteType.Abstain)) {
             _proposalVotes[proposalId].abstainVotes += totalWeight;
         } else {
             revert("GovernorCountingFractional: invalid support value, must be included in VoteType enum");
@@ -265,6 +273,7 @@ abstract contract GovernorCountingFractional is Governor {
      *
      * See {fractionalVoteNonce} and {_castVote} for more information.
      */
+	 // TODO signature is differnt. Need to update signature
     function castVoteWithReasonAndParamsBySig(
         uint256 proposalId,
         uint8 support,
@@ -273,7 +282,7 @@ abstract contract GovernorCountingFractional is Governor {
         uint8 v,
         bytes32 r,
         bytes32 s
-    ) public virtual override returns (uint256) {
+    ) public virtual returns (uint256) {
         // Signature-based fractional voting requires `params` be two full words
         // in length:
         //   16 bytes for againstVotes.

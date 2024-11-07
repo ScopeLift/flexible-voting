@@ -2,7 +2,7 @@
 pragma solidity >=0.8.10;
 
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import {Checkpoints} from "@openzeppelin/contracts/utils/Checkpoints.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 import {IFractionalGovernor} from "./interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "./interfaces/IVotingToken.sol";
 
@@ -48,7 +48,7 @@ import {IVotingToken} from "./interfaces/IVotingToken.sol";
 /// of the rest.
 abstract contract FlexVotingClient {
   using SafeCast for uint256;
-  using Checkpoints for Checkpoints.History;
+  using Checkpoints for Checkpoints.Trace224;
 
   /// @notice The voting options corresponding to those used in the Governor.
   enum VoteType {
@@ -76,12 +76,12 @@ abstract contract FlexVotingClient {
 
   /// @dev Mapping from address to the checkpoint history of raw balances
   /// of that address.
-  mapping(address => Checkpoints.History) private balanceCheckpoints;
+  mapping(address => Checkpoints.Trace224) private balanceCheckpoints;
 
   /// @dev History of the sum total of raw balances in the system. May or may
   /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
   /// given time.
-  Checkpoints.History internal totalBalanceCheckpoints;
+  Checkpoints.Trace224 internal totalBalanceCheckpoints;
 
   /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(address _governor) {
