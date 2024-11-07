@@ -48,7 +48,12 @@ import {IVotingToken} from "./interfaces/IVotingToken.sol";
 /// of the rest.
 abstract contract FlexVotingClient {
   using SafeCast for uint256;
-  using Checkpoints for Checkpoints.Trace224;
+
+  // @dev Trace208 is used instead of Trace224 because the former allocates 48
+  // bits to its _key. We need at least 48 bits because the _key is going to be
+  // a block number. And EIP-6372 specifies that when block numbers are used for
+  // internal clocks (as they are for ERC20Votes) they need to be uint48s.
+  using Checkpoints for Checkpoints.Trace208;
 
   /// @notice The voting options corresponding to those used in the Governor.
   enum VoteType {
@@ -76,12 +81,12 @@ abstract contract FlexVotingClient {
 
   /// @dev Mapping from address to the checkpoint history of raw balances
   /// of that address.
-  mapping(address => Checkpoints.Trace224) private balanceCheckpoints;
+  mapping(address => Checkpoints.Trace208) private balanceCheckpoints;
 
   /// @dev History of the sum total of raw balances in the system. May or may
   /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
   /// given time.
-  Checkpoints.Trace224 internal totalBalanceCheckpoints;
+  Checkpoints.Trace208 internal totalBalanceCheckpoints;
 
   /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(address _governor) {
@@ -92,7 +97,7 @@ abstract contract FlexVotingClient {
   /// token that `_user` has claim to in this system. It may or may not be
   /// equivalent to the withdrawable balance of `GOVERNOR`s token for `user`,
   /// e.g. if the internal representation of balance has been scaled down.
-  function _rawBalanceOf(address _user) internal view virtual returns (uint224);
+  function _rawBalanceOf(address _user) internal view virtual returns (uint208);
 
   /// @dev Used as the `reason` param when submitting a vote to `GOVERNOR`.
   function _castVoteReasonString() internal virtual returns (string memory) {
@@ -194,21 +199,21 @@ abstract contract FlexVotingClient {
 
   /// @dev Checkpoints the _user's current raw balance.
   function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(SafeCast.toUint32(block.number), _rawBalanceOf(_user));
+    balanceCheckpoints[_user].push(SafeCast.toUint48(block.number), _rawBalanceOf(_user));
   }
 
   /// @notice Returns the `_user`'s raw balance at `_blockNumber`.
   /// @param _user The account that's historical raw balance will be looked up.
   /// @param _blockNumber The block at which to lookup the _user's raw balance.
   function getPastRawBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
-    uint32 key = SafeCast.toUint32(_blockNumber);
+    uint48 key = SafeCast.toUint48(_blockNumber);
     return balanceCheckpoints[_user].upperLookup(key);
   }
 
   /// @notice Returns the sum total of raw balances of all users at `_blockNumber`.
   /// @param _blockNumber The block at which to lookup the total balance.
   function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
-    uint32 key = SafeCast.toUint32(_blockNumber);
+    uint48 key = SafeCast.toUint48(_blockNumber);
     return totalBalanceCheckpoints.upperLookup(key);
   }
 }
