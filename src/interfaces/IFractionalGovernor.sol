@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /// @dev The interface that flexible voting-compatible governors are expected to support.
 interface IFractionalGovernor {
-  function token() external returns (address);
+  function token() external view returns (address);
   function proposalSnapshot(uint256 proposalId) external view returns (uint256);
   function proposalDeadline(uint256 proposalId) external view returns (uint256);
   function castVoteWithReasonAndParams(
