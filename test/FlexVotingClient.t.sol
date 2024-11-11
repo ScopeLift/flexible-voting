@@ -50,10 +50,10 @@ contract FlexVotingClientTest is Test {
     vm.label(address(receiver), "receiver");
   }
 
-  function _mintGovAndApproveFlexClient(address _holder, uint208 _amount) public {
-    vm.assume(_holder != address(0));
-    token.exposed_mint(_holder, _amount);
-    vm.prank(_holder);
+  function _mintGovAndApproveFlexClient(address _user, uint208 _amount) public {
+    vm.assume(_user != address(0));
+    token.exposed_mint(_user, _amount);
+    vm.prank(_user);
     token.approve(address(flexClient), type(uint256).max);
   }
 
@@ -215,20 +215,20 @@ contract Deposit is FlexVotingClientTest {
 
 contract Vote is FlexVotingClientTest {
   function testFuzz_UserCanCastVotes(
-    address _holder,
+    address _user,
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_holder, _voteWeight, _supportType);
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_holder, _voteWeight);
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
-    // _holder should now be able to express his/her vote on the proposal.
-    vm.prank(_holder);
+    // _user should now be able to express his/her vote on the proposal.
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
     (
       uint256 _againstVotesExpressed,
@@ -257,41 +257,41 @@ contract Vote is FlexVotingClientTest {
   }
 
   function testFuzz_UserCannotExpressVotesWithoutWeightInPool(
-    address _holder,
+    address _user,
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_holder, _voteWeight, _supportType);
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Mint gov but do not deposit.
-    _mintGovAndApproveFlexClient(_holder, _voteWeight);
-    assertEq(token.balanceOf(_holder), _voteWeight);
-    assertEq(flexClient.deposits(_holder), 0);
+    _mintGovAndApproveFlexClient(_user, _voteWeight);
+    assertEq(token.balanceOf(_user), _voteWeight);
+    assertEq(flexClient.deposits(_user), 0);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
-    // _holder should NOT be able to express his/her vote on the proposal.
+    // _user should NOT be able to express his/her vote on the proposal.
     vm.expectRevert(bytes("no weight"));
-    vm.prank(_holder);
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_supportType));
   }
 
   function testFuzz_UserCannotCastAfterVotingPeriod(
-    address _holder,
+    address _user,
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_holder, _voteWeight, _supportType);
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_holder, _voteWeight);
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Express vote preference.
-    vm.prank(_holder);
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
 
     // Jump ahead so that we're outside of the proposal's voting period.
@@ -323,7 +323,7 @@ contract Vote is FlexVotingClientTest {
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
-    // _holder should now be able to express his/her vote on the proposal.
+    // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
 
