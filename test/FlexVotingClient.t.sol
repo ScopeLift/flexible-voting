@@ -256,6 +256,35 @@ contract Vote is FlexVotingClientTest {
     assertEq(_abstainVotes, _abstainVotesExpressed);
   }
 
+  function testFuzz_CastVoteRevertsWithoutVotesToCast(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // No one has expressed, there are no votes to cast.
+    vm.expectRevert(bytes("no votes expressed"));
+    flexClient.castVote(_proposalId);
+
+    // _user expresses his/her vote on the proposal.
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+
+    // Submit votes on behalf of the flexClient.
+    flexClient.castVote(_proposalId);
+
+    // All votes have been cast, there's nothing new to send to the governor.
+    vm.expectRevert(bytes("no votes expressed"));
+    flexClient.castVote(_proposalId);
+  }
+
   function testFuzz_UserCannotExpressVotesWithoutWeightInPool(
     address _user,
     uint208 _voteWeight,
