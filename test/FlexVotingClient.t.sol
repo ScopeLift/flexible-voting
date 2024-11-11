@@ -119,11 +119,9 @@ contract Deployment is FlexVotingClientTest {
 }
 
 contract Withdraw is FlexVotingClientTest {
-  function testFuzz_UserCanWithdrawGovTokens(
-    address _lender,
-    address _borrower,
-    uint208 _amount
-  ) public {
+  function testFuzz_UserCanWithdrawGovTokens(address _lender, address _borrower, uint208 _amount)
+    public
+  {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
     vm.assume(_lender != address(flexClient));
     vm.assume(_borrower != address(flexClient));
@@ -215,11 +213,7 @@ contract Deposit is FlexVotingClientTest {
 }
 
 contract Vote is FlexVotingClientTest {
-  function testFuzz_UserCanCastVotes(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
+  function testFuzz_UserCanCastVotes(address _user, uint208 _voteWeight, uint8 _supportType) public {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -231,11 +225,8 @@ contract Vote is FlexVotingClientTest {
     // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
-    (
-      uint256 _againstVotesExpressed,
-      uint256 _forVotesExpressed,
-      uint256 _abstainVotesExpressed
-    ) = flexClient.proposalVotes(_proposalId);
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, _supportType == uint8(VoteType.For) ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _supportType == uint8(VoteType.Against) ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _supportType == uint8(VoteType.Abstain) ? _voteWeight : 0);
@@ -340,11 +331,7 @@ contract Vote is FlexVotingClientTest {
     flexClient.castVote(_proposalId);
   }
 
-  function testFuzz_NoDoubleVoting(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
+  function testFuzz_NoDoubleVoting(address _user, uint208 _voteWeight, uint8 _supportType) public {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -538,11 +525,13 @@ contract Vote is FlexVotingClientTest {
     _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, uint8(VoteType.Abstain)));
 
     _vars.voteWeightA = uint208(bound(_vars.voteWeightA, 1e4, type(uint128).max - 1e4 - 1));
-    _vars.voteWeightB = uint208(bound(_vars.voteWeightB, 1e4, type(uint128).max - _vars.voteWeightA - 1));
+    _vars.voteWeightB =
+      uint208(bound(_vars.voteWeightB, 1e4, type(uint128).max - _vars.voteWeightA - 1));
 
     uint208 _maxBorrowWeight = _vars.voteWeightA + _vars.voteWeightB;
     _vars.borrowAmountC = uint208(bound(_vars.borrowAmountC, 1, _maxBorrowWeight - 1));
-    _vars.borrowAmountD = uint208(bound(_vars.borrowAmountD, 1, _maxBorrowWeight - _vars.borrowAmountC));
+    _vars.borrowAmountD =
+      uint208(bound(_vars.borrowAmountD, 1, _maxBorrowWeight - _vars.borrowAmountC));
 
     // These are here just as a sanity check that all of the bounding above worked.
     vm.assume(_vars.voteWeightA + _vars.voteWeightB < type(uint128).max);
@@ -815,7 +804,6 @@ contract Vote is FlexVotingClientTest {
     assertEq(_againstVotes, _voteWeightA); // This should be unchanged!
     assertEq(_abstainVotes, _voteWeightB); // Second user's votes are now in.
   }
-
 }
 
 contract Borrow is FlexVotingClientTest {

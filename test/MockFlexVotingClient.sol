@@ -36,8 +36,7 @@ contract MockFlexVotingClient is FlexVotingClient {
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
 
     FlexVotingClient.totalBalanceCheckpoints.push(
-      SafeCast.toUint48(block.number),
-      FlexVotingClient.totalBalanceCheckpoints.latest() + _amount
+      SafeCast.toUint48(block.number), FlexVotingClient.totalBalanceCheckpoints.latest() + _amount
     );
 
     // Assumes revert on failure.
@@ -53,8 +52,7 @@ contract MockFlexVotingClient is FlexVotingClient {
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
 
     FlexVotingClient.totalBalanceCheckpoints.push(
-      SafeCast.toUint48(block.number),
-      FlexVotingClient.totalBalanceCheckpoints.latest() - _amount
+      SafeCast.toUint48(block.number), FlexVotingClient.totalBalanceCheckpoints.latest() - _amount
     );
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
