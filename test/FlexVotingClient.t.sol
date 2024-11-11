@@ -219,20 +219,20 @@ contract Vote is FlexVotingClientTest {
   }
 
   function testFuzz_NoDoubleVoting(
-    address _hodler,
+    address _user,
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_hodler, _voteWeight);
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
     // _holder should now be able to express his/her vote on the proposal.
-    vm.prank(_hodler);
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
 
     (
@@ -246,7 +246,7 @@ contract Vote is FlexVotingClientTest {
 
     // Vote early and often!
     vm.expectRevert(bytes("already voted"));
-    vm.prank(_hodler);
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
 
     // No votes changed.
@@ -258,45 +258,45 @@ contract Vote is FlexVotingClientTest {
   }
 
   function testFuzz_UsersCannotExpressVotesPriorToDepositing(
-    address _hodler,
+    address _user,
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_hodler, _voteWeight, _supportType);
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Create the proposal *before* the user deposits anything.
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_hodler, _voteWeight);
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
 
     // Now try to express a voting preference on the proposal.
-    assertEq(flexClient.deposits(_hodler), _voteWeight);
+    assertEq(flexClient.deposits(_user), _voteWeight);
     vm.expectRevert(bytes("no weight"));
-    vm.prank(_hodler);
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
   }
 
   function testFuzz_VotingWeightIsSnapshotDependent(
-    address _hodler,
+    address _user,
     uint208 _voteWeightA,
     uint208 _voteWeightB,
     uint8 _supportType
   ) public {
-    _voteWeightA = _commonFuzzerAssumptions(_hodler, _voteWeightA, _supportType);
-    _voteWeightB = _commonFuzzerAssumptions(_hodler, _voteWeightB, _supportType);
+    _voteWeightA = _commonFuzzerAssumptions(_user, _voteWeightA, _supportType);
+    _voteWeightB = _commonFuzzerAssumptions(_user, _voteWeightB, _supportType);
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_hodler, _voteWeightA);
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeightA);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Sometime later the user deposits some more.
     vm.roll(governor.proposalDeadline(_proposalId) - 1);
-    _mintGovAndDepositIntoFlexClient(_hodler, _voteWeightB);
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeightB);
 
-    vm.prank(_hodler);
+    vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
 
     // The internal proposal vote weight should not reflect the new deposit weight.
@@ -318,8 +318,8 @@ contract Vote is FlexVotingClientTest {
   }
 
   function testFuzz_MultipleUsersCanCastVotes(
-    address _hodlerA,
-    address _hodlerB,
+    address _userA,
+    address _userB,
     uint208 _voteWeightA,
     uint208 _voteWeightB
   ) public {
@@ -327,21 +327,21 @@ contract Vote is FlexVotingClientTest {
     _voteWeightA = uint208(bound(_voteWeightA, 1, type(uint120).max));
     _voteWeightB = uint208(bound(_voteWeightB, 1, type(uint120).max));
 
-    vm.assume(_hodlerA != address(flexClient));
-    vm.assume(_hodlerB != address(flexClient));
-    vm.assume(_hodlerA != _hodlerB);
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
+    vm.assume(_userA != _userB);
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_hodlerA, _voteWeightA);
-    _mintGovAndDepositIntoFlexClient(_hodlerB, _voteWeightB);
+    _mintGovAndDepositIntoFlexClient(_userA, _voteWeightA);
+    _mintGovAndDepositIntoFlexClient(_userB, _voteWeightB);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
-    // Hodlers should now be able to express their votes on the proposal.
-    vm.prank(_hodlerA);
+    // users should now be able to express their votes on the proposal.
+    vm.prank(_userA);
     flexClient.expressVote(_proposalId, uint8(VoteType.Against));
-    vm.prank(_hodlerB);
+    vm.prank(_userB);
     flexClient.expressVote(_proposalId, uint8(VoteType.Abstain));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
