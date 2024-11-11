@@ -613,3 +613,40 @@ contract Vote is FlexVotingClientTest {
 
   // TODO Can call castVotes multiple times.
 }
+
+contract Borrow is FlexVotingClientTest {
+  function testFuzz_UsersCanBorrowTokens(
+    address _depositer,
+    uint208 _depositAmount,
+    address _borrower,
+    uint208 _borrowAmount
+  ) public {
+    vm.assume(_borrower != address(0));
+    _depositAmount = _commonFuzzerAssumptions(_depositer, _depositAmount);
+    _borrowAmount = _commonFuzzerAssumptions(_borrower, _borrowAmount);
+    vm.assume(_depositAmount > _borrowAmount);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_depositer, _depositAmount);
+
+    // Borrow some funds.
+    uint256 _initBalance = token.balanceOf(_borrower);
+    vm.prank(_borrower);
+    flexClient.borrow(_borrowAmount);
+
+    // Tokens should have been transferred.
+    assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
+    assertEq(token.balanceOf(address(flexClient)), _depositAmount - _borrowAmount);
+
+    // Borrow total has been tracked.
+    assertEq(flexClient.borrowTotal(_borrower), _borrowAmount);
+
+    // The deposit balance of the depositer should not have changed.
+    assertEq(flexClient.deposits(_depositer), _depositAmount);
+
+    // The total deposit snapshot should not have changed.
+    uint256 _blockAtTimeOfBorrow = block.number;
+    vm.roll(_blockAtTimeOfBorrow + 42); // Advance so the block is mined.
+    assertEq(flexClient.getPastTotalBalance(_blockAtTimeOfBorrow), _depositAmount);
+  }
+}
