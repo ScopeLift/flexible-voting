@@ -477,5 +477,139 @@ contract Vote is FlexVotingClientTest {
     }
   }
 
+  // This is important because it ensures you can't *gain* voting weight by
+  // getting other people to not vote.
+  function testFuzz_VotingWeightIsAbandonedIfSomeoneDoesntExpress(
+    uint208 _voteWeightA,
+    uint208 _voteWeightB,
+    uint8 _supportTypeA,
+    uint208 _borrowAmount
+  ) public {
+    // We need to do this to prevent:
+    // "CompilerError: Stack too deep, try removing local variables."
+    address[3] memory _users = [
+      address(0xbeef), // userA
+      address(0xbabe), // userB
+      address(0xf005ba11) // userC
+    ];
+    _voteWeightA = _commonFuzzerAssumptions(_users[0], _voteWeightA, _supportTypeA);
+    _voteWeightB = _commonFuzzerAssumptions(_users[1], _voteWeightB);
+    _borrowAmount = _commonFuzzerAssumptions(_users[2], _borrowAmount);
+
+    _voteWeightA = uint208(bound(_voteWeightA, 0, type(uint128).max));
+    _voteWeightB = uint208(bound(_voteWeightB, 0, type(uint128).max - _voteWeightA));
+    vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
+    vm.assume(_voteWeightA + _voteWeightB > _borrowAmount);
+
+    // Mint and deposit.
+    _mintGovAndDepositIntoFlexClient(_users[0], _voteWeightA);
+    _mintGovAndDepositIntoFlexClient(_users[1], _voteWeightB);
+    uint256 _initDepositWeight = token.balanceOf(address(flexClient));
+
+    // Borrow from the flexClient, decreasing its token balance.
+    vm.prank(_users[2]);
+    flexClient.borrow(_borrowAmount);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the flexClient's balance.
+    vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+    uint256 _totalPossibleVotingWeight = token.balanceOf(address(flexClient));
+
+    uint256 _fullVotingWeight = token.balanceOf(address(flexClient));
+    assert(_fullVotingWeight < _initDepositWeight);
+    assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB - _borrowAmount);
+
+    // Only user A expresses a vote.
+    vm.prank(_users[0]);
+    flexClient.expressVote(_proposalId, _supportTypeA);
+
+    // Submit votes on behalf of the flexClient.
+    flexClient.castVote(_proposalId);
+
+    // Vote should be cast as a percentage of the depositer's expressed types, since
+    // the actual weight is different from the deposit weight.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+
+    uint256 _expectedVotingWeightA = (_voteWeightA * _fullVotingWeight) / _initDepositWeight;
+    uint256 _expectedVotingWeightB = (_voteWeightB * _fullVotingWeight) / _initDepositWeight;
+
+    // The flexClient *could* have voted with this much weight.
+    assertApproxEqAbs(
+      _totalPossibleVotingWeight, _expectedVotingWeightA + _expectedVotingWeightB, 1
+    );
+
+    // Actually, though, the flexClient did not vote with all of the weight it could have.
+    // VoterB's votes were never cast because he/she did not express his/her preference.
+    assertApproxEqAbs(
+      _againstVotes + _forVotes + _abstainVotes, // The total actual weight.
+      _expectedVotingWeightA, // VoterB's weight has been abandoned, only A's is counted.
+      1
+    );
+
+    // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+    if (_supportTypeA == uint8(VoteType.For)) {
+      assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
+    }
+    if (_supportTypeA == uint8(VoteType.Against)) {
+      assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    }
+    if (_supportTypeA == uint8(VoteType.Abstain)) {
+      assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    }
+  }
+
+  function testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(
+    uint208 _voteWeightA,
+    uint208 _voteWeightB,
+    uint8 _supportTypeA
+  ) public {
+    // We need to do this to prevent:
+    // "CompilerError: Stack too deep, try removing local variables."
+    address[3] memory _users = [
+      address(0xbeef), // userA
+      address(0xbabe), // userB
+      address(0xf005ba11) // userC
+    ];
+    _voteWeightA = _commonFuzzerAssumptions(_users[0], _voteWeightA, _supportTypeA);
+    _voteWeightB = _commonFuzzerAssumptions(_users[1], _voteWeightB);
+
+    vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
+
+    // Mint and deposit for just userA.
+    _mintGovAndDepositIntoFlexClient(_users[0], _voteWeightA);
+    uint256 _initDepositWeight = token.balanceOf(address(flexClient));
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Jump ahead to the proposal snapshot to lock in the flexClient's balance.
+    vm.roll(governor.proposalSnapshot(_proposalId) + 1);
+
+    // Now mint and deposit for userB.
+    _mintGovAndDepositIntoFlexClient(_users[1], _voteWeightB);
+
+    uint256 _fullVotingWeight = token.balanceOf(address(flexClient));
+    assert(_fullVotingWeight > _initDepositWeight);
+    assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB);
+
+    // Only user A expresses a vote.
+    vm.prank(_users[0]);
+    flexClient.expressVote(_proposalId, _supportTypeA);
+
+    // Submit votes on behalf of the flexClient.
+    flexClient.castVote(_proposalId);
+
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+
+    // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
+    if (_supportTypeA == uint8(VoteType.For)) assertEq(_forVotes, _voteWeightA);
+    if (_supportTypeA == uint8(VoteType.Against)) assertEq(_againstVotes, _voteWeightA);
+    if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
+  }
+
   // TODO Can call castVotes multiple times.
 }
