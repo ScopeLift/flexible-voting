@@ -16,6 +16,9 @@ contract MockFlexVotingClient is FlexVotingClient {
   /// @notice Map depositor to deposit amount.
   mapping(address => uint208) public deposits;
 
+  /// @notice Map borrower to total amount borrowed.
+  mapping(address => uint256) public borrowTotal;
+
   constructor(address _governor) FlexVotingClient(_governor) {
     TOKEN = ERC20Votes(GOVERNOR.token());
     _selfDelegate();
@@ -25,6 +28,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     return deposits[_user];
   }
 
+  /// @notice Allow a holder of the governance token to deposit it into the pool.
+  /// @param _amount The amount to be deposited.
   function deposit(uint208 _amount) public {
     deposits[msg.sender] += _amount;
 
@@ -39,6 +44,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     TOKEN.transferFrom(msg.sender, address(this), _amount);
   }
 
+  /// @notice Allow a depositor to withdraw funds previously deposited to the pool.
+  /// @param _amount The amount to be withdrawn.
   function withdraw(uint208 _amount) public {
     // Overflows & reverts if user does not have sufficient deposits.
     deposits[msg.sender] -= _amount;
@@ -51,5 +58,13 @@ contract MockFlexVotingClient is FlexVotingClient {
     );
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
+  }
+
+  /// @notice Arbitrarily remove tokens from the pool. This is to simulate a borrower, hence the
+  /// method name. Since this is just a proof-of-concept, nothing else is actually done here.
+  /// @param _amount The amount to "borrow."
+  function borrow(uint256 _amount) public {
+    borrowTotal[msg.sender] += _amount;
+    TOKEN.transfer(msg.sender, _amount);
   }
 }
