@@ -248,7 +248,7 @@ contract Vote is FlexVotingClientTest {
     assertEq(_abstainVotes, _abstainVotesExpressed);
   }
 
-  function testFuzz_CastVoteRevertsWithoutVotesToCast(
+  function testFuzz_RevertOn_CastVoteWithoutVotesToCast(
     address _user,
     uint208 _voteWeight,
     uint8 _supportType
