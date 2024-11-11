@@ -128,6 +128,7 @@ contract Withdraw is FlexVotingClientTest {
     vm.assume(_lender != address(flexClient));
     vm.assume(_borrower != address(flexClient));
     vm.assume(_borrower != address(0));
+    vm.assume(_lender != _borrower);
 
     uint256 _initBalance = token.balanceOf(_borrower);
     assertEq(flexClient.deposits(_borrower), 0);
