@@ -369,6 +369,30 @@ contract Vote is FlexVotingClientTest {
     flexClient.expressVote(_proposalId, _supportType);
   }
 
+  function testFuzz_UsersMustExpressWithKnownVoteType(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Force vote type to be unrecognized.
+    vm.assume(_supportType > uint8(VoteType.Abstain));
+
+    vm.assume(_user != address(flexClient));
+    // This max is a limitation of the fractional governance protocol storage.
+    _voteWeight = uint208(bound(_voteWeight, 1, type(uint128).max));
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Now try to express a voting preference with a bogus support type.
+    vm.expectRevert(bytes("invalid support value, must be included in VoteType enum"));
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+  }
+
   function testFuzz_VotingWeightIsSnapshotDependent(
     address _user,
     uint208 _voteWeightA,
