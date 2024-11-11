@@ -611,7 +611,65 @@ contract Vote is FlexVotingClientTest {
     if (_supportTypeA == uint8(VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
   }
 
-  // TODO Can call castVotes multiple times.
+  function testFuzz_CanCastVotesMultipleTimesForTheSameProposal(
+    address _userA,
+    address _userB,
+    uint208 _voteWeightA,
+    uint208 _voteWeightB
+  ) public {
+    // This max is a limitation of the fractional governance protocol storage.
+    _voteWeightA = uint208(bound(_voteWeightA, 1, type(uint120).max));
+    _voteWeightB = uint208(bound(_voteWeightB, 1, type(uint120).max));
+
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
+    vm.assume(_userA != _userB);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_userA, _voteWeightA);
+    _mintGovAndDepositIntoFlexClient(_userB, _voteWeightB);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // users should now be able to express their votes on the proposal.
+    vm.prank(_userA);
+    flexClient.expressVote(_proposalId, uint8(VoteType.Against));
+
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      flexClient.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed, 0);
+    assertEq(_againstVotesExpressed, _voteWeightA);
+    assertEq(_abstainVotesExpressed, 0);
+
+    // The governor should have not recieved any votes yet.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, 0);
+    assertEq(_abstainVotes, 0);
+
+    // Submit votes on behalf of the flexClient.
+    flexClient.castVote(_proposalId);
+
+    // Governor should now record votes for the flexClient.
+    (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, _voteWeightA);
+    assertEq(_abstainVotes, 0);
+
+    // The second user now decides to express and cast.
+    vm.prank(_userB);
+    flexClient.expressVote(_proposalId, uint8(VoteType.Abstain));
+    flexClient.castVote(_proposalId);
+
+    // Governor should now record votes for both users.
+    (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, _voteWeightA); // This should be unchanged!
+    assertEq(_abstainVotes, _voteWeightB); // Second user's votes are now in.
+  }
+
 }
 
 contract Borrow is FlexVotingClientTest {
