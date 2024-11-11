@@ -118,8 +118,100 @@ contract Deployment is FlexVotingClientTest {
   }
 }
 
-// TODO deposit
-// TODO withdraw
+contract Withdraw is FlexVotingClientTest {
+  function testFuzz_UserCanWithdrawGovTokens(
+    address _lender,
+    address _borrower,
+    uint208 _amount
+  ) public {
+    _amount = uint208(bound(_amount, 0, type(uint208).max));
+    vm.assume(_lender != address(flexClient));
+    vm.assume(_borrower != address(flexClient));
+    vm.assume(_borrower != address(0));
+
+    uint256 _initBalance = token.balanceOf(_borrower);
+    assertEq(flexClient.deposits(_borrower), 0);
+    assertEq(flexClient.borrowTotal(_borrower), 0);
+
+    _mintGovAndDepositIntoFlexClient(_lender, _amount);
+    assertEq(flexClient.deposits(_lender), _amount);
+
+    // Borrow the funds.
+    vm.prank(_borrower);
+    flexClient.borrow(_amount);
+
+    assertEq(token.balanceOf(_borrower), _initBalance + _amount);
+    assertEq(flexClient.borrowTotal(_borrower), _amount);
+
+    // Deposit totals are unaffected.
+    assertEq(flexClient.deposits(_lender), _amount);
+    assertEq(flexClient.deposits(_borrower), 0);
+  }
+
+  // `borrow`s affects on vote weights are tested in Vote contract below.
+}
+
+contract Deposit is FlexVotingClientTest {
+  function testFuzz_UserCanDepositGovTokens(address _user, uint208 _amount) public {
+    _amount = uint208(bound(_amount, 0, type(uint208).max));
+    vm.assume(_user != address(flexClient));
+    uint256 initialBalance = token.balanceOf(_user);
+    assertEq(flexClient.deposits(_user), 0);
+
+    _mintGovAndDepositIntoFlexClient(_user, _amount);
+
+    assertEq(token.balanceOf(address(flexClient)), _amount);
+    assertEq(token.balanceOf(_user), initialBalance);
+    assertEq(token.getVotes(address(flexClient)), _amount);
+
+    // Confirm internal accounting has updated.
+    assertEq(flexClient.deposits(_user), _amount);
+  }
+
+  function testFuzz_DepositsAreCheckpointed(
+    address _user,
+    uint208 _amountA,
+    uint208 _amountB,
+    uint24 _depositDelay
+  ) public {
+    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
+    _amountB = uint208(bound(_amountB, 1, type(uint128).max));
+
+    // Deposit some gov.
+    _mintGovAndDepositIntoFlexClient(_user, _amountA);
+    assertEq(flexClient.deposits(_user), _amountA);
+
+    vm.roll(block.number + 42); // Advance so that we can look at checkpoints.
+
+    // We can still retrieve the user's balance at the given time.
+    uint256 _checkpoint1 = block.number - 1;
+    assertEq(
+      flexClient.getPastRawBalance(_user, _checkpoint1),
+      _amountA,
+      "user's first deposit was not properly checkpointed"
+    );
+
+    uint256 newBlockNum = block.number + _depositDelay;
+    vm.roll(newBlockNum);
+
+    // Deposit some more.
+    _mintGovAndDepositIntoFlexClient(_user, _amountB);
+    assertEq(flexClient.deposits(_user), _amountA + _amountB);
+
+    vm.roll(block.number + 42); // Advance so that we can look at checkpoints.
+
+    assertEq(
+      flexClient.getPastRawBalance(_user, _checkpoint1),
+      _amountA,
+      "user's first deposit was not properly checkpointed"
+    );
+    assertEq(
+      flexClient.getPastRawBalance(_user, block.number - 1),
+      _amountA + _amountB,
+      "user's second deposit was not properly checkpointed"
+    );
+  }
+}
 
 contract Vote is FlexVotingClientTest {
   function testFuzz_UserCanCastVotes(
