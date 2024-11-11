@@ -14,7 +14,7 @@ contract MockFlexVotingClient is FlexVotingClient {
   ERC20Votes public immutable TOKEN;
 
   /// @notice Map depositor to deposit amount.
-  mapping(address => uint256) public deposits;
+  mapping(address => uint208) public deposits;
 
   constructor(address _governor) FlexVotingClient(_governor) {
     TOKEN = ERC20Votes(GOVERNOR.token());
@@ -22,24 +22,24 @@ contract MockFlexVotingClient is FlexVotingClient {
   }
 
   function _rawBalanceOf(address _user) internal view override returns (uint208) {
-    return SafeCast.toUint208(TOKEN.balanceOf(_user));
+    return deposits[_user];
   }
 
-  function deposit(uint256 _amount) public {
+  function deposit(uint208 _amount) public {
     deposits[msg.sender] += _amount;
 
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
 
     FlexVotingClient.totalBalanceCheckpoints.push(
       SafeCast.toUint48(block.number),
-      SafeCast.toUint208(TOKEN.balanceOf(address(this)))
+      FlexVotingClient.totalBalanceCheckpoints.latest() + _amount
     );
 
     // Assumes revert on failure.
     TOKEN.transferFrom(msg.sender, address(this), _amount);
   }
 
-  function withdraw(uint256 _amount) public {
+  function withdraw(uint208 _amount) public {
     // Overflows & reverts if user does not have sufficient deposits.
     deposits[msg.sender] -= _amount;
 
@@ -47,7 +47,7 @@ contract MockFlexVotingClient is FlexVotingClient {
 
     FlexVotingClient.totalBalanceCheckpoints.push(
       SafeCast.toUint48(block.number),
-      SafeCast.toUint208(TOKEN.balanceOf(address(this)))
+      FlexVotingClient.totalBalanceCheckpoints.latest() - _amount
     );
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
