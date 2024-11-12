@@ -15,7 +15,6 @@ import {FractionalGovernor} from "test/FractionalGovernor.sol";
 import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
 contract FlexVotingClientTest is Test {
-
   MockFlexVotingClient flexClient;
   GovToken token;
   FractionalGovernor governor;
@@ -63,10 +62,7 @@ contract FlexVotingClientTest is Test {
 
     // Submit the proposal.
     proposalId = governor.propose(targets, values, calldatas, "A great proposal");
-    assertEq(
-      uint8(governor.state(proposalId)),
-      uint8(IGovernor.ProposalState.Pending)
-    );
+    assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Pending));
 
     // Advance proposal to active state.
     vm.roll(governor.proposalSnapshot(proposalId) + 1);
@@ -87,7 +83,7 @@ contract FlexVotingClientTest is Test {
     returns (uint208)
   {
     vm.assume(_address != address(flexClient));
-    vm.assume(_supportType <= uint8(GCF.VoteType.Abstain)); // couldn't get fuzzer to work w/ the enum
+    vm.assume(_supportType <= uint8(GCF.VoteType.Abstain)); // couldn't get fuzzer to work w/ enum
     // This max is a limitation of the fractional governance protocol storage.
     return uint208(bound(_voteWeight, 1, type(uint128).max));
   }
@@ -338,8 +334,12 @@ contract Vote is FlexVotingClientTest {
       uint256 _abstainVotesExpressedInit
     ) = flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressedInit, _supportType == uint8(GCF.VoteType.For) ? _voteWeight : 0);
-    assertEq(_againstVotesExpressedInit, _supportType == uint8(GCF.VoteType.Against) ? _voteWeight : 0);
-    assertEq(_abstainVotesExpressedInit, _supportType == uint8(GCF.VoteType.Abstain) ? _voteWeight : 0);
+    assertEq(
+      _againstVotesExpressedInit, _supportType == uint8(GCF.VoteType.Against) ? _voteWeight : 0
+    );
+    assertEq(
+      _abstainVotesExpressedInit, _supportType == uint8(GCF.VoteType.Abstain) ? _voteWeight : 0
+    );
 
     // Vote early and often!
     vm.expectRevert(bytes("already voted"));
