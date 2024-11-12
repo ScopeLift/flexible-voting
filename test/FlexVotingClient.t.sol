@@ -6,13 +6,13 @@ import {Vm} from "forge-std/Vm.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 
-import {IVotingToken} from "../src/interfaces/IVotingToken.sol";
-import {IFractionalGovernor} from "../src/interfaces/IFractionalGovernor.sol";
-import {MockFlexVotingClient} from "./MockFlexVotingClient.sol";
-import {GovToken} from "./GovToken.sol";
-import {FractionalGovernor} from "./FractionalGovernor.sol";
-import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
-import {GovernorCountingFractional as GCF} from "../src/GovernorCountingFractional.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
+import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
+import {GovToken} from "test/GovToken.sol";
+import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
 contract FlexVotingClientTest is Test {
 
