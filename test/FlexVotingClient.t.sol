@@ -103,7 +103,7 @@ contract Deployment is FlexVotingClientTest {
 }
 
 contract Constructor is FlexVotingClientTest {
-  function test_constructor_SetsGovernor() public view {
+  function test_SetsGovernor() public view {
     assertEq(address(flexClient.GOVERNOR()), address(governor));
   }
 }
@@ -202,6 +202,130 @@ contract Deposit is FlexVotingClientTest {
   }
 }
 
+contract ExpressVote is FlexVotingClientTest {
+  function testFuzz_IncrementsInternalAccouting(address _user, uint208 _voteWeight, uint8 _supportType) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // _user should now be able to express his/her vote on the proposal.
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      flexClient.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed, _supportType == uint8(GCF.VoteType.For) ? _voteWeight : 0);
+    assertEq(_againstVotesExpressed, _supportType == uint8(GCF.VoteType.Against) ? _voteWeight : 0);
+    assertEq(_abstainVotesExpressed, _supportType == uint8(GCF.VoteType.Abstain) ? _voteWeight : 0);
+
+    // No votes have been cast yet.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, 0);
+    assertEq(_abstainVotes, 0);
+  }
+
+  function testFuzz_RevertOn_NoWeight(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Mint gov but do not deposit.
+    _mintGovAndApproveFlexClient(_user, _voteWeight);
+    assertEq(token.balanceOf(_user), _voteWeight);
+    assertEq(flexClient.deposits(_user), 0);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // _user should NOT be able to express his/her vote on the proposal.
+    vm.expectRevert(bytes("no weight"));
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, uint8(_supportType));
+
+    // Deposit into the client.
+    vm.prank(_user);
+    flexClient.deposit(_voteWeight);
+    assertEq(flexClient.deposits(_user), _voteWeight);
+
+    // _user should still NOT be able to express his/her vote on the proposal.
+    // Despite having a deposit balance, he/she didn't have a balance at the
+    // proposal snapshot.
+    vm.expectRevert(bytes("no weight"));
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, uint8(_supportType));
+  }
+
+  function testFuzz_RevertOn_DoubleVotes(address _user, uint208 _voteWeight, uint8 _supportType) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // _user should now be able to express his/her vote on the proposal.
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+
+    (
+      uint256 _againstVotesExpressedInit,
+      uint256 _forVotesExpressedInit,
+      uint256 _abstainVotesExpressedInit
+    ) = flexClient.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressedInit, _supportType == uint8(GCF.VoteType.For) ? _voteWeight : 0);
+    assertEq(
+      _againstVotesExpressedInit, _supportType == uint8(GCF.VoteType.Against) ? _voteWeight : 0
+    );
+    assertEq(
+      _abstainVotesExpressedInit, _supportType == uint8(GCF.VoteType.Abstain) ? _voteWeight : 0
+    );
+
+    // Vote early and often!
+    vm.expectRevert(bytes("already voted"));
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+
+    // No votes changed.
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      flexClient.proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed, _forVotesExpressedInit);
+    assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
+    assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
+  }
+
+  function testFuzz_RevertOn_UnknownVoteType(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    // Force vote type to be unrecognized.
+    vm.assume(_supportType > uint8(GCF.VoteType.Abstain));
+
+    vm.assume(_user != address(flexClient));
+    // This max is a limitation of the fractional governance protocol storage.
+    _voteWeight = uint208(bound(_voteWeight, 1, type(uint128).max));
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Now try to express a voting preference with a bogus support type.
+    vm.expectRevert(bytes("invalid support value, must be included in VoteType enum"));
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+  }
+}
+
 contract Vote is FlexVotingClientTest {
   function testFuzz_UserCanCastVotes(address _user, uint208 _voteWeight, uint8 _supportType) public {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
@@ -267,27 +391,6 @@ contract Vote is FlexVotingClientTest {
     flexClient.castVote(_proposalId);
   }
 
-  function testFuzz_UserCannotExpressVotesWithoutWeightInPool(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
-
-    // Mint gov but do not deposit.
-    _mintGovAndApproveFlexClient(_user, _voteWeight);
-    assertEq(token.balanceOf(_user), _voteWeight);
-    assertEq(flexClient.deposits(_user), 0);
-
-    // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    // _user should NOT be able to express his/her vote on the proposal.
-    vm.expectRevert(bytes("no weight"));
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_supportType));
-  }
-
   function testFuzz_UserCannotCastAfterVotingPeriod(
     address _user,
     uint208 _voteWeight,
@@ -321,45 +424,6 @@ contract Vote is FlexVotingClientTest {
     flexClient.castVote(_proposalId);
   }
 
-  function testFuzz_NoDoubleVoting(address _user, uint208 _voteWeight, uint8 _supportType) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
-
-    // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
-
-    // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    // _user should now be able to express his/her vote on the proposal.
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
-
-    (
-      uint256 _againstVotesExpressedInit,
-      uint256 _forVotesExpressedInit,
-      uint256 _abstainVotesExpressedInit
-    ) = flexClient.proposalVotes(_proposalId);
-    assertEq(_forVotesExpressedInit, _supportType == uint8(GCF.VoteType.For) ? _voteWeight : 0);
-    assertEq(
-      _againstVotesExpressedInit, _supportType == uint8(GCF.VoteType.Against) ? _voteWeight : 0
-    );
-    assertEq(
-      _abstainVotesExpressedInit, _supportType == uint8(GCF.VoteType.Abstain) ? _voteWeight : 0
-    );
-
-    // Vote early and often!
-    vm.expectRevert(bytes("already voted"));
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
-
-    // No votes changed.
-    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
-    assertEq(_forVotesExpressed, _forVotesExpressedInit);
-    assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
-    assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
-  }
-
   function testFuzz_UsersCannotExpressVotesPriorToDepositing(
     address _user,
     uint208 _voteWeight,
@@ -376,30 +440,6 @@ contract Vote is FlexVotingClientTest {
     // Now try to express a voting preference on the proposal.
     assertEq(flexClient.deposits(_user), _voteWeight);
     vm.expectRevert(bytes("no weight"));
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
-  }
-
-  function testFuzz_UsersMustExpressWithKnownVoteType(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
-    // Force vote type to be unrecognized.
-    vm.assume(_supportType > uint8(GCF.VoteType.Abstain));
-
-    vm.assume(_user != address(flexClient));
-    // This max is a limitation of the fractional governance protocol storage.
-    _voteWeight = uint208(bound(_voteWeight, 1, type(uint128).max));
-
-    // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
-
-    // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    // Now try to express a voting preference with a bogus support type.
-    vm.expectRevert(bytes("invalid support value, must be included in VoteType enum"));
     vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
   }
