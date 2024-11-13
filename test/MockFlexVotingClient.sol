@@ -36,6 +36,18 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _castVoteReasonString();
   }
 
+  function exposed_selfDelegate() external {
+    return _selfDelegate();
+  }
+
+  function exposed_setDeposits(address _user, uint208 _amount) external {
+    deposits[_user] = _amount;
+  }
+
+  function exposed_checkpointRawBalanceOf(address _user) external {
+    return _checkpointRawBalanceOf(_user);
+  }
+
   /// @notice Allow a holder of the governance token to deposit it into the pool.
   /// @param _amount The amount to be deposited.
   function deposit(uint208 _amount) public {

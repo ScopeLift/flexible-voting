@@ -106,6 +106,9 @@ contract Constructor is FlexVotingClientTest {
   function test_SetsGovernor() public view {
     assertEq(address(flexClient.GOVERNOR()), address(governor));
   }
+  function test_SelfDelegates() public view {
+    assertEq(token.delegates(address(flexClient)), address(flexClient));
+  }
 }
 
 // Contract name has a leading underscore for scopelint spec support.
@@ -115,7 +118,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
     vm.assume(_user != address(0));
   }
 
-  function testFuzz_ReturnsZeroForNonDepositors(address _user) public {
+  function testFuzz_ReturnsZeroForNonDepositors(address _user) public view {
     _commonUserAssumptions(_user);
     assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
   }
@@ -174,6 +177,43 @@ contract _CastVoteReasonString is FlexVotingClientTest {
       flexClient.exposed_castVoteReasonString(),
       "rolled-up vote from governance token holders"
     );
+  }
+}
+
+// Contract name has a leading underscore for scopelint spec support.
+contract _SelfDelegate is FlexVotingClientTest {
+  function testFuzz_SetsClientAsTheDelegate(address _delegatee) public {
+    vm.assume(_delegatee != address(0));
+    vm.assume(_delegatee != address(flexClient));
+
+    // We self-delegate in the constructor, so we need to first un-delegate for
+    // this test to be meaningful.
+    vm.prank(address(flexClient));
+    token.delegate(_delegatee);
+    assertEq(token.delegates(address(flexClient)), _delegatee);
+
+    flexClient.exposed_selfDelegate();
+    assertEq(token.delegates(address(flexClient)), address(flexClient));
+  }
+}
+
+// Contract name has a leading underscore for scopelint spec support.
+contract _CheckpointRawBalanceOf is FlexVotingClientTest {
+  function testFuzz_StoresTheRawBalanceWithTheBlockNumber(
+    address _user,
+    uint208 _amount,
+    uint48 _blockNum
+  ) public {
+    vm.assume(_user != address(flexClient));
+    vm.assume(_blockNum > 2);
+    vm.assume(_blockNum < type(uint48).max);
+
+    flexClient.exposed_setDeposits(_user, _amount);
+    assertEq(flexClient.getPastRawBalance(_user, _blockNum), 0);
+
+    vm.roll(_blockNum);
+    flexClient.exposed_checkpointRawBalanceOf(_user);
+    assertEq(flexClient.getPastRawBalance(_user, _blockNum), _amount);
   }
 }
 
