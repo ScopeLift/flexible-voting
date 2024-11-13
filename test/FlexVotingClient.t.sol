@@ -102,6 +102,12 @@ contract Deployment is FlexVotingClientTest {
   }
 }
 
+contract Constructor is FlexVotingClientTest {
+  function test_constructor_SetsGovernor() public view {
+    assertEq(address(flexClient.GOVERNOR()), address(governor));
+  }
+}
+
 contract Withdraw is FlexVotingClientTest {
   function testFuzz_UserCanWithdrawGovTokens(address _lender, address _borrower, uint208 _amount)
     public
