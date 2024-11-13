@@ -108,6 +108,75 @@ contract Constructor is FlexVotingClientTest {
   }
 }
 
+// Contract name has a leading underscore for scopelint spec support.
+contract _RawBalanceOf is FlexVotingClientTest {
+  function _commonUserAssumptions(address _user) internal view {
+    vm.assume(_user != address(flexClient));
+    vm.assume(_user != address(0));
+  }
+
+  function testFuzz_ReturnsZeroForNonDepositors(address _user) public {
+    _commonUserAssumptions(_user);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
+  }
+
+  function testFuzz_IncreasesOnDeposit(address _user, uint208 _amount) public {
+    _commonUserAssumptions(_user);
+    _amount = uint208(bound(_amount, 1, type(uint128).max));
+
+    // Deposit some gov.
+    _mintGovAndDepositIntoFlexClient(_user, _amount);
+
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _amount);
+  }
+
+  function testFuzz_DecreasesOnWithdrawal(address _user, uint208 _amount) public {
+    _commonUserAssumptions(_user);
+    _amount = uint208(bound(_amount, 1, type(uint128).max));
+
+    // Deposit some gov.
+    _mintGovAndDepositIntoFlexClient(_user, _amount);
+
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _amount);
+
+    vm.prank(_user);
+    flexClient.withdraw(_amount);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
+  }
+
+
+  function testFuzz_UnaffectedByBorrow(
+    address _user,
+    uint208 _deposit,
+    uint208 _borrow
+  ) public {
+    _commonUserAssumptions(_user);
+    _deposit = uint208(bound(_deposit, 1, type(uint128).max));
+    _borrow = uint208(bound(_borrow, 1, _deposit));
+
+    // Deposit some gov.
+    _mintGovAndDepositIntoFlexClient(_user, _deposit);
+
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _deposit);
+
+    vm.prank(_user);
+    flexClient.borrow(_borrow);
+
+    // Raw balance is unchanged.
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _deposit);
+  }
+}
+
+// Contract name has a leading underscore for scopelint spec support.
+contract _CastVoteReasonString is FlexVotingClientTest {
+  function test_ReturnsDescriptiveString() public {
+    assertEq(
+      flexClient.exposed_castVoteReasonString(),
+      "rolled-up vote from governance token holders"
+    );
+  }
+}
+
 contract Withdraw is FlexVotingClientTest {
   function testFuzz_UserCanWithdrawGovTokens(address _lender, address _borrower, uint208 _amount)
     public
