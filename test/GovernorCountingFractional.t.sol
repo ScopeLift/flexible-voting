@@ -1,16 +1,17 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.10;
+pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
-import {GovernorCompatibilityBravo} from
-  "@openzeppelin/contracts/governance/compatibility/GovernorCompatibilityBravo.sol";
 import {FixedPointMathLib} from "solmate/utils/FixedPointMathLib.sol";
 
 import {GovToken} from "./GovToken.sol";
-import {FractionalGovernor, IVotes, IGovernor} from "./FractionalGovernor.sol";
+import {FractionalGovernor, GovernorCountingFractional} from "./FractionalGovernor.sol";
 import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
+import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 contract GovernorCountingFractionalTest is Test {
   using FixedPointMathLib for uint256;
@@ -39,6 +40,12 @@ contract GovernorCountingFractionalTest is Test {
     uint256 endBlock,
     string description
   );
+
+  enum VoteType {
+    Against,
+    For,
+    Abstain
+  }
 
   // We use a min of 1e4 to avoid flooring votes to 0.
   uint256 constant MIN_VOTE_WEIGHT = 1e4;
@@ -152,11 +159,10 @@ contract GovernorCountingFractionalTest is Test {
     Proposal memory _rawProposalInfo = _getSimpleProposal();
 
     vm.expectEmit(true, true, true, true);
-    emit ProposalExecuted(_rawProposalInfo.id);
-
-    // Ensure that the other contract is invoked.
-    vm.expectEmit(true, true, true, true);
     emit MockFunctionCalled();
+
+    vm.expectEmit(true, true, true, true);
+    emit ProposalExecuted(_rawProposalInfo.id);
 
     governor.execute(
       _rawProposalInfo.targets,
@@ -196,7 +202,7 @@ contract GovernorCountingFractionalTest is Test {
   }
 
   function _randomSupportType(uint256 salt) public pure returns (uint8) {
-    return uint8(bound(salt, 0, uint8(GovernorCompatibilityBravo.VoteType.Abstain)));
+    return uint8(bound(salt, 0, uint8(VoteType.Abstain)));
   }
 
   function _randomVoteSplit(FractionalVoteSplit memory _voteSplit)
@@ -253,15 +259,9 @@ contract GovernorCountingFractionalTest is Test {
         againstVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAgainst));
         abstainVotes += uint128(voter.weight.mulWadDown(voter.voteSplit.percentAbstain));
       } else {
-        if (voter.support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
-          forVotes += voter.weight;
-        }
-        if (voter.support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
-          againstVotes += voter.weight;
-        }
-        if (voter.support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
-          abstainVotes += voter.weight;
-        }
+        if (voter.support == uint8(VoteType.For)) forVotes += voter.weight;
+        if (voter.support == uint8(VoteType.Against)) againstVotes += voter.weight;
+        if (voter.support == uint8(VoteType.Abstain)) abstainVotes += voter.weight;
       }
     }
   }
@@ -332,7 +332,15 @@ contract GovernorCountingFractionalTest is Test {
       assertEq(uint8(status), uint8(IGovernor.ProposalState.Defeated));
 
       Proposal memory _rawProposalInfo = _getSimpleProposal();
-      vm.expectRevert(bytes("Governor: proposal not successful"));
+      vm.expectRevert(
+        abi.encodeWithSelector(
+          IGovernor.GovernorUnexpectedProposalState.selector,
+          _proposalId,
+          status,
+          bytes32(1 << uint8(IGovernor.ProposalState.Succeeded))
+            | bytes32(1 << uint8(IGovernor.ProposalState.Queued))
+        )
+      );
       governor.execute(
         _rawProposalInfo.targets,
         _rawProposalInfo.values,
@@ -372,242 +380,6 @@ contract GovernorCountingFractionalTest is Test {
     _fractionalGovernorHappyPathTest(voters);
   }
 
-  function testFuzz_NominalVotingWithFractionalizedParamsAndSignature(
-    uint256 _weight,
-    uint128 _nonce
-  ) public {
-    Voter memory _voter;
-    uint256 _privateKey;
-    (_voter.addr, _privateKey) = makeAddrAndKey("voter");
-    vm.assume(_voter.addr != address(this));
-
-    // Use a random nonce. Bound by max - 1 because we need to sign one message.
-    _nonce = uint128(bound(_nonce, 0, type(uint128).max - 1));
-    governor.exposed_setFractionalVoteNonce(_voter.addr, _nonce);
-    uint128 _initNonce = governor.fractionalVoteNonce(_voter.addr);
-
-    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
-    _voter.support = _randomSupportType(_weight);
-
-    _mintAndDelegateToVoter(_voter);
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    bytes32 _voteMessage = keccak256(
-      abi.encode(
-        keccak256("ExtendedBallot(uint256 proposalId,uint8 support,string reason,bytes params)"),
-        _proposalId,
-        _voter.support,
-        keccak256(bytes("I have my reasons")),
-        keccak256(new bytes(0))
-      )
-    );
-
-    bytes32 _voteMessageHash =
-      keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _voteMessage));
-
-    (uint8 _v, bytes32 _r, bytes32 _s) = vm.sign(_privateKey, _voteMessageHash);
-
-    governor.castVoteWithReasonAndParamsBySig(
-      _proposalId, _voter.support, "I have my reasons", new bytes(0), _v, _r, _s
-    );
-
-    assertEq(
-      _initNonce, governor.fractionalVoteNonce(_voter.addr), "nonce should not have incremented"
-    );
-
-    (uint256 _actualAgainstVotes, uint256 _actualForVotes, uint256 _actualAbstainVotes) =
-      governor.proposalVotes(_proposalId);
-    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.For)) {
-      assertEq(_voter.weight, _actualForVotes);
-    }
-    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.Against)) {
-      assertEq(_voter.weight, _actualAgainstVotes);
-    }
-    if (_voter.support == uint8(GovernorCompatibilityBravo.VoteType.Abstain)) {
-      assertEq(_voter.weight, _actualAbstainVotes);
-    }
-
-    // The signature cannot be re-used.
-    vm.expectRevert("GovernorCountingFractional: all weight cast");
-    governor.castVoteWithReasonAndParamsBySig(
-      _proposalId, _voter.support, "I have my reasons", new bytes(0), _v, _r, _s
-    );
-  }
-
-  struct CastVoteWithReasonAndParamsBySigTestVars {
-    uint128 forVotes;
-    uint128 againstVotes;
-    uint128 abstainVotes;
-    uint128 lastNonce;
-    bytes fractionalizedVotes;
-    uint256 privateKey;
-    uint256 proposalId;
-    Voter voter;
-    bytes32 voteMessage;
-    bytes32 voteMessageHash;
-    uint8 v;
-    bytes32 r;
-    bytes32 s;
-    uint256 actualAgainstVotes;
-    uint256 actualForVotes;
-    uint256 actualAbstainVotes;
-    uint256 remainingWeight;
-  }
-
-  function testFuzz_VotingWithFractionalizedParamsAndSignature(
-    uint256 _weight,
-    uint256 _partialVoteWeight,
-    FractionalVoteSplit memory _voteSplit,
-    uint128 _nonce
-  ) public {
-    CastVoteWithReasonAndParamsBySigTestVars memory _vars;
-    (_vars.voter.addr, _vars.privateKey) = makeAddrAndKey("voter with replay protection");
-    vm.assume(_vars.voter.addr != address(this));
-
-    // Use a random nonce. Bound by (max - 2) because we need to sign 2 messages.
-    _nonce = uint128(bound(_nonce, 0, type(uint128).max - 2));
-    governor.exposed_setFractionalVoteNonce(_vars.voter.addr, _nonce);
-
-    _vars.voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
-    _vars.voter.support = _randomSupportType(_weight);
-    _vars.voter.voteSplit = _randomVoteSplit(_voteSplit);
-
-    // We want to be able to cast two distinct signature-based votes.
-    _partialVoteWeight = bound(
-      _partialVoteWeight,
-      _vars.voter.weight.mulWadDown(0.1e18), // 10%
-      _vars.voter.weight.mulWadDown(0.9e18) // 90%
-    );
-
-    _vars.forVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentFor));
-    _vars.againstVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentAgainst));
-    _vars.abstainVotes = uint128(_partialVoteWeight.mulWadDown(_voteSplit.percentAbstain));
-    _vars.fractionalizedVotes = abi.encodePacked(
-      _vars.againstVotes,
-      _vars.forVotes,
-      _vars.abstainVotes,
-      governor.fractionalVoteNonce(_vars.voter.addr)
-    );
-
-    _mintAndDelegateToVoter(_vars.voter);
-    _vars.proposalId = _createAndSubmitProposal();
-
-    _vars.voteMessage = keccak256(
-      abi.encode(
-        governor.EXTENDED_BALLOT_TYPEHASH(),
-        _vars.proposalId,
-        _vars.voter.support,
-        keccak256(bytes("I have my reasons")),
-        keccak256(_vars.fractionalizedVotes)
-      )
-    );
-
-    _vars.voteMessageHash =
-      keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
-
-    (_vars.v, _vars.r, _vars.s) = vm.sign(_vars.privateKey, _vars.voteMessageHash);
-    _vars.lastNonce = governor.fractionalVoteNonce(_vars.voter.addr);
-
-    // First vote.
-    governor.castVoteWithReasonAndParamsBySig(
-      _vars.proposalId,
-      _vars.voter.support,
-      "I have my reasons",
-      _vars.fractionalizedVotes,
-      _vars.v,
-      _vars.r,
-      _vars.s
-    );
-
-    // Nonce should have incremented.
-    assertEq(
-      _vars.lastNonce + 1,
-      governor.fractionalVoteNonce(_vars.voter.addr),
-      "nonce should have incremented"
-    );
-    _vars.lastNonce = governor.fractionalVoteNonce(_vars.voter.addr);
-
-    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
-      governor.proposalVotes(_vars.proposalId);
-
-    assertEq(_vars.forVotes, _vars.actualForVotes);
-    assertEq(_vars.againstVotes, _vars.actualAgainstVotes);
-    assertEq(_vars.abstainVotes, _vars.actualAbstainVotes);
-
-    // Try to re-use the signature, which should revert.
-    vm.expectRevert("GovernorCountingFractional: signature has already been used");
-    governor.castVoteWithReasonAndParamsBySig(
-      _vars.proposalId,
-      _vars.voter.support,
-      "I have my reasons",
-      _vars.fractionalizedVotes,
-      _vars.v,
-      _vars.r,
-      _vars.s
-    );
-
-    // Nonce shouldn't have changed since the first successful vote.
-    assertEq(
-      _vars.lastNonce,
-      governor.fractionalVoteNonce(_vars.voter.addr),
-      "nonce should not have incremented"
-    );
-
-    // Sign a new message.
-    _vars.remainingWeight = _vars.voter.weight - _partialVoteWeight;
-    _vars.forVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentFor));
-    _vars.againstVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentAgainst));
-    _vars.abstainVotes = uint128(_vars.remainingWeight.mulWadDown(_voteSplit.percentAbstain));
-    _vars.fractionalizedVotes = abi.encodePacked(
-      _vars.againstVotes,
-      _vars.forVotes,
-      _vars.abstainVotes,
-      governor.fractionalVoteNonce(_vars.voter.addr)
-    );
-    _vars.voteMessage = keccak256(
-      abi.encode(
-        governor.EXTENDED_BALLOT_TYPEHASH(),
-        _vars.proposalId,
-        _vars.voter.support,
-        keccak256(bytes("I have my reasons")),
-        keccak256(_vars.fractionalizedVotes)
-      )
-    );
-    _vars.voteMessageHash =
-      keccak256(abi.encodePacked("\x19\x01", EIP712_DOMAIN_SEPARATOR, _vars.voteMessage));
-    (_vars.v, _vars.r, _vars.s) = vm.sign(_vars.privateKey, _vars.voteMessageHash);
-
-    // Submit second signed vote. It should succeed.
-    governor.castVoteWithReasonAndParamsBySig(
-      _vars.proposalId,
-      _vars.voter.support,
-      "I have my reasons",
-      _vars.fractionalizedVotes,
-      _vars.v,
-      _vars.r,
-      _vars.s
-    );
-
-    // Nonce should have incremented again.
-    assertEq(
-      _vars.lastNonce + 1,
-      governor.fractionalVoteNonce(_vars.voter.addr),
-      "nonce should have incremented"
-    );
-
-    (_vars.actualAgainstVotes, _vars.actualForVotes, _vars.actualAbstainVotes) =
-      governor.proposalVotes(_vars.proposalId);
-
-    // Actual weights can differ by up to 1 because of rounding during division.
-    assertApproxEqAbs(_vars.voter.weight.mulWadDown(_voteSplit.percentFor), _vars.actualForVotes, 1);
-    assertApproxEqAbs(
-      _vars.voter.weight.mulWadDown(_voteSplit.percentAgainst), _vars.actualAgainstVotes, 1
-    );
-    assertApproxEqAbs(
-      _vars.voter.weight.mulWadDown(_voteSplit.percentAbstain), _vars.actualAbstainVotes, 1
-    );
-  }
-
   function testFuzz_VoteSplitsCanBeMaxedOut(uint256[4] memory _weights, uint8 _maxSplit) public {
     Voter[4] memory _voters = _setupNominalVoters(_weights);
 
@@ -638,20 +410,28 @@ contract GovernorCountingFractionalTest is Test {
 
     // Attempt to cast nominal votes.
     vm.prank(_voterAddr);
-    vm.expectRevert("GovernorCountingFractional: no weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional_NoVoteWeight.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId,
-      uint8(GovernorCompatibilityBravo.VoteType.For),
+      uint8(VoteType.For),
       "I hope no one catches me doing this!",
       new bytes(0) // No data, this is a nominal vote.
     );
 
     // Attempt to cast fractional votes.
     vm.prank(_voterAddr);
-    vm.expectRevert("GovernorCountingFractional: no weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional_NoVoteWeight.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId,
-      uint8(GovernorCompatibilityBravo.VoteType.For),
+      uint8(VoteType.For),
       "I'm so bad",
       abi.encodePacked(type(uint128).max, type(uint128).max, type(uint128).max)
     );
@@ -712,7 +492,11 @@ contract GovernorCountingFractionalTest is Test {
     );
 
     vm.prank(voter.addr);
-    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Yay", fractionalizedVotes);
   }
 
@@ -731,7 +515,9 @@ contract GovernorCountingFractionalTest is Test {
 
     bytes memory emptyVotingParams;
     vm.prank(voter.addr);
-    vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
+    vm.expectRevert(
+      abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, voter.weight)
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Yay", emptyVotingParams);
   }
 
@@ -759,7 +545,9 @@ contract GovernorCountingFractionalTest is Test {
 
     bytes memory fractionalizedVotes = abi.encodePacked(_againstVotes, _forVotes, _abstainVotes);
     vm.prank(voter.addr);
-    vm.expectRevert("SafeCast: value doesn't fit in 128 bits");
+    vm.expectRevert(
+      abi.encodeWithSelector(SafeCast.SafeCastOverflowedUintDowncast.selector, 128, voter.weight)
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", fractionalizedVotes);
   }
 
@@ -781,7 +569,11 @@ contract GovernorCountingFractionalTest is Test {
     uint256 _proposalId = _createAndSubmitProposal();
 
     vm.prank(voter.addr);
-    vm.expectRevert("GovernorCountingFractional: invalid voteData");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__InvalidVoteData.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(_proposalId, voter.support, "Weeee", _invalidVoteData);
   }
 
@@ -1198,7 +990,11 @@ contract GovernorCountingFractionalTest is Test {
 
     // Attempt to cast votes again. This should revert.
     vm.prank(_voter.addr);
-    vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId,
       _voter.support,
@@ -1225,7 +1021,11 @@ contract GovernorCountingFractionalTest is Test {
 
     // It should not be possible to vote again.
     vm.prank(_voter.addr);
-    vm.expectRevert("GovernorCountingFractional: all weight cast");
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     governor.castVoteWithReasonAndParams(
       _proposalId, _voter.support, "Yay", _emptyDataBecauseWereVotingNominally
     );
@@ -1272,7 +1072,11 @@ contract GovernorCountingFractionalTest is Test {
       );
 
       // Now attempt to vote fractionally. It should fail.
-      vm.expectRevert("GovernorCountingFractional: all weight cast");
+      vm.expectRevert(
+        abi.encodeWithSelector(
+          GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+        )
+      );
       vm.prank(_voter.addr);
       governor.castVoteWithReasonAndParams(
         _proposalId, _voter.support, "Fractional vote", _fractionalizedVoteData
@@ -1293,7 +1097,11 @@ contract GovernorCountingFractionalTest is Test {
       );
 
       vm.prank(_voter.addr);
-      vm.expectRevert("GovernorCountingFractional: vote would exceed weight");
+      vm.expectRevert(
+        abi.encodeWithSelector(
+          GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+        )
+      );
       governor.castVoteWithReasonAndParams(
         _proposalId, _voter.support, "Nominal vote", _nominalVoteData
       );

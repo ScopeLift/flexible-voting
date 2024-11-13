@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.10;
+pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
 import "./GovToken.sol";
 import "./FractionalGovernor.sol";
@@ -115,7 +116,7 @@ contract Deployment is FractionalPoolTest {
 
 contract Deposit is FractionalPoolTest {
   function test_UserCanDepositGovTokens(address _holder, uint256 _amount) public {
-    _amount = bound(_amount, 0, type(uint224).max);
+    _amount = bound(_amount, 0, type(uint208).max);
     vm.assume(_holder != address(pool));
     uint256 initialBalance = token.balanceOf(_holder);
 
@@ -245,9 +246,17 @@ contract Vote is FractionalPoolTest {
 
     // Jump ahead so that we're outside of the proposal's voting period.
     vm.roll(governor.proposalDeadline(_proposalId) + 1);
+    IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
 
     // We should not be able to castVote at this point.
-    vm.expectRevert(bytes("Governor: vote not currently active"));
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IGovernor.GovernorUnexpectedProposalState.selector,
+        _proposalId,
+        status,
+        bytes32(1 << uint8(IGovernor.ProposalState.Active))
+      )
+    );
     pool.castVote(_proposalId);
   }
 
@@ -446,7 +455,11 @@ contract Vote is FractionalPoolTest {
     pool.castVote(_proposalId);
 
     // Try to submit them again.
-    vm.expectRevert(bytes("GovernorCountingFractional: all weight cast"));
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+      )
+    );
     pool.castVote(_proposalId);
   }
 
