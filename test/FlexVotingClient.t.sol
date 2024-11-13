@@ -229,7 +229,27 @@ contract ExpressVote is FlexVotingClientTest {
     assertEq(_abstainVotes, 0);
   }
 
-  function testFuzz_RevertOn_NoWeight(
+  function testFuzz_RevertWhen_DepositingAfterProposal(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Create the proposal *before* the user deposits anything.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Now try to express a voting preference on the proposal.
+    assertEq(flexClient.deposits(_user), _voteWeight);
+    vm.expectRevert(bytes("no weight"));
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+  }
+
+  function testFuzz_RevertWhen_NoClientWeightButTokenWeight(
     address _user,
     uint208 _voteWeight,
     uint8 _supportType
@@ -326,8 +346,8 @@ contract ExpressVote is FlexVotingClientTest {
   }
 }
 
-contract Vote is FlexVotingClientTest {
-  function testFuzz_UserCanCastVotes(address _user, uint208 _voteWeight, uint8 _supportType) public {
+contract CastVote is FlexVotingClientTest {
+  function testFuzz_SubmitsVotesToGovernor(address _user, uint208 _voteWeight, uint8 _supportType) public {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -352,99 +372,17 @@ contract Vote is FlexVotingClientTest {
     assertEq(_againstVotes, 0);
     assertEq(_abstainVotes, 0);
 
-    // submit votes on behalf of the flexClient
+    // Submit votes on behalf of the flexClient.
     flexClient.castVote(_proposalId);
 
-    // governor should now record votes from the flexClient
+    // Governor should now record votes from the flexClient.
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
     assertEq(_forVotes, _forVotesExpressed);
     assertEq(_againstVotes, _againstVotesExpressed);
     assertEq(_abstainVotes, _abstainVotesExpressed);
   }
 
-  function testFuzz_RevertOn_CastVoteWithoutVotesToCast(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
-
-    // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
-
-    // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    // No one has expressed, there are no votes to cast.
-    vm.expectRevert(bytes("no votes expressed"));
-    flexClient.castVote(_proposalId);
-
-    // _user expresses his/her vote on the proposal.
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
-
-    // Submit votes on behalf of the flexClient.
-    flexClient.castVote(_proposalId);
-
-    // All votes have been cast, there's nothing new to send to the governor.
-    vm.expectRevert(bytes("no votes expressed"));
-    flexClient.castVote(_proposalId);
-  }
-
-  function testFuzz_UserCannotCastAfterVotingPeriod(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
-
-    // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
-
-    // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    // Express vote preference.
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
-
-    // Jump ahead so that we're outside of the proposal's voting period.
-    vm.roll(governor.proposalDeadline(_proposalId) + 1);
-    IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
-
-    // We should not be able to castVote at this point.
-    vm.expectRevert(
-      abi.encodeWithSelector(
-        IGovernor.GovernorUnexpectedProposalState.selector,
-        _proposalId,
-        status,
-        bytes32(1 << uint8(IGovernor.ProposalState.Active))
-      )
-    );
-    flexClient.castVote(_proposalId);
-  }
-
-  function testFuzz_UsersCannotExpressVotesPriorToDepositing(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
-
-    // Create the proposal *before* the user deposits anything.
-    uint256 _proposalId = _createAndSubmitProposal();
-
-    // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
-
-    // Now try to express a voting preference on the proposal.
-    assertEq(flexClient.deposits(_user), _voteWeight);
-    vm.expectRevert(bytes("no weight"));
-    vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
-  }
-
-  function testFuzz_VotingWeightIsSnapshotDependent(
+  function testFuzz_WeightIsSnapshotDependent(
     address _user,
     uint208 _voteWeightA,
     uint208 _voteWeightB,
@@ -484,7 +422,7 @@ contract Vote is FlexVotingClientTest {
     assertEq(_abstainVotes, _supportType == uint8(GCF.VoteType.Abstain) ? _voteWeightA : 0);
   }
 
-  function testFuzz_MultipleUsersCanCastVotes(
+  function testFuzz_TracksMultipleUsersVotes(
     address _userA,
     address _userB,
     uint208 _voteWeightA,
@@ -547,7 +485,7 @@ contract Vote is FlexVotingClientTest {
     uint208 borrowAmountD;
   }
 
-  function testFuzz_VoteWeightIsScaledBasedOnPoolBalance(VoteWeightIsScaledTestVars memory _vars)
+  function testFuzz_ScalesVoteWeightBasedOnPoolBalance(VoteWeightIsScaledTestVars memory _vars)
     public
   {
     _vars.userA = address(0xbeef);
@@ -648,7 +586,7 @@ contract Vote is FlexVotingClientTest {
 
   // This is important because it ensures you can't *gain* voting weight by
   // getting other people to not vote.
-  function testFuzz_VotingWeightIsAbandonedIfSomeoneDoesntExpress(
+  function testFuzz_AbandonsUnexpressedVotingWeight(
     uint208 _voteWeightA,
     uint208 _voteWeightB,
     uint8 _supportTypeA,
@@ -780,7 +718,7 @@ contract Vote is FlexVotingClientTest {
     if (_supportTypeA == uint8(GCF.VoteType.Abstain)) assertEq(_abstainVotes, _voteWeightA);
   }
 
-  function testFuzz_CanCastVotesMultipleTimesForTheSameProposal(
+  function testFuzz_CanCallMultipleTimesForTheSameProposal(
     address _userA,
     address _userB,
     uint208 _voteWeightA,
@@ -838,6 +776,69 @@ contract Vote is FlexVotingClientTest {
     assertEq(_againstVotes, _voteWeightA); // This should be unchanged!
     assertEq(_abstainVotes, _voteWeightB); // Second user's votes are now in.
   }
+
+  function testFuzz_RevertWhen_NoVotesToCast(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // No one has expressed, there are no votes to cast.
+    vm.expectRevert(bytes("no votes expressed"));
+    flexClient.castVote(_proposalId);
+
+    // _user expresses his/her vote on the proposal.
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+
+    // Submit votes on behalf of the flexClient.
+    flexClient.castVote(_proposalId);
+
+    // All votes have been cast, there's nothing new to send to the governor.
+    vm.expectRevert(bytes("no votes expressed"));
+    flexClient.castVote(_proposalId);
+  }
+
+  function testFuzz_RevertWhen_AfterVotingPeriod(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
+    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // Express vote preference.
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+
+    // Jump ahead so that we're outside of the proposal's voting period.
+    vm.roll(governor.proposalDeadline(_proposalId) + 1);
+    IGovernor.ProposalState status = IGovernor.ProposalState(uint32(governor.state(_proposalId)));
+
+    // We should not be able to castVote at this point.
+    vm.expectRevert(
+      abi.encodeWithSelector(
+        IGovernor.GovernorUnexpectedProposalState.selector,
+        _proposalId,
+        status,
+        bytes32(1 << uint8(IGovernor.ProposalState.Active))
+      )
+    );
+    flexClient.castVote(_proposalId);
+  }
+
 }
 
 contract Borrow is FlexVotingClientTest {
