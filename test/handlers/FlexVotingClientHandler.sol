@@ -8,12 +8,12 @@ import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-import {IVotingToken} from "../src/interfaces/IVotingToken.sol";
-import {IFractionalGovernor} from "../src/interfaces/IFractionalGovernor.sol";
-import {MockFlexVotingClient} from "./MockFlexVotingClient.sol";
-import {GovToken} from "./GovToken.sol";
-import {FractionalGovernor} from "./FractionalGovernor.sol";
-import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
+import {GovToken} from "test/GovToken.sol";
+import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
 contract FlexVotingClientHandler is Test {
   using EnumerableSet for EnumerableSet.AddressSet;
@@ -30,6 +30,12 @@ contract FlexVotingClientHandler is Test {
   uint256 public ghost_depositSum;
   uint256 public ghost_withdrawSum;
   uint128 public ghost_mintedTokens;
+
+  // Maps actors to proposal ids to number of times they've voted on the proposal.
+  // E.g. actorProposalVotes[0xBEEF][42] == the number of times 0xBEEF voted on
+  // proposal 42.
+  mapping(address => mapping(uint256 => uint256)) public ghost_actorProposalVotes;
+  address[] public ghost_doubleVoteActors;
 
   constructor(
     GovToken _token,
@@ -84,14 +90,14 @@ contract FlexVotingClientHandler is Test {
     // Some actors won't have the tokens they need. This is deliberate.
     if (_amount <= _remainingTokens) {
       token.exposed_mint(currentActor, _amount);
-      ghost_mintedTokens += _amount
+      ghost_mintedTokens += _amount;
     }
 
     vm.startPrank(currentActor);
     // TODO we're pre-approving every depositi, should we?
     token.approve(address(flexClient), uint256(_amount));
     flexClient.deposit(_amount);
-    vm.stopPrank()
+    vm.stopPrank();
 
     ghost_depositSum += _amount;
   }
@@ -133,7 +139,7 @@ contract FlexVotingClientHandler is Test {
   function expressVote(
     uint256 _proposalId,
     uint8 _support,
-    uint256 _userSeed,
+    uint256 _userSeed
   ) useActor(_userSeed) external {
     // TODO should we allow people to try to vote with bogus support types?
     vm.assume(_support <= uint8(MockFlexVotingClient.VoteType.Abstain));
@@ -141,6 +147,11 @@ contract FlexVotingClientHandler is Test {
     _proposalId = _randProposal(_proposalId);
     vm.prank(currentActor);
     flexClient.expressVote(_proposalId, _support);
+
+    ghost_actorProposalVotes[currentActor][_proposalId] += 1;
+    if (ghost_actorProposalVotes[currentActor][_proposalId] > 1) {
+      ghost_doubleVoteActors.push(currentActor);
+    }
   }
 
   function castVote(uint256 _proposalId) external {
