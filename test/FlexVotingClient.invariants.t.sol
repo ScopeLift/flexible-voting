@@ -16,18 +16,6 @@ import {ProposalReceiverMock} from "./ProposalReceiverMock.sol";
 
 contract FlexVotingInvariantTest is Test {
 
-  // going to need a few contracts:
-  //   - govToken
-  //   - fractional governor
-  //   - flex client (mock flex client)
-  //   - (probably) reciever for governor proposals
-  //
-  // what functions to expose?
-  //   - flexClient.deposit
-  //   - flexClient.withdraw
-  //   - flexClient.expressVote
-  //   - flexClient.castVote
-  //
   // system invariants:
   //   - one vote per person per proposal
   //   - flex client should not allow anyone to increase effective voting
@@ -54,5 +42,17 @@ contract FlexVotingInvariantTest is Test {
 
     receiver = new ProposalReceiverMock();
     vm.label(address(receiver), "receiver");
+
+    handler = new FlexClientHandler(token, governor, flexClient, receiver);
+
+    bytes4[] memory selectors = new bytes4[](5);
+    selectors[0] = FlexClientHandler.deposit.selector;
+    selectors[0] = FlexClientHandler.withdraw.selector;
+    selectors[0] = FlexClientHandler.expressVote.selector;
+    selectors[0] = FlexClientHandler.castVote.selector;
+    selectors[0] = FlexClientHandler.propose.selector;
+
+    targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
+    targetContract(address(handler));
   }
 }
