@@ -256,7 +256,7 @@ contract GetPastRawBalance is FlexVotingClientTest {
     vm.assume(_blockNum > 2);
     vm.assume(_blockNum < type(uint48).max);
     _amountA = uint208(bound(_amountA, 1, type(uint128).max));
-    _amountB = uint208(bound(_amountB, 1, type(uint128).max - _amountA));
+    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
 
     _mintGovAndDepositIntoFlexClient(_user, _amountA);
     vm.roll(_blockNum);
@@ -402,7 +402,7 @@ contract Deposit is FlexVotingClientTest {
     uint24 _depositDelay
   ) public {
     _amountA = uint208(bound(_amountA, 1, type(uint128).max));
-    _amountB = uint208(bound(_amountB, 1, type(uint128).max));
+    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
 
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amountA);
