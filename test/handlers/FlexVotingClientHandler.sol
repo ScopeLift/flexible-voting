@@ -8,6 +8,7 @@ import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
+import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
@@ -17,6 +18,7 @@ import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
 contract FlexVotingClientHandler is Test {
   using EnumerableSet for EnumerableSet.AddressSet;
+  using EnumerableSet for EnumerableSet.UintSet;
 
   MockFlexVotingClient flexClient;
   GovToken token;
@@ -35,7 +37,7 @@ contract FlexVotingClientHandler is Test {
   // E.g. actorProposalVotes[0xBEEF][42] == the number of times 0xBEEF voted on
   // proposal 42.
   mapping(address => mapping(uint256 => uint256)) public ghost_actorProposalVotes;
-  address[] public ghost_doubleVoteActors;
+  uint256 public ghost_doubleVoteActors;
 
   constructor(
     GovToken _token,
@@ -62,16 +64,16 @@ contract FlexVotingClientHandler is Test {
   }
 
   function _randActor(uint256 _seed) internal returns (address) {
-    uint256 len = _actors.length;
-    return len > 0 ?  _actors[_seed % len] : address(0);
+    uint256 len = _actors.length();
+    return len > 0 ?  _actors.at(_seed % len) : address(0);
   }
 
   function _randProposal(uint256 _seed) internal returns (uint256) {
-    uint256 len = _proposals.length;
-    return len > 0 ? _proposals[_seed % len] : 0;
+    uint256 len = _proposals.length();
+    return len > 0 ? _proposals.at(_seed % len) : 0;
   }
 
-  function _validActorAddress(address _user) internal {
+  function _validActorAddress(address _user) internal returns (bool) {
     return _user != address(0) &&
       _user != address(flexClient) &&
       _user != address(governor) &&
@@ -88,9 +90,9 @@ contract FlexVotingClientHandler is Test {
     _amount = uint208(bound(_amount, 0, type(uint128).max));
 
     // Some actors won't have the tokens they need. This is deliberate.
-    if (_amount <= _remainingTokens) {
+    if (_amount <= _remainingTokens()) {
       token.exposed_mint(currentActor, _amount);
-      ghost_mintedTokens += _amount;
+      ghost_mintedTokens += uint128(_amount);
     }
 
     vm.startPrank(currentActor);
@@ -142,7 +144,7 @@ contract FlexVotingClientHandler is Test {
     uint256 _userSeed
   ) useActor(_userSeed) external {
     // TODO should we allow people to try to vote with bogus support types?
-    vm.assume(_support <= uint8(MockFlexVotingClient.VoteType.Abstain));
+    vm.assume(_support <= uint8(GCF.VoteType.Abstain));
     // TODO should users only express on proposals created after they had deposits?
     _proposalId = _randProposal(_proposalId);
     vm.prank(currentActor);
@@ -150,7 +152,7 @@ contract FlexVotingClientHandler is Test {
 
     ghost_actorProposalVotes[currentActor][_proposalId] += 1;
     if (ghost_actorProposalVotes[currentActor][_proposalId] > 1) {
-      ghost_doubleVoteActors.push(currentActor);
+      ghost_doubleVoteActors += 1;
     }
   }
 
@@ -158,6 +160,6 @@ contract FlexVotingClientHandler is Test {
     // TODO should users only be able to cast if votes were expressed?
     _proposalId = _randProposal(_proposalId);
     vm.prank(msg.sender);
-    flexClient.castVote();
+    flexClient.castVote(_proposalId);
   }
 }
