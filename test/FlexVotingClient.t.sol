@@ -207,6 +207,7 @@ contract _CheckpointRawBalanceOf is FlexVotingClientTest {
     vm.assume(_user != address(flexClient));
     vm.assume(_blockNum > 2);
     vm.assume(_blockNum < type(uint48).max);
+    _amount = uint208(bound(_amount, 1, type(uint128).max));
 
     flexClient.exposed_setDeposits(_user, _amount);
     assertEq(flexClient.getPastRawBalance(_user, _blockNum), 0);
@@ -215,6 +216,139 @@ contract _CheckpointRawBalanceOf is FlexVotingClientTest {
     flexClient.exposed_checkpointRawBalanceOf(_user);
     assertEq(flexClient.getPastRawBalance(_user, _blockNum), _amount);
   }
+}
+
+contract GetPastRawBalance is FlexVotingClientTest {
+  function testFuzz_ReturnsZeroForUsersWithoutDeposits(
+    address _depositor,
+    address _nonDepositor,
+    uint208 _amount
+  ) public {
+    vm.assume(_depositor != address(flexClient));
+    vm.assume(_nonDepositor != address(flexClient));
+    _amount = uint208(bound(_amount, 1, type(uint128).max));
+
+    assertEq(flexClient.getPastRawBalance(_depositor, 0), 0);
+    _mintGovAndDepositIntoFlexClient(_depositor, _amount);
+    assertEq(flexClient.getPastRawBalance(_nonDepositor, 0), 0);
+  }
+
+  function testFuzz_ReturnsCurrentValueForFutureBlocks(
+    address _user,
+    uint208 _amount,
+    uint48 _blockNum
+  ) public {
+    vm.assume(_user != address(flexClient));
+    vm.assume(_blockNum > 2);
+    vm.assume(_blockNum < type(uint48).max);
+    _amount = uint208(bound(_amount, 1, type(uint128).max));
+
+    _mintGovAndDepositIntoFlexClient(_user, _amount);
+
+    assertEq(flexClient.getPastRawBalance(_user, block.number), _amount);
+    assertEq(flexClient.getPastRawBalance(_user, _blockNum), _amount);
+    vm.roll(_blockNum);
+    assertEq(flexClient.getPastRawBalance(_user, block.number), _amount);
+  }
+
+  function testFuzz_ReturnsUserBalanceAtAGivenBlock(
+    address _user,
+    uint208 _amountA,
+    uint208 _amountB,
+    uint48 _blockNum
+  ) public {
+    vm.assume(_user != address(flexClient));
+    vm.assume(_blockNum > 2);
+    vm.assume(_blockNum < type(uint48).max);
+    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
+    _amountB = uint208(bound(_amountB, 1, type(uint128).max - _amountA));
+
+    _mintGovAndDepositIntoFlexClient(_user, _amountA);
+    vm.roll(_blockNum);
+    _mintGovAndDepositIntoFlexClient(_user, _amountB);
+    vm.roll(block.number + 1);
+
+    uint48 _zeroBlock = 0;
+    uint48 _initBlock = 1;
+    assertEq(flexClient.getPastRawBalance(_user, _zeroBlock), 0);
+    assertEq(flexClient.getPastRawBalance(_user, _initBlock), _amountA);
+    assertEq(flexClient.getPastRawBalance(_user, _blockNum), _amountA + _amountB);
+  }
+}
+
+contract GetPastTotalBalance is FlexVotingClientTest {
+  function test_ReturnsZeroWithoutDeposits() public view {
+    uint48 _zeroBlock = 0;
+    uint48 _futureBlock = uint48(block.number) + 42;
+    assertEq(flexClient.getPastTotalBalance(_zeroBlock), 0);
+    assertEq(flexClient.getPastTotalBalance(_futureBlock), 0);
+  }
+
+  function testFuzz_ReturnsCurrentValueForFutureBlocks(
+    address _user,
+    uint208 _amount,
+    uint48 _blockNum
+  ) public {
+    vm.assume(_user != address(flexClient));
+    vm.assume(_blockNum > 2);
+    vm.assume(_blockNum < type(uint48).max);
+    _amount = uint208(bound(_amount, 1, type(uint128).max));
+
+    _mintGovAndDepositIntoFlexClient(_user, _amount);
+
+    assertEq(flexClient.getPastTotalBalance(block.number), _amount);
+    assertEq(flexClient.getPastTotalBalance(_blockNum), _amount);
+    vm.roll(_blockNum);
+    assertEq(flexClient.getPastTotalBalance(block.number), _amount);
+  }
+
+  function testFuzz_SumsAllUserDeposits(
+    address _userA,
+    uint208 _amountA,
+    address _userB,
+    uint208 _amountB
+  ) public {
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
+    vm.assume(_userA != _userB);
+
+    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
+    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
+
+    _mintGovAndDepositIntoFlexClient(_userA, _amountA);
+    _mintGovAndDepositIntoFlexClient(_userB, _amountB);
+
+    vm.roll(block.number + 1);
+
+    assertEq(flexClient.getPastTotalBalance(block.number), _amountA + _amountB);
+  }
+
+  function testFuzz_ReturnsTotalDepositsAtAGivenBlock(
+    address _userA,
+    uint208 _amountA,
+    address _userB,
+    uint208 _amountB,
+    uint48 _blockNum
+  ) public {
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
+    vm.assume(_userA != _userB);
+    vm.assume(_blockNum > 2);
+    vm.assume(_blockNum < type(uint48).max);
+
+    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
+    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
+
+    assertEq(flexClient.getPastTotalBalance(block.number), 0);
+
+    _mintGovAndDepositIntoFlexClient(_userA, _amountA);
+    vm.roll(_blockNum);
+    _mintGovAndDepositIntoFlexClient(_userB, _amountB);
+
+    assertEq(flexClient.getPastTotalBalance(block.number - _blockNum + 1), _amountA);
+    assertEq(flexClient.getPastTotalBalance(block.number), _amountA + _amountB);
+  }
+  // parallel of last test for getPastRawBalance
 }
 
 contract Withdraw is FlexVotingClientTest {
