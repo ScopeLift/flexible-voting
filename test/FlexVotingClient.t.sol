@@ -106,6 +106,7 @@ contract Constructor is FlexVotingClientTest {
   function test_SetsGovernor() public view {
     assertEq(address(flexClient.GOVERNOR()), address(governor));
   }
+
   function test_SelfDelegates() public view {
     assertEq(token.delegates(address(flexClient)), address(flexClient));
   }
@@ -147,12 +148,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
     assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
   }
 
-
-  function testFuzz_UnaffectedByBorrow(
-    address _user,
-    uint208 _deposit,
-    uint208 _borrow
-  ) public {
+  function testFuzz_UnaffectedByBorrow(address _user, uint208 _deposit, uint208 _borrow) public {
     _commonUserAssumptions(_user);
     _deposit = uint208(bound(_deposit, 1, type(uint128).max));
     _borrow = uint208(bound(_borrow, 1, _deposit));
@@ -174,8 +170,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
 contract _CastVoteReasonString is FlexVotingClientTest {
   function test_ReturnsDescriptiveString() public {
     assertEq(
-      flexClient.exposed_castVoteReasonString(),
-      "rolled-up vote from governance token holders"
+      flexClient.exposed_castVoteReasonString(), "rolled-up vote from governance token holders"
     );
   }
 }
@@ -446,7 +441,11 @@ contract Deposit is FlexVotingClientTest {
 }
 
 contract ExpressVote is FlexVotingClientTest {
-  function testFuzz_IncrementsInternalAccouting(address _user, uint208 _voteWeight, uint8 _supportType) public {
+  function testFuzz_IncrementsInternalAccouting(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -525,7 +524,9 @@ contract ExpressVote is FlexVotingClientTest {
     flexClient.expressVote(_proposalId, uint8(_supportType));
   }
 
-  function testFuzz_RevertOn_DoubleVotes(address _user, uint208 _voteWeight, uint8 _supportType) public {
+  function testFuzz_RevertOn_DoubleVotes(address _user, uint208 _voteWeight, uint8 _supportType)
+    public
+  {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -564,11 +565,9 @@ contract ExpressVote is FlexVotingClientTest {
     assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
   }
 
-  function testFuzz_RevertOn_UnknownVoteType(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
+  function testFuzz_RevertOn_UnknownVoteType(address _user, uint208 _voteWeight, uint8 _supportType)
+    public
+  {
     // Force vote type to be unrecognized.
     vm.assume(_supportType > uint8(GCF.VoteType.Abstain));
 
@@ -590,7 +589,9 @@ contract ExpressVote is FlexVotingClientTest {
 }
 
 contract CastVote is FlexVotingClientTest {
-  function testFuzz_SubmitsVotesToGovernor(address _user, uint208 _voteWeight, uint8 _supportType) public {
+  function testFuzz_SubmitsVotesToGovernor(address _user, uint208 _voteWeight, uint8 _supportType)
+    public
+  {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -1020,11 +1021,9 @@ contract CastVote is FlexVotingClientTest {
     assertEq(_abstainVotes, _voteWeightB); // Second user's votes are now in.
   }
 
-  function testFuzz_RevertWhen_NoVotesToCast(
-    address _user,
-    uint208 _voteWeight,
-    uint8 _supportType
-  ) public {
+  function testFuzz_RevertWhen_NoVotesToCast(address _user, uint208 _voteWeight, uint8 _supportType)
+    public
+  {
     _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
@@ -1081,7 +1080,6 @@ contract CastVote is FlexVotingClientTest {
     );
     flexClient.castVote(_proposalId);
   }
-
 }
 
 contract Borrow is FlexVotingClientTest {
