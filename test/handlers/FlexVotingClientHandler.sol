@@ -73,9 +73,13 @@ contract FlexVotingClientHandler is Test {
     _;
   }
 
-  function _randActor(uint256 _seed) internal returns (address) {
+  function _randActor(uint256 _seed) public returns (address) {
     uint256 len = _actors.length();
     return len > 0 ?  _actors.at(_seed % len) : address(0);
+  }
+
+  function lastProposal() external returns (uint256) {
+    return _proposals.at(_proposals.length() - 1);
   }
 
   function _randProposal(uint256 _seed) internal returns (uint256) {
@@ -93,6 +97,10 @@ contract FlexVotingClientHandler is Test {
 
   function _remainingTokens() internal returns (uint128) {
     return type(uint128).max - ghost_mintedTokens;
+  }
+
+  function proposalLength() public returns(uint256) {
+    return _proposals.length();
   }
 
   // TODO This always creates a new actor. Should it?
