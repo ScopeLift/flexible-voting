@@ -40,10 +40,10 @@ contract FlexVotingInvariantTest is Test {
 
     bytes4[] memory selectors = new bytes4[](5);
     selectors[0] = FlexVotingClientHandler.deposit.selector;
-    selectors[0] = FlexVotingClientHandler.withdraw.selector;
-    selectors[0] = FlexVotingClientHandler.expressVote.selector;
-    selectors[0] = FlexVotingClientHandler.castVote.selector;
-    selectors[0] = FlexVotingClientHandler.propose.selector;
+    selectors[1] = FlexVotingClientHandler.withdraw.selector;
+    selectors[2] = FlexVotingClientHandler.expressVote.selector;
+    selectors[3] = FlexVotingClientHandler.castVote.selector;
+    selectors[4] = FlexVotingClientHandler.propose.selector;
 
     targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     targetContract(address(handler));
