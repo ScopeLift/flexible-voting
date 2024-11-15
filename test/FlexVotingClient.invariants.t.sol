@@ -58,6 +58,7 @@ contract FlexVotingInvariantTest is Test {
   //   - voting (without borrows) w/ flex client should not decrease vote weight
 
   function invariant_OneVotePerActorPerProposal() public {
+    handler.callSummary();
     assertEq(handler.ghost_doubleVoteActors(), 0);
   }
 }

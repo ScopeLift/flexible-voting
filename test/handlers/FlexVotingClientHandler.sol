@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
@@ -29,6 +29,11 @@ contract FlexVotingClientHandler is Test {
   EnumerableSet.AddressSet internal _actors;
   address internal currentActor;
 
+  struct CallCounts {
+    uint256 count;
+  }
+  mapping(bytes32 => CallCounts) public calls;
+
   uint256 public ghost_depositSum;
   uint256 public ghost_withdrawSum;
   uint128 public ghost_mintedTokens;
@@ -49,6 +54,11 @@ contract FlexVotingClientHandler is Test {
     flexClient = _client;
     governor = _governor;
     receiver = _receiver;
+  }
+
+  modifier countCall(bytes32 key) {
+    calls[key].count++;
+    _;
   }
 
   modifier createActor() {
@@ -86,7 +96,7 @@ contract FlexVotingClientHandler is Test {
   }
 
   // TODO This always creates a new actor. Should it?
-  function deposit(uint208 _amount) createActor external {
+  function deposit(uint208 _amount) createActor countCall("deposit") external {
     _amount = uint208(bound(_amount, 0, type(uint128).max));
 
     // Some actors won't have the tokens they need. This is deliberate.
@@ -105,7 +115,14 @@ contract FlexVotingClientHandler is Test {
   }
 
   // TODO we restrict withdrawals to addresses that have balances, should we?
-  function withdraw(uint256 _userSeed, uint208 _amount) useActor(_userSeed) external {
+  function withdraw(
+    uint256 _userSeed,
+    uint208 _amount
+  )
+    useActor(_userSeed)
+    countCall("withdraw")
+    external
+  {
     // TODO we limit withdrawals to the total amount deposited, should we?
     //   instead we could limit the caller to withdraw some portion of its balance
     //   or we could let the caller attempt to withdraw any uint208
@@ -117,10 +134,10 @@ contract FlexVotingClientHandler is Test {
     ghost_withdrawSum += _amount;
   }
 
-  // TODO should we place limits on how often this can be called?
-  function propose() external {
+  function propose(string memory _proposalName, uint256 _seed) countCall("propose") external {
     // Proposal will underflow if we're on the zero block
     if (block.number == 0) vm.roll(1);
+    if (this.proposalLength() > 3) return;
 
     // Create a proposal
     bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
@@ -133,8 +150,11 @@ contract FlexVotingClientHandler is Test {
 
     // Submit the proposal.
     vm.prank(msg.sender);
-    uint256 _id = governor.propose(targets, values, calldatas, "A great proposal");
+    uint256 _id = governor.propose(targets, values, calldatas, _proposalName);
     _proposals.add(_id);
+
+    // Roll the clock to get voting started.
+    vm.roll(_seed % 10);
   }
 
   // TODO we restrict expression to addresses that have deposited, should we?
@@ -142,7 +162,7 @@ contract FlexVotingClientHandler is Test {
     uint256 _proposalId,
     uint8 _support,
     uint256 _userSeed
-  ) useActor(_userSeed) external {
+  ) useActor(_userSeed) countCall("expressVote") external {
     // TODO should we allow people to try to vote with bogus support types?
     vm.assume(_support <= uint8(GCF.VoteType.Abstain));
     // TODO should users only express on proposals created after they had deposits?
@@ -156,10 +176,21 @@ contract FlexVotingClientHandler is Test {
     }
   }
 
-  function castVote(uint256 _proposalId) external {
+  function castVote(uint256 _proposalId) countCall("castVote") external {
+    console2.log("david trying to cast vote");
     // TODO should users only be able to cast if votes were expressed?
     _proposalId = _randProposal(_proposalId);
     vm.prank(msg.sender);
     flexClient.castVote(_proposalId);
+  }
+
+  function callSummary() external {
+    console2.log("\nCall summary:");
+    console2.log("-------------------");
+    console2.log("deposit:", calls["deposit"].count);
+    console2.log("withdraw:", calls["withdraw"].count);
+    console2.log("expressVote:", calls["expressVote"].count);
+    console2.log("castVote:", calls["castVote"].count);
+    console2.log("propose:", calls["propose"].count);
   }
 }
