@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
@@ -155,6 +154,30 @@ contract FlexVotingInvariantTest is Test {
 
     // Internal accounting is correct.
     assertEq(handler.ghost_actorProposalVotes(address(this), _proposalId), 1);
+  }
+
+  function testFuzz_castVote(
+    uint256 _proposalSeed,
+    uint256 _userSeed,
+    uint128 _amount
+  ) public {
+    _amount = uint128(bound(_amount, 1, type(uint128).max));
+    uint8 _voteType = uint8(GCF.VoteType.Against);
+    vm.expectRevert(bytes("no votes expressed"));
+    handler.castVote(_proposalSeed);
+
+    handler.deposit(_amount);
+    handler.propose("a gorgeous proposal", _proposalSeed);
+    handler.expressVote(_proposalSeed, _voteType, _userSeed);
+    handler.castVote(_proposalSeed);
+
+    uint256 _proposalId = handler.lastProposal();
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+
+    assertEq(_forVotes, 0);
+    assertEq(_againstVotes, _amount);
+    assertEq(_abstainVotes, 0);
   }
 
   // function invariant_OneVotePerActorPerProposal() public {

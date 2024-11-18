@@ -73,7 +73,7 @@ contract FlexVotingClientHandler is Test {
     _;
   }
 
-  function _randActor(uint256 _seed) public returns (address) {
+  function _randActor(uint256 _seed) internal returns (address) {
     uint256 len = _actors.length();
     return len > 0 ?  _actors.at(_seed % len) : address(0);
   }
@@ -142,7 +142,10 @@ contract FlexVotingClientHandler is Test {
     ghost_withdrawSum += _amount;
   }
 
-  function propose(string memory _proposalName, uint256 _seed) countCall("propose") external {
+  function propose(
+    string memory _proposalName,
+    uint256 _seed
+  ) countCall("propose") external {
     // Proposal will underflow if we're on the zero block
     if (block.number == 0) vm.roll(1);
     if (this.proposalLength() > 3) return;
@@ -162,7 +165,7 @@ contract FlexVotingClientHandler is Test {
     _proposals.add(_id);
 
     // Roll the clock to get voting started.
-    vm.roll(_seed % 10);
+    vm.roll(governor.proposalSnapshot(_id) + 1);
   }
 
   // TODO we restrict expression to addresses that have deposited, should we?
