@@ -222,5 +222,14 @@ contract FlexVotingClientHandler is Test {
     console2.log("expressVote:", calls["expressVote"].count);
     console2.log("castVote:", calls["castVote"].count);
     console2.log("propose:", calls["propose"].count);
+    console2.log("-------------------");
+    console2.log("actor count:", _actors.length());
+    console2.log("voter count:", _voters.length());
+    console2.log("proposal count:", _proposals.length());
+    console2.log("amount deposited:", ghost_depositSum);
+    console2.log("amount withdrawn:", ghost_withdrawSum);
+    console2.log("amount remaining:", _remainingTokens());
+    console2.log("-------------------");
+
   }
 }
