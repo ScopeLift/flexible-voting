@@ -37,6 +37,7 @@ contract FlexVotingClientHandler is Test {
   uint256 public ghost_depositSum;
   uint256 public ghost_withdrawSum;
   uint128 public ghost_mintedTokens;
+  mapping(address => uint128) public ghost_accountDeposits;
 
   // Maps actors to proposal ids to number of times they've voted on the proposal.
   // E.g. actorProposalVotes[0xBEEF][42] == the number of times 0xBEEF voted on
@@ -120,6 +121,7 @@ contract FlexVotingClientHandler is Test {
     vm.stopPrank();
 
     ghost_depositSum += _amount;
+    ghost_accountDeposits[currentActor] += uint128(_amount);
   }
 
   // TODO we restrict withdrawals to addresses that have balances, should we?
@@ -134,12 +136,13 @@ contract FlexVotingClientHandler is Test {
     // TODO we limit withdrawals to the total amount deposited, should we?
     //   instead we could limit the caller to withdraw some portion of its balance
     //   or we could let the caller attempt to withdraw any uint208
-    _amount = uint208(bound(_amount, 0, ghost_depositSum));
+    _amount = uint208(bound(_amount, 0, ghost_accountDeposits[currentActor]));
 
     vm.prank(currentActor);
     flexClient.withdraw(_amount);
 
     ghost_withdrawSum += _amount;
+    ghost_accountDeposits[currentActor] -= uint128(_amount);
   }
 
   function propose(

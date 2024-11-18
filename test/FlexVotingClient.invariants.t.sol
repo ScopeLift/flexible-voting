@@ -102,10 +102,6 @@ contract FlexVotingInvariantTest is Test {
     assertEq(flexClient.deposits(address(this)), _amount / 2);
     assertEq(token.balanceOf(address(this)), _amount / 2);
 
-    // Try to withdraw a sane but still to large amount.
-    vm.expectRevert();
-    handler.withdraw(_userSeed, _amount);
-
     handler.withdraw(_userSeed, _amount / 2);
     assertEq(handler.ghost_withdrawSum(), _amount);
     assertEq(token.balanceOf(address(this)), _amount);
