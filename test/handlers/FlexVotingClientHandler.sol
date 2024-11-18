@@ -71,7 +71,7 @@ contract FlexVotingClientHandler is Test {
   }
 
   modifier maybeCreateVoter() {
-    if (proposalId == 0) _voters.add(currentActor);
+    if (_proposals.length() == 0) _voters.add(currentActor);
     _;
   }
 
@@ -191,7 +191,7 @@ contract FlexVotingClientHandler is Test {
     uint8 _support,
     uint256 _userSeed
   ) useVoter(_userSeed) countCall("expressVote") external {
-    vm.assume(proposalId > 0);
+    vm.assume(_proposals.length() > 0);
 
     // TODO should we allow people to try to vote with bogus support types?
     vm.assume(_support <= uint8(GCF.VoteType.Abstain));
