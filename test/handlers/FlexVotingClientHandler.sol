@@ -106,7 +106,7 @@ contract FlexVotingClientHandler is Test {
 
   // TODO This always creates a new actor. Should it?
   function deposit(uint208 _amount) createActor countCall("deposit") external {
-    _amount = uint208(bound(_amount, 0, type(uint128).max));
+    _amount = uint208(bound(_amount, 0, _remainingTokens()));
 
     // Some actors won't have the tokens they need. This is deliberate.
     if (_amount <= _remainingTokens()) {
