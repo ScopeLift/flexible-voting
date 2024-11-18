@@ -221,11 +221,18 @@ contract GetPastRawBalance is FlexVotingClientTest {
   ) public {
     vm.assume(_depositor != address(flexClient));
     vm.assume(_nonDepositor != address(flexClient));
+    vm.assume(_nonDepositor != _depositor);
     _amount = uint208(bound(_amount, 1, type(uint128).max));
 
+    vm.roll(block.number + 1);
     assertEq(flexClient.getPastRawBalance(_depositor, 0), 0);
-    _mintGovAndDepositIntoFlexClient(_depositor, _amount);
     assertEq(flexClient.getPastRawBalance(_nonDepositor, 0), 0);
+
+    _mintGovAndDepositIntoFlexClient(_depositor, _amount);
+    vm.roll(block.number + 1);
+
+    assertEq(flexClient.getPastRawBalance(_depositor, block.number - 1), _amount);
+    assertEq(flexClient.getPastRawBalance(_nonDepositor, block.number - 1), 0);
   }
 
   function testFuzz_ReturnsCurrentValueForFutureBlocks(
