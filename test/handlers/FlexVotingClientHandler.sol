@@ -26,6 +26,7 @@ contract FlexVotingClientHandler is Test {
   ProposalReceiverMock receiver;
 
   EnumerableSet.UintSet internal _proposals;
+  EnumerableSet.AddressSet internal _voters;
   EnumerableSet.AddressSet internal _actors;
   address internal currentActor;
 
@@ -69,14 +70,24 @@ contract FlexVotingClientHandler is Test {
     _;
   }
 
-  modifier useActor(uint256 actorIndexSeed) {
-    currentActor = _randActor(actorIndexSeed);
+  modifier maybeCreateVoter() {
+    if (proposalId == 0) _voters.add(currentActor);
     _;
   }
 
-  function _randActor(uint256 _seed) internal returns (address) {
-    uint256 len = _actors.length();
-    return len > 0 ?  _actors.at(_seed % len) : address(0);
+  modifier useActor(uint256 actorIndexSeed) {
+    currentActor = _randAdress(_actors, actorIndexSeed);
+    _;
+  }
+
+  modifier useVoter(uint256 _voterSeed) {
+    currentActor = _randAdress(_voters, _voterSeed);
+    _;
+  }
+
+  function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed) internal returns (address) {
+    uint256 len = _addressSet.length();
+    return len > 0 ?  _addressSet.at(_seed % len) : address(0);
   }
 
   function lastProposal() external returns (uint256) {
@@ -105,7 +116,10 @@ contract FlexVotingClientHandler is Test {
   }
 
   // TODO This always creates a new actor. Should it?
-  function deposit(uint208 _amount) createActor countCall("deposit") external {
+  function deposit(
+    uint208 _amount
+  ) createActor maybeCreateVoter countCall("deposit") external {
+    vm.assume(_remainingTokens() > 0);
     _amount = uint208(bound(_amount, 0, _remainingTokens()));
 
     // Some actors won't have the tokens they need. This is deliberate.
@@ -171,12 +185,14 @@ contract FlexVotingClientHandler is Test {
     vm.roll(governor.proposalSnapshot(_id) + 1);
   }
 
-  // TODO we restrict expression to addresses that have deposited, should we?
+  // TODO restrict expressVote to addresses that deposited BEFORE proposal.
   function expressVote(
     uint256 _proposalId,
     uint8 _support,
     uint256 _userSeed
-  ) useActor(_userSeed) countCall("expressVote") external {
+  ) useVoter(_userSeed) countCall("expressVote") external {
+    vm.assume(proposalId > 0);
+
     // TODO should we allow people to try to vote with bogus support types?
     vm.assume(_support <= uint8(GCF.VoteType.Abstain));
     // TODO should users only express on proposals created after they had deposits?
