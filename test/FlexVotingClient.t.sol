@@ -69,15 +69,15 @@ contract FlexVotingClientTest is Test {
     assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Active));
   }
 
-  function _commonFuzzerAssumptions(address _address, uint208 _voteWeight)
+  function _assumeSafeVoteParams(address _address, uint208 _voteWeight)
     public
     view
     returns (uint208)
   {
-    return _commonFuzzerAssumptions(_address, _voteWeight, uint8(GCF.VoteType.Against));
+    return _assumeSafeVoteParams(_address, _voteWeight, uint8(GCF.VoteType.Against));
   }
 
-  function _commonFuzzerAssumptions(address _address, uint208 _voteWeight, uint8 _supportType)
+  function _assumeSafeVoteParams(address _address, uint208 _voteWeight, uint8 _supportType)
     public
     view
     returns (uint208)
@@ -114,18 +114,18 @@ contract Constructor is FlexVotingClientTest {
 
 // Contract name has a leading underscore for scopelint spec support.
 contract _RawBalanceOf is FlexVotingClientTest {
-  function _commonUserAssumptions(address _user) internal view {
+  function _assumeSafeUser(address _user) internal view {
     vm.assume(_user != address(flexClient));
     vm.assume(_user != address(0));
   }
 
   function testFuzz_ReturnsZeroForNonDepositors(address _user) public view {
-    _commonUserAssumptions(_user);
+    _assumeSafeUser(_user);
     assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
   }
 
   function testFuzz_IncreasesOnDeposit(address _user, uint208 _amount) public {
-    _commonUserAssumptions(_user);
+    _assumeSafeUser(_user);
     _amount = uint208(bound(_amount, 1, type(uint128).max));
 
     // Deposit some gov.
@@ -135,7 +135,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
   }
 
   function testFuzz_DecreasesOnWithdrawal(address _user, uint208 _amount) public {
-    _commonUserAssumptions(_user);
+    _assumeSafeUser(_user);
     _amount = uint208(bound(_amount, 1, type(uint128).max));
 
     // Deposit some gov.
@@ -149,7 +149,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
   }
 
   function testFuzz_UnaffectedByBorrow(address _user, uint208 _deposit, uint208 _borrow) public {
-    _commonUserAssumptions(_user);
+    _assumeSafeUser(_user);
     _deposit = uint208(bound(_deposit, 1, type(uint128).max));
     _borrow = uint208(bound(_borrow, 1, _deposit));
 
@@ -446,7 +446,7 @@ contract ExpressVote is FlexVotingClientTest {
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -476,7 +476,7 @@ contract ExpressVote is FlexVotingClientTest {
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Create the proposal *before* the user deposits anything.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -496,7 +496,7 @@ contract ExpressVote is FlexVotingClientTest {
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Mint gov but do not deposit.
     _mintGovAndApproveFlexClient(_user, _voteWeight);
@@ -527,7 +527,7 @@ contract ExpressVote is FlexVotingClientTest {
   function testFuzz_RevertOn_DoubleVotes(address _user, uint208 _voteWeight, uint8 _supportType)
     public
   {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -592,7 +592,7 @@ contract CastVote is FlexVotingClientTest {
   function testFuzz_SubmitsVotesToGovernor(address _user, uint208 _voteWeight, uint8 _supportType)
     public
   {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -632,8 +632,8 @@ contract CastVote is FlexVotingClientTest {
     uint208 _voteWeightB,
     uint8 _supportType
   ) public {
-    _voteWeightA = _commonFuzzerAssumptions(_user, _voteWeightA, _supportType);
-    _voteWeightB = _commonFuzzerAssumptions(_user, _voteWeightB, _supportType);
+    _voteWeightA = _assumeSafeVoteParams(_user, _voteWeightA, _supportType);
+    _voteWeightB = _assumeSafeVoteParams(_user, _voteWeightB, _supportType);
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeightA);
@@ -843,9 +843,9 @@ contract CastVote is FlexVotingClientTest {
       address(0xbabe), // userB
       address(0xf005ba11) // userC
     ];
-    _voteWeightA = _commonFuzzerAssumptions(_users[0], _voteWeightA, _supportTypeA);
-    _voteWeightB = _commonFuzzerAssumptions(_users[1], _voteWeightB);
-    _borrowAmount = _commonFuzzerAssumptions(_users[2], _borrowAmount);
+    _voteWeightA = _assumeSafeVoteParams(_users[0], _voteWeightA, _supportTypeA);
+    _voteWeightB = _assumeSafeVoteParams(_users[1], _voteWeightB);
+    _borrowAmount = _assumeSafeVoteParams(_users[2], _borrowAmount);
 
     _voteWeightA = uint208(bound(_voteWeightA, 0, type(uint128).max));
     _voteWeightB = uint208(bound(_voteWeightB, 0, type(uint128).max - _voteWeightA));
@@ -924,8 +924,8 @@ contract CastVote is FlexVotingClientTest {
       address(0xbabe), // userB
       address(0xf005ba11) // userC
     ];
-    _voteWeightA = _commonFuzzerAssumptions(_users[0], _voteWeightA, _supportTypeA);
-    _voteWeightB = _commonFuzzerAssumptions(_users[1], _voteWeightB);
+    _voteWeightA = _assumeSafeVoteParams(_users[0], _voteWeightA, _supportTypeA);
+    _voteWeightB = _assumeSafeVoteParams(_users[1], _voteWeightB);
 
     vm.assume(_voteWeightA + _voteWeightB < type(uint128).max);
 
@@ -1024,7 +1024,7 @@ contract CastVote is FlexVotingClientTest {
   function testFuzz_RevertWhen_NoVotesToCast(address _user, uint208 _voteWeight, uint8 _supportType)
     public
   {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -1053,7 +1053,7 @@ contract CastVote is FlexVotingClientTest {
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
-    _voteWeight = _commonFuzzerAssumptions(_user, _voteWeight, _supportType);
+    _voteWeight = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -1090,8 +1090,8 @@ contract Borrow is FlexVotingClientTest {
     uint208 _borrowAmount
   ) public {
     vm.assume(_borrower != address(0));
-    _depositAmount = _commonFuzzerAssumptions(_depositer, _depositAmount);
-    _borrowAmount = _commonFuzzerAssumptions(_borrower, _borrowAmount);
+    _depositAmount = _assumeSafeVoteParams(_depositer, _depositAmount);
+    _borrowAmount = _assumeSafeVoteParams(_borrower, _borrowAmount);
     vm.assume(_depositAmount > _borrowAmount);
 
     // Deposit some funds.
