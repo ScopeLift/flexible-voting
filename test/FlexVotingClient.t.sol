@@ -200,8 +200,7 @@ contract _CheckpointRawBalanceOf is FlexVotingClientTest {
     uint48 _blockNum
   ) public {
     vm.assume(_user != address(flexClient));
-    vm.assume(_blockNum > 2);
-    vm.assume(_blockNum < type(uint48).max);
+    _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, type(uint128).max));
 
     flexClient.exposed_setDeposits(_user, _amount);
@@ -241,8 +240,7 @@ contract GetPastRawBalance is FlexVotingClientTest {
     uint48 _blockNum
   ) public {
     vm.assume(_user != address(flexClient));
-    vm.assume(_blockNum > 2);
-    vm.assume(_blockNum < type(uint48).max);
+    _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, type(uint128).max));
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
@@ -260,8 +258,7 @@ contract GetPastRawBalance is FlexVotingClientTest {
     uint48 _blockNum
   ) public {
     vm.assume(_user != address(flexClient));
-    vm.assume(_blockNum > 2);
-    vm.assume(_blockNum < type(uint48).max);
+    _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
     _amountA = uint208(bound(_amountA, 1, type(uint128).max));
     _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
 
@@ -292,8 +289,7 @@ contract GetPastTotalBalance is FlexVotingClientTest {
     uint48 _blockNum
   ) public {
     vm.assume(_user != address(flexClient));
-    vm.assume(_blockNum > 2);
-    vm.assume(_blockNum < type(uint48).max);
+    _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, type(uint128).max));
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
@@ -335,8 +331,7 @@ contract GetPastTotalBalance is FlexVotingClientTest {
     vm.assume(_userA != address(flexClient));
     vm.assume(_userB != address(flexClient));
     vm.assume(_userA != _userB);
-    vm.assume(_blockNum > 2);
-    vm.assume(_blockNum < type(uint48).max);
+    _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
 
     _amountA = uint208(bound(_amountA, 1, type(uint128).max));
     _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
