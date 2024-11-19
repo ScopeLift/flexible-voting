@@ -99,10 +99,7 @@ contract FlexVotingClientTest is Test {
     returns (uint208 _boundedWeight, GCF.VoteType _boundedSupport)
   {
     _assumeSafeUser(_account);
-
     _boundedSupport = _randVoteType(_supportType);
-
-    // This max is a limitation of the fractional governance protocol storage.
     _boundedWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
   }
 }
@@ -586,8 +583,7 @@ contract ExpressVote is FlexVotingClientTest {
     // Force vote type to be unrecognized.
     _supportType = uint8(bound(_supportType, uint256(type(GCF.VoteType).max) + 1, type(uint8).max));
 
-    vm.assume(_user != address(flexClient));
-    // This max is a limitation of the fractional governance protocol storage.
+    _assumeSafeUser(_user);
     _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
 
     // Deposit some funds.
@@ -722,13 +718,11 @@ contract CastVote is FlexVotingClientTest {
     uint208 _voteWeightA,
     uint208 _voteWeightB
   ) public {
-    // This max is a limitation of the fractional governance protocol storage.
-    _voteWeightA = uint208(bound(_voteWeightA, 1, type(uint120).max));
-    _voteWeightB = uint208(bound(_voteWeightB, 1, type(uint120).max));
-
-    vm.assume(_userA != address(flexClient));
-    vm.assume(_userB != address(flexClient));
     vm.assume(_userA != _userB);
+    _assumeSafeUser(_userA);
+    _assumeSafeUser(_userB);
+    _voteWeightA = uint208(bound(_voteWeightA, 1, MAX_VOTES - 1));
+    _voteWeightB = uint208(bound(_voteWeightB, 1, MAX_VOTES - _voteWeightA));
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_userA, _voteWeightA);
