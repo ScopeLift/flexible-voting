@@ -78,14 +78,10 @@ contract FlexVotingClientTest is Test {
     vm.assume(_user != address(0));
   }
 
-  function _randVoteType(uint8 _seed) public view returns (GCF.VoteType) {
-    return GCF.VoteType(uint8(
-      bound(
-        uint256(_seed),
-        uint256(type(GCF.VoteType).min),
-        uint256(type(GCF.VoteType).max)
-      )
-    ));
+  function _randVoteType(uint8 _seed) public pure returns (GCF.VoteType) {
+    return GCF.VoteType(
+      uint8(bound(uint256(_seed), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max)))
+    );
   }
 
   function _assumeSafeVoteParams(address _account, uint208 _voteWeight)
@@ -568,18 +564,13 @@ contract ExpressVote is FlexVotingClientTest {
       uint256 _abstainVotesExpressedInit
     ) = flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressedInit, _voteType == GCF.VoteType.For ? _voteWeight : 0);
-    assertEq(
-      _againstVotesExpressedInit, _voteType == GCF.VoteType.Against ? _voteWeight : 0
-    );
-    assertEq(
-      _abstainVotesExpressedInit, _voteType == GCF.VoteType.Abstain ? _voteWeight : 0
-    );
+    assertEq(_againstVotesExpressedInit, _voteType == GCF.VoteType.Against ? _voteWeight : 0);
+    assertEq(_abstainVotesExpressedInit, _voteType == GCF.VoteType.Abstain ? _voteWeight : 0);
 
     // Vote early and often!
     vm.expectRevert(bytes("already voted"));
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
-
 
     // No votes changed.
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
@@ -767,8 +758,7 @@ contract CastVote is FlexVotingClientTest {
     _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, uint256(type(GCF.VoteType).max)));
 
     _vars.voteWeightA = uint208(bound(_vars.voteWeightA, 1e4, MAX_VOTES - 1e4 - 1));
-    _vars.voteWeightB =
-      uint208(bound(_vars.voteWeightB, 1e4, MAX_VOTES - _vars.voteWeightA - 1));
+    _vars.voteWeightB = uint208(bound(_vars.voteWeightB, 1e4, MAX_VOTES - _vars.voteWeightA - 1));
 
     uint208 _maxBorrowWeight = _vars.voteWeightA + _vars.voteWeightB;
     _vars.borrowAmountC = uint208(bound(_vars.borrowAmountC, 1, _maxBorrowWeight - 1));
@@ -930,12 +920,12 @@ contract CastVote is FlexVotingClientTest {
 
     // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
     if (_voteTypeA == GCF.VoteType.For) assertApproxEqAbs(_forVotes, _expectedVotingWeightA, 1);
-    if (_voteTypeA == GCF.VoteType.Against) assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
-    if (_voteTypeA == GCF.VoteType.Abstain) assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
-  }
-
-  function test_VotingWeightIsUnaffectedByDepositsAfterProposal() public {
-    testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(340282366920938463463374607431768211455, 726, 223);
+    if (_voteTypeA == GCF.VoteType.Against) {
+      assertApproxEqAbs(_againstVotes, _expectedVotingWeightA, 1);
+    }
+    if (_voteTypeA == GCF.VoteType.Abstain) {
+      assertApproxEqAbs(_abstainVotes, _expectedVotingWeightA, 1);
+    }
   }
 
   function testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(
