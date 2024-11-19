@@ -24,6 +24,9 @@ contract FlexVotingClientTest is Test {
   // See GovernorCountingFractional.ProposalVote struct.
   uint256 MAX_VOTES = type(uint128).max;
 
+  // The highest valid vote type, represented as a uint256.
+  uint256 MAX_VOTE_TYPE = uint256(type(GCF.VoteType).max);
+
   function setUp() public {
     token = new GovToken();
     vm.label(address(token), "token");
@@ -78,10 +81,9 @@ contract FlexVotingClientTest is Test {
     vm.assume(_user != address(0));
   }
 
-  function _randVoteType(uint8 _seed) public pure returns (GCF.VoteType) {
-    return GCF.VoteType(
-      uint8(bound(uint256(_seed), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max)))
-    );
+  function _randVoteType(uint8 _seed) public view returns (GCF.VoteType) {
+    return
+      GCF.VoteType(uint8(bound(uint256(_seed), uint256(type(GCF.VoteType).min), MAX_VOTE_TYPE)));
   }
 
   function _assumeSafeVoteParams(address _account, uint208 _voteWeight)
@@ -581,7 +583,7 @@ contract ExpressVote is FlexVotingClientTest {
     public
   {
     // Force vote type to be unrecognized.
-    _supportType = uint8(bound(_supportType, uint256(type(GCF.VoteType).max) + 1, type(uint8).max));
+    _supportType = uint8(bound(_supportType, MAX_VOTE_TYPE + 1, type(uint8).max));
 
     _assumeSafeUser(_user);
     _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
@@ -603,9 +605,7 @@ contract ExpressVote is FlexVotingClientTest {
     uint208 _voteWeight,
     uint8 _supportType,
     uint256 _proposalId
-  )
-    public
-  {
+  ) public {
     _assumeSafeUser(_user);
     _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
 
@@ -615,7 +615,7 @@ contract ExpressVote is FlexVotingClientTest {
     vm.assume(governor.proposalSnapshot(_proposalId) == 0);
 
     // Force vote type to be unrecognized.
-    _supportType = uint8(bound(_supportType, uint256(type(GCF.VoteType).max) + 1, type(uint8).max));
+    _supportType = uint8(bound(_supportType, MAX_VOTE_TYPE + 1, type(uint8).max));
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -781,8 +781,8 @@ contract CastVote is FlexVotingClientTest {
     _vars.userC = address(0xf005ba11);
     _vars.userD = address(0xba5eba11);
 
-    _vars.supportTypeA = uint8(bound(_vars.supportTypeA, 0, uint256(type(GCF.VoteType).max)));
-    _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, uint256(type(GCF.VoteType).max)));
+    _vars.supportTypeA = uint8(bound(_vars.supportTypeA, 0, MAX_VOTE_TYPE));
+    _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, MAX_VOTE_TYPE));
 
     _vars.voteWeightA = uint208(bound(_vars.voteWeightA, 1e4, MAX_VOTES - 1e4 - 1));
     _vars.voteWeightB = uint208(bound(_vars.voteWeightB, 1e4, MAX_VOTES - _vars.voteWeightA - 1));
