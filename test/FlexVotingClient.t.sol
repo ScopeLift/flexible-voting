@@ -20,6 +20,10 @@ contract FlexVotingClientTest is Test {
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
 
+  // This max is a limitation of GovernorCountingFractional's vote storage size.
+  // See GovernorCountingFractional.ProposalVote struct.
+  uint256 MAX_VOTES = type(uint128).max;
+
   function setUp() public {
     token = new GovToken();
     vm.label(address(token), "token");
@@ -90,7 +94,7 @@ contract FlexVotingClientTest is Test {
     returns (uint208 _boundedWeight)
   {
     _assumeSafeUser(_account);
-    _boundedWeight = uint208(bound(_voteWeight, 1, type(uint128).max));
+    _boundedWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
   }
 
   function _assumeSafeVoteParams(address _account, uint208 _voteWeight, uint8 _supportType)
@@ -103,7 +107,7 @@ contract FlexVotingClientTest is Test {
     _boundedSupport = _randVoteType(_supportType);
 
     // This max is a limitation of the fractional governance protocol storage.
-    _boundedWeight = uint208(bound(_voteWeight, 1, type(uint128).max));
+    _boundedWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
   }
 }
 
@@ -139,7 +143,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
 
   function testFuzz_IncreasesOnDeposit(address _user, uint208 _amount) public {
     _assumeSafeUser(_user);
-    _amount = uint208(bound(_amount, 1, type(uint128).max));
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amount);
@@ -149,7 +153,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
 
   function testFuzz_DecreasesOnWithdrawal(address _user, uint208 _amount) public {
     _assumeSafeUser(_user);
-    _amount = uint208(bound(_amount, 1, type(uint128).max));
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amount);
@@ -163,7 +167,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
 
   function testFuzz_UnaffectedByBorrow(address _user, uint208 _deposit, uint208 _borrow) public {
     _assumeSafeUser(_user);
-    _deposit = uint208(bound(_deposit, 1, type(uint128).max));
+    _deposit = uint208(bound(_deposit, 1, MAX_VOTES));
     _borrow = uint208(bound(_borrow, 1, _deposit));
 
     // Deposit some gov.
@@ -214,7 +218,7 @@ contract _CheckpointRawBalanceOf is FlexVotingClientTest {
   ) public {
     vm.assume(_user != address(flexClient));
     _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
-    _amount = uint208(bound(_amount, 1, type(uint128).max));
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     flexClient.exposed_setDeposits(_user, _amount);
     assertEq(flexClient.getPastRawBalance(_user, _blockNum), 0);
@@ -234,7 +238,7 @@ contract GetPastRawBalance is FlexVotingClientTest {
     vm.assume(_depositor != address(flexClient));
     vm.assume(_nonDepositor != address(flexClient));
     vm.assume(_nonDepositor != _depositor);
-    _amount = uint208(bound(_amount, 1, type(uint128).max));
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     vm.roll(block.number + 1);
     assertEq(flexClient.getPastRawBalance(_depositor, 0), 0);
@@ -254,7 +258,7 @@ contract GetPastRawBalance is FlexVotingClientTest {
   ) public {
     vm.assume(_user != address(flexClient));
     _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
-    _amount = uint208(bound(_amount, 1, type(uint128).max));
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
@@ -272,8 +276,8 @@ contract GetPastRawBalance is FlexVotingClientTest {
   ) public {
     vm.assume(_user != address(flexClient));
     _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
-    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
-    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
+    _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
+    _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
     _mintGovAndDepositIntoFlexClient(_user, _amountA);
     vm.roll(_blockNum);
@@ -303,7 +307,7 @@ contract GetPastTotalBalance is FlexVotingClientTest {
   ) public {
     vm.assume(_user != address(flexClient));
     _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
-    _amount = uint208(bound(_amount, 1, type(uint128).max));
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
@@ -323,8 +327,8 @@ contract GetPastTotalBalance is FlexVotingClientTest {
     vm.assume(_userB != address(flexClient));
     vm.assume(_userA != _userB);
 
-    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
-    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
+    _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
+    _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
     _mintGovAndDepositIntoFlexClient(_userA, _amountA);
     _mintGovAndDepositIntoFlexClient(_userB, _amountB);
@@ -346,8 +350,8 @@ contract GetPastTotalBalance is FlexVotingClientTest {
     vm.assume(_userA != _userB);
     _blockNum = uint48(bound(_blockNum, block.number + 1, type(uint48).max));
 
-    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
-    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
+    _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
+    _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
     assertEq(flexClient.getPastTotalBalance(block.number), 0);
 
@@ -416,8 +420,8 @@ contract Deposit is FlexVotingClientTest {
     uint208 _amountB,
     uint24 _depositDelay
   ) public {
-    _amountA = uint208(bound(_amountA, 1, type(uint128).max));
-    _amountB = uint208(bound(_amountB, 0, type(uint128).max - _amountA));
+    _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
+    _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amountA);
@@ -593,7 +597,7 @@ contract ExpressVote is FlexVotingClientTest {
 
     vm.assume(_user != address(flexClient));
     // This max is a limitation of the fractional governance protocol storage.
-    _voteWeight = uint208(bound(_voteWeight, 1, type(uint128).max));
+    _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
 
     // Deposit some funds.
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
@@ -762,9 +766,9 @@ contract CastVote is FlexVotingClientTest {
     _vars.supportTypeA = uint8(bound(_vars.supportTypeA, 0, uint256(type(GCF.VoteType).max)));
     _vars.supportTypeB = uint8(bound(_vars.supportTypeB, 0, uint256(type(GCF.VoteType).max)));
 
-    _vars.voteWeightA = uint208(bound(_vars.voteWeightA, 1e4, type(uint128).max - 1e4 - 1));
+    _vars.voteWeightA = uint208(bound(_vars.voteWeightA, 1e4, MAX_VOTES - 1e4 - 1));
     _vars.voteWeightB =
-      uint208(bound(_vars.voteWeightB, 1e4, type(uint128).max - _vars.voteWeightA - 1));
+      uint208(bound(_vars.voteWeightB, 1e4, MAX_VOTES - _vars.voteWeightA - 1));
 
     uint208 _maxBorrowWeight = _vars.voteWeightA + _vars.voteWeightB;
     _vars.borrowAmountC = uint208(bound(_vars.borrowAmountC, 1, _maxBorrowWeight - 1));
@@ -772,7 +776,7 @@ contract CastVote is FlexVotingClientTest {
       uint208(bound(_vars.borrowAmountD, 1, _maxBorrowWeight - _vars.borrowAmountC));
 
     // These are here just as a sanity check that all of the bounding above worked.
-    vm.assume(_vars.voteWeightA + _vars.voteWeightB < type(uint128).max);
+    vm.assume(_vars.voteWeightA + _vars.voteWeightB < MAX_VOTES);
     vm.assume(_vars.voteWeightA + _vars.voteWeightB >= _vars.borrowAmountC + _vars.borrowAmountD);
 
     // Mint and deposit.
@@ -869,10 +873,10 @@ contract CastVote is FlexVotingClientTest {
     // Requirements:
     //   voteWeights and borrow each >= 1
     //   voteWeights and borrow each <= uint128.max
-    //   _voteWeightA + _voteWeightB < type(uint128).max
+    //   _voteWeightA + _voteWeightB < MAX_VOTES
     //   _voteWeightA + _voteWeightB > _borrowAmount
-    _voteWeightA = uint208(bound(_voteWeightA, 1, type(uint128).max - 2));
-    _voteWeightB = uint208(bound(_voteWeightB, 1, type(uint128).max - _voteWeightA - 1));
+    _voteWeightA = uint208(bound(_voteWeightA, 1, MAX_VOTES - 2));
+    _voteWeightB = uint208(bound(_voteWeightB, 1, MAX_VOTES - _voteWeightA - 1));
     _borrowAmount = uint208(bound(_borrowAmount, 1, _voteWeightA + _voteWeightB - 1));
     GCF.VoteType _voteTypeA = _randVoteType(_supportTypeA);
 
@@ -947,9 +951,9 @@ contract CastVote is FlexVotingClientTest {
       address(0xf005ba11) // userC
     ];
 
-    // We need _voteWeightA + _voteWeightB < type(uint128).max.
-    _voteWeightA = uint208(bound(_voteWeightA, 1, type(uint128).max - 2));
-    _voteWeightB = uint208(bound(_voteWeightB, 1, type(uint128).max - _voteWeightA - 1));
+    // We need _voteWeightA + _voteWeightB < MAX_VOTES.
+    _voteWeightA = uint208(bound(_voteWeightA, 1, MAX_VOTES - 2));
+    _voteWeightB = uint208(bound(_voteWeightB, 1, MAX_VOTES - _voteWeightA - 1));
     GCF.VoteType _voteTypeA = _randVoteType(_supportTypeA);
 
     // Mint and deposit for just userA.
