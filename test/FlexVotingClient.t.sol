@@ -601,6 +601,39 @@ contract ExpressVote is FlexVotingClientTest {
     vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
   }
+
+  function testFuzz_RevertOn_UnknownProposal(
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType,
+    uint256 _proposalId
+  )
+    public
+  {
+    _assumeSafeUser(_user);
+    _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
+
+    // Confirm that we've pulled a bogus proposal number.
+    // This is the condition Governor.state checks for when raising
+    // GovernorNonexistentProposal.
+    vm.assume(governor.proposalSnapshot(_proposalId) == 0);
+
+    // Force vote type to be unrecognized.
+    _supportType = uint8(bound(_supportType, uint256(type(GCF.VoteType).max) + 1, type(uint8).max));
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+
+    // Create a real proposal to verify the two won't be mixed up when
+    // expressing.
+    uint256 _id = _createAndSubmitProposal();
+    assert(_proposalId != _id);
+
+    // Now try to express a voting preference on the bogus proposal.
+    vm.expectRevert("no weight");
+    vm.prank(_user);
+    flexClient.expressVote(_proposalId, _supportType);
+  }
 }
 
 contract CastVote is FlexVotingClientTest {
