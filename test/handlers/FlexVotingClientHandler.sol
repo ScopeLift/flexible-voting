@@ -120,7 +120,7 @@ contract FlexVotingClientHandler is Test {
     uint208 _amount
   ) createActor maybeCreateVoter countCall("deposit") external {
     vm.assume(_remainingTokens() > 0);
-    _amount = uint208(bound(_amount, 0, _remainingTokens()));
+    _amount = uint208(_bound(_amount, 0, _remainingTokens()));
 
     // Some actors won't have the tokens they need. This is deliberate.
     if (_amount <= _remainingTokens()) {
@@ -150,7 +150,7 @@ contract FlexVotingClientHandler is Test {
     // TODO we limit withdrawals to the total amount deposited, should we?
     //   instead we could limit the caller to withdraw some portion of its balance
     //   or we could let the caller attempt to withdraw any uint208
-    _amount = uint208(bound(_amount, 0, ghost_accountDeposits[currentActor]));
+    _amount = uint208(_bound(_amount, 0, ghost_accountDeposits[currentActor]));
 
     vm.prank(currentActor);
     flexClient.withdraw(_amount);
