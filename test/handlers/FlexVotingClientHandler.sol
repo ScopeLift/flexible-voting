@@ -194,7 +194,11 @@ contract FlexVotingClientHandler is Test {
     vm.assume(_proposals.length() > 0);
 
     // TODO should we allow people to try to vote with bogus support types?
-    vm.assume(_support <= uint8(GCF.VoteType.Abstain));
+    _support = uint8(_bound(
+      uint256(_support),
+      uint256(type(GCF.VoteType).min),
+      uint256(type(GCF.VoteType).max)
+    ));
     // TODO should users only express on proposals created after they had deposits?
     _proposalId = _randProposal(_proposalId);
     vm.prank(currentActor);
