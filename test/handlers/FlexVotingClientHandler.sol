@@ -191,7 +191,7 @@ contract FlexVotingClientHandler is Test {
     uint8 _support,
     uint256 _userSeed
   ) useVoter(_userSeed) countCall("expressVote") external {
-    vm.assume(_proposals.length() > 0);
+    if (_proposals.length() == 0) return;
 
     // TODO should we allow people to try to vote with bogus support types?
     _support = uint8(_bound(
