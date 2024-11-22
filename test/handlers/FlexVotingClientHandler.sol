@@ -163,6 +163,9 @@ contract FlexVotingClientHandler is Test {
     string memory _proposalName,
     uint256 _seed
   ) countCall("propose") external {
+    // Require there to be depositors.
+    if (_actors.length() < 100) return;
+
     // Proposal will underflow if we're on the zero block
     if (block.number == 0) vm.roll(1);
     if (this.proposalLength() > 3) return;
