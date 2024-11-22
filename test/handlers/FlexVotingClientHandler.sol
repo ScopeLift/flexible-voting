@@ -211,8 +211,9 @@ contract FlexVotingClientHandler is Test {
   }
 
   function castVote(uint256 _proposalId) countCall("castVote") external {
-    console2.log("david trying to cast vote");
-    // TODO should users only be able to cast if votes were expressed?
+    // If someone tries to castVotes when there is no proposal it just reverts.
+    if (_proposals.length() == 0) return;
+
     _proposalId = _randProposal(_proposalId);
     vm.prank(msg.sender);
     flexClient.castVote(_proposalId);
