@@ -25,10 +25,21 @@ contract FlexVotingClientHandler is Test {
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
 
-  EnumerableSet.UintSet internal _proposals;
-  EnumerableSet.AddressSet internal _voters;
-  EnumerableSet.AddressSet internal _actors;
+  EnumerableSet.UintSet internal proposals;
+  EnumerableSet.AddressSet internal voters;
+  EnumerableSet.AddressSet internal actors;
   address internal currentActor;
+
+  // Maps proposalIds to sets of users that have expressed votes but not yet had
+  // them cast.
+  mapping(uint256 => EnumerableSet.AddressSet) internal _pendingVotes;
+
+  // Maps proposalId to votes cast by this contract on the proposal.
+  mapping(uint256 => uint256) public ghost_votesCast;
+
+  // Maps proposalId to aggregate deposit weight held by users whose expressed
+  // votes were cast.
+  mapping(uint256 => uint256) public ghost_depositsCast;
 
   struct CallCounts {
     uint256 count;
@@ -40,10 +51,10 @@ contract FlexVotingClientHandler is Test {
   uint128 public ghost_mintedTokens;
   mapping(address => uint128) public ghost_accountDeposits;
 
-  // Maps actors to proposal ids to number of times they've voted on the proposal.
-  // E.g. actorProposalVotes[0xBEEF][42] == the number of times 0xBEEF voted on
-  // proposal 42.
-  mapping(address => mapping(uint256 => uint256)) public ghost_actorProposalVotes;
+  // Maps actors to proposal ids to number of times they've expressed votes on the proposal.
+  // E.g. actorExpressedVotes[0xBEEF][42] == the number of times 0xBEEF
+  // expressed a voting preference on proposal 42.
+  mapping(address => mapping(uint256 => uint256)) public ghost_actorExpressedVotes;
   uint256 public ghost_doubleVoteActors;
 
   constructor(
@@ -66,22 +77,22 @@ contract FlexVotingClientHandler is Test {
   modifier createActor() {
     vm.assume(_validActorAddress(msg.sender));
     currentActor = msg.sender;
-    _actors.add(msg.sender);
+    actors.add(msg.sender);
     _;
   }
 
   modifier maybeCreateVoter() {
-    if (_proposals.length() == 0) _voters.add(currentActor);
+    if (proposals.length() == 0) voters.add(currentActor);
     _;
   }
 
   modifier useActor(uint256 actorIndexSeed) {
-    currentActor = _randAdress(_actors, actorIndexSeed);
+    currentActor = _randAdress(actors, actorIndexSeed);
     _;
   }
 
   modifier useVoter(uint256 _voterSeed) {
-    currentActor = _randAdress(_voters, _voterSeed);
+    currentActor = _randAdress(voters, _voterSeed);
     _;
   }
 
@@ -91,12 +102,12 @@ contract FlexVotingClientHandler is Test {
   }
 
   function lastProposal() external returns (uint256) {
-    return _proposals.at(_proposals.length() - 1);
+    return proposals.at(proposals.length() - 1);
   }
 
   function _randProposal(uint256 _seed) internal returns (uint256) {
-    uint256 len = _proposals.length();
-    return len > 0 ? _proposals.at(_seed % len) : 0;
+    uint256 len = proposals.length();
+    return len > 0 ? proposals.at(_seed % len) : 0;
   }
 
   function _validActorAddress(address _user) internal returns (bool) {
@@ -111,8 +122,12 @@ contract FlexVotingClientHandler is Test {
     return type(uint128).max - ghost_mintedTokens;
   }
 
-  function proposalLength() public returns(uint256) {
-    return _proposals.length();
+  function proposal(uint256 _index) public returns (uint256) {
+    return proposals.at(_index);
+  }
+
+  function proposalLength() public returns (uint256) {
+    return proposals.length();
   }
 
   // TODO This always creates a new actor. Should it?
@@ -164,7 +179,7 @@ contract FlexVotingClientHandler is Test {
     uint256 _seed
   ) countCall("propose") external {
     // Require there to be depositors.
-    if (_actors.length() < 90) return;
+    if (actors.length() < 90) return;
 
     // Proposal will underflow if we're on the zero block
     if (block.number == 0) vm.roll(1);
@@ -182,7 +197,7 @@ contract FlexVotingClientHandler is Test {
     // Submit the proposal.
     vm.prank(msg.sender);
     uint256 _id = governor.propose(targets, values, calldatas, _proposalName);
-    _proposals.add(_id);
+    proposals.add(_id);
 
     // Roll the clock to get voting started.
     vm.roll(governor.proposalSnapshot(_id) + 1);
@@ -194,7 +209,7 @@ contract FlexVotingClientHandler is Test {
     uint8 _support,
     uint256 _userSeed
   ) useVoter(_userSeed) countCall("expressVote") external {
-    if (_proposals.length() == 0) return;
+    if (proposals.length() == 0) return;
 
     // TODO should we allow people to try to vote with bogus support types?
     _support = uint8(_bound(
@@ -207,19 +222,73 @@ contract FlexVotingClientHandler is Test {
     vm.prank(currentActor);
     flexClient.expressVote(_proposalId, _support);
 
-    ghost_actorProposalVotes[currentActor][_proposalId] += 1;
-    if (ghost_actorProposalVotes[currentActor][_proposalId] > 1) {
+    _pendingVotes[_proposalId].add(currentActor);
+
+    ghost_actorExpressedVotes[currentActor][_proposalId] += 1;
+    if (ghost_actorExpressedVotes[currentActor][_proposalId] > 1) {
       ghost_doubleVoteActors += 1;
     }
   }
 
+  struct CastVoteVars {
+    uint256 initAgainstVotes;
+    uint256 initForVotes;
+    uint256 initAbstainVotes;
+    uint256 newAgainstVotes;
+    uint256 newForVotes;
+    uint256 newAbstainVotes;
+    uint256 voteDelta;
+    uint256 aggDepositWeight;
+  }
+
   function castVote(uint256 _proposalId) countCall("castVote") external {
     // If someone tries to castVotes when there is no proposal it just reverts.
-    if (_proposals.length() == 0) return;
+    if (proposals.length() == 0) return;
+
+    CastVoteVars memory _vars;
 
     _proposalId = _randProposal(_proposalId);
+
+    (
+      _vars.initAgainstVotes,
+      _vars.initForVotes,
+      _vars.initAbstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
     vm.prank(msg.sender);
     flexClient.castVote(_proposalId);
+
+    (
+      _vars.newAgainstVotes,
+      _vars.newForVotes,
+      _vars.newAbstainVotes
+    ) = governor.proposalVotes(_proposalId);
+
+    // The voters who just had votes cast for them.
+    EnumerableSet.AddressSet storage _voters = _pendingVotes[_proposalId];
+
+    // The aggregate voting weight just cast.
+    _vars.voteDelta = (
+      _vars.newAgainstVotes + _vars.newForVotes + _vars.newAbstainVotes
+    ) - (
+      _vars.initAgainstVotes + _vars.initForVotes + _vars.initAbstainVotes
+    );
+    ghost_votesCast[_proposalId] += _vars.voteDelta;
+
+    // The aggregate deposit weight just cast.
+    for (uint256 i; i < _voters.length(); i++) {
+      address _voter = _voters.at(i);
+      // TODO Can this be done with internal accounting?
+      // We need deposits less withdrawals for the user AT proposal time
+      _vars.aggDepositWeight += flexClient.getPastRawBalance(
+        _voter,
+        governor.proposalSnapshot(_proposalId)
+      );
+    }
+    ghost_depositsCast[_proposalId] += _vars.aggDepositWeight;
+
+    // Delete the pending votes.
+    delete _pendingVotes[_proposalId];
   }
 
   function callSummary() external {
@@ -231,21 +300,23 @@ contract FlexVotingClientHandler is Test {
     console2.log("castVote:", calls["castVote"].count);
     console2.log("propose:", calls["propose"].count);
     console2.log("-------------------");
-    console2.log("actor count:", _actors.length());
-    console2.log("voter count:", _voters.length());
-    console2.log("proposal count:", _proposals.length());
+    console2.log("actor count:", actors.length());
+    console2.log("voter count:", voters.length());
+    console2.log("proposal count:", proposals.length());
     console2.log("amount deposited:", ghost_depositSum);
     console2.log("amount withdrawn:", ghost_withdrawSum);
     console2.log("amount remaining:", _remainingTokens());
     console2.log("-------------------");
-    for (uint256 i; i < _proposals.length(); i++) {
-      uint256 _proposalId = _proposals.at(i);
+    for (uint256 i; i < proposals.length(); i++) {
+      uint256 _proposalId = proposals.at(i);
       (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
         governor.proposalVotes(_proposalId);
       console2.log("proposal", i);
-      console2.log("  forVotes", _forVotes);
+      console2.log("  forVotes    ", _forVotes);
       console2.log("  againstVotes", _againstVotes);
       console2.log("  abstainVotes", _abstainVotes);
+      console2.log("  votesCast   ", ghost_votesCast[_proposalId]);
+      console2.log("  depositsCast", ghost_depositsCast[_proposalId]);
     }
     console2.log("-------------------");
 
