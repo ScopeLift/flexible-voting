@@ -238,6 +238,16 @@ contract FlexVotingClientHandler is Test {
     console2.log("amount withdrawn:", ghost_withdrawSum);
     console2.log("amount remaining:", _remainingTokens());
     console2.log("-------------------");
+    for (uint256 i; i < _proposals.length(); i++) {
+      uint256 _proposalId = _proposals.at(i);
+      (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+        governor.proposalVotes(_proposalId);
+      console2.log("proposal", i);
+      console2.log("  forVotes", _forVotes);
+      console2.log("  againstVotes", _againstVotes);
+      console2.log("  abstainVotes", _abstainVotes);
+    }
+    console2.log("-------------------");
 
   }
 }
