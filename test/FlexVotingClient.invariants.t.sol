@@ -49,37 +49,6 @@ contract FlexVotingInvariantTest is Test {
     targetContract(address(handler));
   }
 
-  // function test_withdraw() public {
-  //   uint256 _userSeed = 1; // There's only one actor, so it doesn't matter.
-  //   uint128 _amount = 42424242;
-  //   handler.deposit(_amount);
-  //
-  //   // Deposits can be withdrawn from the flexClient through the handler.
-  //   handler.withdraw(_userSeed, _amount / 2);
-  //   assertEq(handler.ghost_depositSum(), _amount);
-  //   assertEq(handler.ghost_withdrawSum(), _amount / 2);
-  //   assertEq(flexClient.deposits(address(this)), _amount / 2);
-  //   assertEq(token.balanceOf(address(this)), _amount / 2);
-  //
-  //   handler.withdraw(_userSeed, _amount / 2);
-  //   assertEq(handler.ghost_withdrawSum(), _amount);
-  //   assertEq(token.balanceOf(address(this)), _amount);
-  //   assertEq(flexClient.deposits(address(this)), 0);
-  // }
-  //
-  // function test_withdrawAmountIsBounded() public {
-  //   uint256 _userSeed = 1; // There's only one actor, so it doesn't matter.
-  //   uint128 _amount = 42424242;
-  //   handler.deposit(_amount);
-  //
-  //   // Try to withdraw a crazy amount, it won't revert.
-  //   handler.withdraw(_userSeed, uint208(type(uint128).max));
-  //   assert(token.balanceOf(address(this)) > 0);
-  //   assert(token.balanceOf(address(this)) < _amount);
-  //   assert(flexClient.deposits(address(this)) > 0);
-  //   assert(flexClient.deposits(address(this)) < _amount);
-  // }
-  //
   // function testFuzz_expressVote(
   //   uint256 _userSeed,
   //   uint256 _proposalId,
@@ -337,6 +306,65 @@ contract Deposit is FlexVotingClientHandlerTest {
     handler.deposit(_amount);
     vm.stopPrank();
 
+    if (_amount > handler.MAX_TOKENS()) {
+      assert(flexClient.deposits(_user) < _amount);
+    }
+
     assert(handler.ghost_mintedTokens() <= handler.MAX_TOKENS());
+  }
+}
+
+contract Withdraw is FlexVotingClientHandlerTest {
+  function testFuzz_withdraw(uint208 _amount) public {
+    address _user = _bytesToUser(abi.encodePacked(_amount));
+    _amount = uint208(bound(_amount, 1, handler.MAX_TOKENS()));
+
+    // There's only one actor, so seed doesn't matter.
+    uint256 _userSeed = uint256(_amount);
+
+    vm.startPrank(_user);
+    handler.deposit(_amount);
+    vm.stopPrank();
+
+    uint208 _initAmount = _amount / 3;
+
+    // Deposits can be withdrawn from the flexClient through the handler.
+    vm.startPrank(_user);
+    vm.expectCall(
+      address(flexClient),
+      abi.encodeCall(flexClient.withdraw, _initAmount)
+    );
+    handler.withdraw(_userSeed, _initAmount);
+    vm.stopPrank();
+
+    assertEq(handler.ghost_depositSum(), _amount);
+    assertEq(handler.ghost_withdrawSum(), _initAmount);
+    assertEq(handler.ghost_accountDeposits(_user), _amount - _initAmount);
+    assertEq(flexClient.deposits(_user), _amount - _initAmount);
+    assertEq(token.balanceOf(_user), _initAmount);
+
+    vm.startPrank(_user);
+    handler.withdraw(_userSeed, _amount - _initAmount);
+    vm.stopPrank();
+
+    assertEq(handler.ghost_withdrawSum(), _amount);
+    assertEq(handler.ghost_accountDeposits(_user), 0);
+    assertEq(token.balanceOf(_user), _amount);
+    assertEq(flexClient.deposits(_user), 0);
+  }
+
+  function testFuzz_amountIsBounded(uint208 _amount) public {
+    address _user = _bytesToUser(abi.encodePacked(_amount));
+    // There's only one actor, so seed doesn't matter.
+    uint256 _userSeed = uint256(_amount);
+
+    // Try to withdraw a crazy amount, it won't revert.
+    vm.startPrank(_user);
+    handler.deposit(_amount);
+    handler.withdraw(_userSeed, type(uint208).max);
+    vm.stopPrank();
+
+    assert(token.balanceOf(_user) <= _amount);
+    assertTrue(flexClient.deposits(_user) <= _amount);
   }
 }

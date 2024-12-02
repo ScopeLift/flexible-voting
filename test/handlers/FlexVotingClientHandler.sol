@@ -184,8 +184,9 @@ contract FlexVotingClientHandler is Test {
     //   or we could let the caller attempt to withdraw any uint208
     _amount = uint208(_bound(_amount, 0, ghost_accountDeposits[currentActor]));
 
-    vm.prank(currentActor);
+    vm.startPrank(currentActor);
     flexClient.withdraw(_amount);
+    vm.stopPrank();
 
     ghost_withdrawSum += _amount;
     ghost_accountDeposits[currentActor] -= uint128(_amount);
