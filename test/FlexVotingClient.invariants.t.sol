@@ -49,22 +49,47 @@ contract FlexVotingInvariantTest is Test {
     targetContract(address(handler));
   }
 
-  // function test_multipleProposals() public {
-  //   assertEq(handler.proposalLength(), 0);
-  //   handler.propose("capital idea 'ol chap", 42424242);
-  //   assertEq(handler.proposalLength(), 1);
-  //   handler.propose("we should do dis", 1702);
-  //   assertEq(handler.proposalLength(), 2);
-  //   handler.propose("yuge, beautiful proposal", 5927392);
-  //   assertEq(handler.proposalLength(), 3);
-  //   handler.propose("a modest proposal", 1111111);
-  //   assertEq(handler.proposalLength(), 4);
-  //
-  //   // After 4 proposals we stop adding new ones. The call doesn't revert.
-  //   handler.propose("yessiree bob", 7777777);
-  //   assertEq(handler.proposalLength(), 4);
-  // }
-  //
+  function _bytesToUser(bytes memory _entropy) internal returns (address) {
+    return address(uint160(uint256(keccak256(_entropy))));
+  }
+
+  function _makeActors(uint256 _seed, uint256 _n) internal {
+    for (uint256 i; i < _n; i++) {
+      address _randUser = _bytesToUser(abi.encodePacked(_seed, _n, i));
+      uint208 _amount = uint208(bound(_seed, 1, handler.remainingTokens() / _n));
+      vm.startPrank(_randUser);
+      handler.deposit(_amount);
+      vm.stopPrank();
+    }
+  }
+
+  function testFuzz_multipleProposals(uint256 _seed) public {
+    // No proposal is created if there are no actors.
+    assertEq(handler.proposalLength(), 0);
+    handler.propose("capital idea 'ol chap", 42424242);
+    assertEq(handler.proposalLength(), 0);
+
+    // A critical mass of actors is required.
+    _makeActors(_seed, 90);
+    handler.propose("capital idea 'ol chap", 42424242);
+    assertEq(handler.proposalLength(), 1);
+
+    // We cap the number of proposals.
+    handler.propose("we should do dis", 1702);
+    assertEq(handler.proposalLength(), 2);
+    handler.propose("yuge, beautiful proposal", 5927392);
+    assertEq(handler.proposalLength(), 3);
+    handler.propose("a modest proposal", 1111111);
+    assertEq(handler.proposalLength(), 4);
+    handler.propose("yessiree bob", 7777777);
+    assertEq(handler.proposalLength(), 5);
+
+    // After 5 proposals we stop adding new ones.
+    // The call doesn't revert.
+    handler.propose("this will be a no-op", 1029384756);
+    assertEq(handler.proposalLength(), 5);
+  }
+
   // function test_deposit() public {
   //   uint128 _amount = 42424242;
   //

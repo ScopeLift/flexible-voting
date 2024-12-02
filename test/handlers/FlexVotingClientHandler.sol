@@ -96,6 +96,10 @@ contract FlexVotingClientHandler is Test {
     _;
   }
 
+  function testhook_makeActor() createActor external returns (address) {
+    return currentActor;
+  }
+
   function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed) internal returns (address) {
     uint256 len = _addressSet.length();
     return len > 0 ?  _addressSet.at(_seed % len) : address(0);
@@ -118,7 +122,7 @@ contract FlexVotingClientHandler is Test {
       _user != address(token);
   }
 
-  function _remainingTokens() internal returns (uint128) {
+  function remainingTokens() public returns (uint128) {
     return type(uint128).max - ghost_mintedTokens;
   }
 
@@ -134,11 +138,11 @@ contract FlexVotingClientHandler is Test {
   function deposit(
     uint208 _amount
   ) createActor maybeCreateVoter countCall("deposit") external {
-    vm.assume(_remainingTokens() > 0);
-    _amount = uint208(_bound(_amount, 0, _remainingTokens()));
+    vm.assume(remainingTokens() > 0);
+    _amount = uint208(_bound(_amount, 0, remainingTokens()));
 
     // Some actors won't have the tokens they need. This is deliberate.
-    if (_amount <= _remainingTokens()) {
+    if (_amount <= remainingTokens()) {
       token.exposed_mint(currentActor, _amount);
       ghost_mintedTokens += uint128(_amount);
     }
@@ -305,7 +309,7 @@ contract FlexVotingClientHandler is Test {
     console2.log("proposal count:", proposals.length());
     console2.log("amount deposited:", ghost_depositSum);
     console2.log("amount withdrawn:", ghost_withdrawSum);
-    console2.log("amount remaining:", _remainingTokens());
+    console2.log("amount remaining:", remainingTokens());
     console2.log("-------------------");
     for (uint256 i; i < proposals.length(); i++) {
       uint256 _proposalId = proposals.at(i);
