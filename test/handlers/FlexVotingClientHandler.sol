@@ -25,6 +25,8 @@ contract FlexVotingClientHandler is Test {
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
 
+  uint128 public MAX_TOKENS = type(uint128).max;
+
   EnumerableSet.UintSet internal proposals;
   EnumerableSet.AddressSet internal voters;
   EnumerableSet.AddressSet internal actors;
@@ -106,7 +108,18 @@ contract FlexVotingClientHandler is Test {
   }
 
   function lastProposal() external returns (uint256) {
+    if (proposals.length() == 0) return 0;
     return proposals.at(proposals.length() - 1);
+  }
+
+  function lastActor() external returns (address) {
+    if (actors.length() == 0) return address(0);
+    return actors.at(actors.length() - 1);
+  }
+
+  function lastVoter() external returns (address) {
+    if (voters.length() == 0) return address(0);
+    return voters.at(voters.length() - 1);
   }
 
   function _randProposal(uint256 _seed) internal returns (uint256) {
@@ -123,7 +136,7 @@ contract FlexVotingClientHandler is Test {
   }
 
   function remainingTokens() public returns (uint128) {
-    return type(uint128).max - ghost_mintedTokens;
+    return MAX_TOKENS - ghost_mintedTokens;
   }
 
   function proposal(uint256 _index) public returns (uint256) {
@@ -148,7 +161,7 @@ contract FlexVotingClientHandler is Test {
     }
 
     vm.startPrank(currentActor);
-    // TODO we're pre-approving every depositi, should we?
+    // TODO we're pre-approving every deposit, should we?
     token.approve(address(flexClient), uint256(_amount));
     flexClient.deposit(_amount);
     vm.stopPrank();
@@ -181,13 +194,13 @@ contract FlexVotingClientHandler is Test {
   function propose(
     string memory _proposalName,
     uint256 _seed
-  ) countCall("propose") external {
+  ) countCall("propose") external returns (uint256 _proposalId) {
     // Require there to be depositors.
-    if (actors.length() < 90) return;
+    if (actors.length() < 90) return 0;
 
     // Proposal will underflow if we're on the zero block
     if (block.number == 0) vm.roll(1);
-    if (this.proposalLength() > 4) return;
+    if (this.proposalLength() > 4) return 0;
 
     // Create a proposal
     bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
@@ -200,11 +213,11 @@ contract FlexVotingClientHandler is Test {
 
     // Submit the proposal.
     vm.prank(msg.sender);
-    uint256 _id = governor.propose(targets, values, calldatas, _proposalName);
-    proposals.add(_id);
+    _proposalId = governor.propose(targets, values, calldatas, _proposalName);
+    proposals.add(_proposalId);
 
     // Roll the clock to get voting started.
-    vm.roll(governor.proposalSnapshot(_id) + 1);
+    vm.roll(governor.proposalSnapshot(_proposalId) + 1);
   }
 
   // TODO restrict expressVote to addresses that deposited BEFORE proposal.
