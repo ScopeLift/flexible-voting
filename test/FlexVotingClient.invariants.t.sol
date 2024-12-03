@@ -49,37 +49,6 @@ contract FlexVotingInvariantTest is Test {
     targetContract(address(handler));
   }
 
-  // function testFuzz_expressVote(
-  //   uint256 _userSeed,
-  //   uint256 _proposalId,
-  //   uint128 _amount
-  // ) public {
-  //   _amount = uint128(bound(_amount, 1, type(uint128).max));
-  //   uint8 _voteType = uint8(GCF.VoteType.For);
-  //
-  //   vm.expectRevert(bytes("no weight"));
-  //   handler.expressVote(_proposalId, _voteType, _userSeed);
-  //
-  //   handler.deposit(_amount);
-  //
-  //   vm.expectRevert(bytes("no weight"));
-  //   handler.expressVote(_proposalId, _voteType, _userSeed);
-  //
-  //   // There needs to be a proposal.
-  //   handler.propose("a beautiful proposal", 5927392);
-  //
-  //   // Express vote on the handler passes through to the client.
-  //   handler.expressVote(_proposalId, _voteType, _userSeed);
-  //   _proposalId = handler.lastProposal();
-  //   (,uint128 _forVotes,) = flexClient.proposalVotes(_proposalId);
-  //   assertEq(_forVotes, _amount);
-  //   vm.expectRevert(bytes("already voted"));
-  //   handler.expressVote(_proposalId, _voteType, _userSeed);
-  //
-  //   // Internal accounting is correct.
-  //   assertEq(handler.ghost_actorProposalVotes(address(this), _proposalId), 1);
-  // }
-  //
   // function testFuzz_castVote(
   //   uint256 _proposalSeed,
   //   uint256 _userSeed,
@@ -365,5 +334,70 @@ contract Withdraw is FlexVotingClientHandlerTest {
 
     assert(token.balanceOf(_user) <= _amount);
     assertTrue(flexClient.deposits(_user) <= _amount);
+  }
+}
+
+contract ExpressVote is FlexVotingClientHandlerTest {
+  function testFuzz_hasInternalAccounting(
+    uint256 _userSeed,
+    uint256 _proposalId,
+    uint8 _voteType,
+    uint128 _amount
+  ) public {
+    address _user = _bytesToUser(abi.encodePacked(_userSeed));
+    // We need actors to cross the proposal threshold on expressVote.
+    uint128 _actorCount = 89;
+    uint128 _reserved = _actorCount * 1e24; // Tokens for other actors.
+    _amount = uint128(bound(_amount, 1, handler.MAX_TOKENS() - _reserved));
+    _voteType = uint8(_bound(
+      uint256(_voteType),
+      uint256(type(GCF.VoteType).min),
+      uint256(type(GCF.VoteType).max)
+    ));
+
+    _makeActors(_reserved / _actorCount, _actorCount);
+
+    vm.startPrank(_user);
+    handler.deposit(_amount);
+    _actorCount += 1; // Deposit adds an actor/voter.
+
+    // There's no proposal, so this should be a no-op.
+    handler.expressVote(_proposalId, _voteType, _userSeed);
+    assertFalse(handler.hasPendingVotes(_user, _proposalId));
+    assertEq(
+      handler.ghost_actorExpressedVotes(_user, _proposalId),
+      0
+    );
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      flexClient.proposalVotes(_proposalId);
+    assertEq(_againstVotes, 0);
+    assertEq(_forVotes, 0);
+    assertEq(_abstainVotes, 0);
+
+    _proposalId = handler.propose("a beautiful proposal");
+
+    // This seed that allows us to force use of the voter we want.
+    uint256 _seedForVoter = _actorCount - 1; // e.g. 89 % 90 = 89
+
+    // Finally, we can call expressVote.
+    vm.expectCall(
+      address(flexClient),
+      abi.encodeCall(flexClient.expressVote, (_proposalId, _voteType))
+    );
+    handler.expressVote(_proposalId, _voteType, _seedForVoter);
+    assertTrue(handler.hasPendingVotes(_user, _proposalId));
+    assertEq(handler.ghost_actorExpressedVotes(_user, _proposalId), 1);
+
+    // The vote preference should have been recorded by the client.
+    (_againstVotes, _forVotes, _abstainVotes) = flexClient.proposalVotes(_proposalId);
+    if (_voteType == uint8(GCF.VoteType.Against)) assertEq(_amount, _againstVotes);
+    if (_voteType == uint8(GCF.VoteType.For)) assertEq(_amount, _forVotes);
+    if (_voteType == uint8(GCF.VoteType.Abstain)) assertEq(_amount, _abstainVotes);
+
+    // The user should not be able to vote again.
+    vm.expectRevert(bytes("already voted"));
+    handler.expressVote(_proposalId, _voteType, _seedForVoter);
+
+    vm.stopPrank();
   }
 }

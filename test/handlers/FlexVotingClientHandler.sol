@@ -34,7 +34,7 @@ contract FlexVotingClientHandler is Test {
 
   // Maps proposalIds to sets of users that have expressed votes but not yet had
   // them cast.
-  mapping(uint256 => EnumerableSet.AddressSet) internal _pendingVotes;
+  mapping(uint256 => EnumerableSet.AddressSet) internal pendingVotes;
 
   // Maps proposalId to votes cast by this contract on the proposal.
   mapping(uint256 => uint256) public ghost_votesCast;
@@ -100,6 +100,10 @@ contract FlexVotingClientHandler is Test {
 
   function testhook_makeActor() createActor external returns (address) {
     return currentActor;
+  }
+
+  function hasPendingVotes(address _user, uint256 _proposalId) external returns (bool) {
+    return pendingVotes[_proposalId].contains(_user);
   }
 
   function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed) internal returns (address) {
@@ -222,7 +226,7 @@ contract FlexVotingClientHandler is Test {
 
   // TODO restrict expressVote to addresses that deposited BEFORE proposal.
   function expressVote(
-    uint256 _proposalId,
+    uint256 _proposalSeed,
     uint8 _support,
     uint256 _userSeed
   ) useVoter(_userSeed) countCall("expressVote") external {
@@ -235,11 +239,12 @@ contract FlexVotingClientHandler is Test {
       uint256(type(GCF.VoteType).max)
     ));
     // TODO should users only express on proposals created after they had deposits?
-    _proposalId = _randProposal(_proposalId);
-    vm.prank(currentActor);
+    uint256 _proposalId = _randProposal(_proposalSeed);
+    vm.startPrank(currentActor);
     flexClient.expressVote(_proposalId, _support);
+    vm.stopPrank();
 
-    _pendingVotes[_proposalId].add(currentActor);
+    pendingVotes[_proposalId].add(currentActor);
 
     ghost_actorExpressedVotes[currentActor][_proposalId] += 1;
     if (ghost_actorExpressedVotes[currentActor][_proposalId] > 1) {
@@ -282,7 +287,7 @@ contract FlexVotingClientHandler is Test {
     ) = governor.proposalVotes(_proposalId);
 
     // The voters who just had votes cast for them.
-    EnumerableSet.AddressSet storage _voters = _pendingVotes[_proposalId];
+    EnumerableSet.AddressSet storage _voters = pendingVotes[_proposalId];
 
     // The aggregate voting weight just cast.
     _vars.voteDelta = (
@@ -305,7 +310,7 @@ contract FlexVotingClientHandler is Test {
     ghost_depositsCast[_proposalId] += _vars.aggDepositWeight;
 
     // Delete the pending votes.
-    delete _pendingVotes[_proposalId];
+    delete pendingVotes[_proposalId];
   }
 
   function callSummary() external {
