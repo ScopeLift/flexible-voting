@@ -193,8 +193,7 @@ contract FlexVotingClientHandler is Test {
   }
 
   function propose(
-    string memory _proposalName,
-    uint256 _seed
+    string memory _proposalName
   ) countCall("propose") external returns (uint256 _proposalId) {
     // Require there to be depositors.
     if (actors.length() < 90) return 0;

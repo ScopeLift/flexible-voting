@@ -176,27 +176,27 @@ contract Propose is FlexVotingClientHandlerTest {
   function testFuzz_multipleProposals(uint256 _seed) public {
     // No proposal is created if there are no actors.
     assertEq(handler.proposalLength(), 0);
-    handler.propose("capital idea 'ol chap", 42424242);
+    handler.propose("capital idea 'ol chap");
     assertEq(handler.proposalLength(), 0);
 
     // A critical mass of actors is required.
     _makeActors(_seed, 90);
-    handler.propose("capital idea 'ol chap", 42424242);
+    handler.propose("capital idea 'ol chap");
     assertEq(handler.proposalLength(), 1);
 
     // We cap the number of proposals.
-    handler.propose("we should do dis", 1702);
+    handler.propose("we should do dis");
     assertEq(handler.proposalLength(), 2);
-    handler.propose("yuge, beautiful proposal", 5927392);
+    handler.propose("yuge, beautiful proposal");
     assertEq(handler.proposalLength(), 3);
-    handler.propose("a modest proposal", 1111111);
+    handler.propose("a modest proposal");
     assertEq(handler.proposalLength(), 4);
-    handler.propose("yessiree bob", 7777777);
+    handler.propose("yessiree bob");
     assertEq(handler.proposalLength(), 5);
 
     // After 5 proposals we stop adding new ones.
     // The call doesn't revert.
-    handler.propose("this will be a no-op", 1029384756);
+    handler.propose("this will be a no-op");
     assertEq(handler.proposalLength(), 5);
   }
 }
@@ -271,9 +271,8 @@ contract Deposit is FlexVotingClientHandlerTest {
     assertEq(handler.lastVoter(), _userA);
 
     // Create a proposal.
-    uint256 _seed = uint256(_amountA);
     _makeActors(_remaining / 89, 89);
-    uint256 _proposalId = handler.propose("jolly good idea", _seed);
+    uint256 _proposalId = handler.propose("jolly good idea");
     assertEq(handler.lastProposal(), _proposalId);
 
     // New depositors are no longer considered "voters".
