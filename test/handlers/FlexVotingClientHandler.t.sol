@@ -6,6 +6,9 @@ import {FlexVotingInvariantSetup} from "test/FlexVotingClient.invariants.t.sol";
 import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
+  // Amounts evenly divisible by 9 do not create new users.
+  uint256 MAGIC_NUMBER = 9;
+
   function _bytesToUser(bytes memory _entropy) internal pure returns (address) {
     return address(uint160(uint256(keccak256(_entropy))));
   }
@@ -14,6 +17,8 @@ contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
     for (uint256 i; i < _n; i++) {
       address _randUser = _bytesToUser(abi.encodePacked(_seed, _n, i));
       uint208 _amount = uint208(bound(_seed, 1, handler.remainingTokens() / _n));
+      // We want to create new users.
+      if (_amount % MAGIC_NUMBER == 0) _amount += 1;
       vm.startPrank(_randUser);
       handler.deposit(_amount);
       vm.stopPrank();
@@ -35,7 +40,7 @@ contract Propose is FlexVotingClientHandlerTest {
     assertEq(handler.proposalLength(), 0);
 
     // A critical mass of actors is required.
-    _makeActors(_seed, 90);
+    _makeActors(_seed, handler.PROPOSAL_THRESHOLD());
     handler.propose("capital idea 'ol chap");
     assertEq(handler.proposalLength(), 1);
 
@@ -104,6 +109,8 @@ contract Deposit is FlexVotingClientHandlerTest {
     uint128 _remaining = handler.MAX_TOKENS() - _reservedForOtherActors;
     _amountA = uint128(bound(_amountA, 1, _remaining - 1));
     _amountB = uint128(bound(_amountB, 1, _remaining - _amountA));
+    if (_amountA % MAGIC_NUMBER == 0) _amountA -= 1;
+    if (_amountB % MAGIC_NUMBER == 0) _amountB -= 1;
 
     assertEq(handler.lastProposal(), 0);
     assertEq(handler.lastVoter(), address(0));
@@ -117,7 +124,7 @@ contract Deposit is FlexVotingClientHandlerTest {
     assertEq(handler.lastVoter(), _userA);
 
     // Create a proposal.
-    _makeActors(_remaining / 89, 89);
+    _makeActors(_remaining / handler.PROPOSAL_THRESHOLD(), handler.PROPOSAL_THRESHOLD());
     uint256 _proposalId = handler.propose("jolly good idea");
     assertEq(handler.lastProposal(), _proposalId);
 
@@ -219,9 +226,10 @@ contract ExpressVote is FlexVotingClientHandlerTest {
   ) public {
     address _user = _bytesToUser(abi.encodePacked(_userSeed));
     // We need actors to cross the proposal threshold on expressVote.
-    uint128 _actorCount = 89;
+    uint128 _actorCount = handler.PROPOSAL_THRESHOLD() - 1;
     uint128 _reserved = _actorCount * 1e24; // Tokens for other actors.
     _amount = uint128(bound(_amount, 1, handler.MAX_TOKENS() - _reserved));
+    if (_amount % MAGIC_NUMBER == 0) _amount -= 1;
     _voteType = _validVoteType(_voteType);
 
     _makeActors(_reserved / _actorCount, _actorCount);
@@ -282,7 +290,7 @@ contract CastVote is FlexVotingClientHandlerTest {
   ) public {
     _voteType = _validVoteType(_voteType);
     // We need actors to cross the proposal threshold on expressVote.
-    uint128 _actorCount = 90;
+    uint128 _actorCount = handler.PROPOSAL_THRESHOLD();
     uint128 _voteSize = 1e24;
     uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
     _makeActors(_reserved / _actorCount, _actorCount);
@@ -316,13 +324,15 @@ contract CastVote is FlexVotingClientHandlerTest {
     uint8 _voteTypeB
   ) public {
     // We need actors to cross the proposal threshold on expressVote.
-    uint128 _actorCount = 90;
+    uint128 _actorCount = handler.PROPOSAL_THRESHOLD();
     uint128 _voteSize = 1e24;
     uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
-    _makeActors(_reserved / _actorCount, _actorCount);
+    _makeActors(_voteSize, _actorCount);
 
     _weightA = uint128(bound(_weightA, 1, handler.MAX_TOKENS() - _reserved - 1));
     _weightB = uint128(bound(_weightB, 1, handler.MAX_TOKENS() - _reserved - _weightA));
+    if (_weightA % MAGIC_NUMBER == 0) _weightA -= 1;
+    if (_weightB % MAGIC_NUMBER == 0) _weightB -= 1;
 
     address _alice = makeAddr("alice");
     vm.startPrank(_alice);
@@ -375,13 +385,15 @@ contract CastVote is FlexVotingClientHandlerTest {
     uint8 _voteTypeB
   ) public {
     // We need actors to cross the proposal threshold on expressVote.
-    uint128 _actorCount = 90;
+    uint128 _actorCount = handler.PROPOSAL_THRESHOLD();
     uint128 _voteSize = 1e24;
     uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
     _makeActors(_reserved / _actorCount, _actorCount);
 
     _weightA = uint128(bound(_weightA, 1, handler.MAX_TOKENS() - _reserved - 1));
     _weightB = uint128(bound(_weightB, 1, handler.MAX_TOKENS() - _reserved - _weightA));
+    if (_weightA % MAGIC_NUMBER == 0) _weightA -= 1;
+    if (_weightB % MAGIC_NUMBER == 0) _weightB -= 1;
 
     address _alice = makeAddr("alice");
     vm.startPrank(_alice);
@@ -445,7 +457,7 @@ contract CastVote is FlexVotingClientHandlerTest {
     uint8 _voteTypeA
   ) public {
     // We need actors to cross the proposal threshold on expressVote.
-    uint128 _actorCount = 90;
+    uint128 _actorCount = handler.PROPOSAL_THRESHOLD();
     uint128 _voteSize = 1e24;
     uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
     _makeActors(_reserved / _actorCount, _actorCount);
@@ -458,6 +470,8 @@ contract CastVote is FlexVotingClientHandlerTest {
     uint128 _remainingTokens = handler.MAX_TOKENS() - _reserved;
     _weightA = uint128(bound(_weightA, (_remainingTokens / 2) + 1, _remainingTokens - 1));
     _weightB = uint128(bound(_weightB, 1, _remainingTokens - _weightA));
+    if (_weightA % MAGIC_NUMBER == 0) _weightA -= 1;
+    if (_weightB % MAGIC_NUMBER == 0) _weightB -= 1;
 
     address _alice = makeAddr("alice");
     vm.startPrank(_alice);

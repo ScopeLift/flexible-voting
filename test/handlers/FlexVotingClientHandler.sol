@@ -25,6 +25,10 @@ contract FlexVotingClientHandler is Test {
 
   uint128 public MAX_TOKENS = type(uint128).max;
 
+  // The number of actors that must exist before we allow a proposal to be
+  // created.
+  uint8 public PROPOSAL_THRESHOLD = 70;
+
   EnumerableSet.UintSet internal proposals;
   EnumerableSet.AddressSet internal voters;
   EnumerableSet.AddressSet internal actors;
@@ -74,10 +78,18 @@ contract FlexVotingClientHandler is Test {
     _;
   }
 
-  modifier createActor() {
+  modifier maybeCreateActor(uint256 _seed) {
     vm.assume(_validActorAddress(msg.sender));
-    currentActor = msg.sender;
-    actors.add(msg.sender);
+
+    if (actors.length() > 0 && _seed % 9 == 0) {
+      // Use an existing actor 10% of the time.
+      currentActor = _randAddress(actors, _seed);
+    } else {
+      // Create a new actor 90% of the time.
+      currentActor = msg.sender;
+      actors.add(msg.sender);
+    }
+
     _;
   }
 
@@ -163,8 +175,17 @@ contract FlexVotingClientHandler is Test {
     return proposals.length();
   }
 
+  function actorsLength() public view returns (uint256) {
+    return actors.length();
+  }
+
   // TODO This always creates a new actor. Should it?
-  function deposit(uint208 _amount) external createActor maybeCreateVoter countCall("deposit") {
+  function deposit(uint208 _amount)
+    external
+    maybeCreateActor(_amount)
+    maybeCreateVoter
+    countCall("deposit")
+  {
     vm.assume(remainingTokens() > 0);
     _amount = uint208(_bound(_amount, 0, remainingTokens()));
 
@@ -209,7 +230,7 @@ contract FlexVotingClientHandler is Test {
     returns (uint256 _proposalId)
   {
     // Require there to be depositors.
-    if (actors.length() < 90) return 0;
+    if (actors.length() < PROPOSAL_THRESHOLD) return 0;
 
     // Proposal will underflow if we're on the zero block
     if (block.number == 0) vm.roll(1);
