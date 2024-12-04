@@ -21,11 +21,9 @@ contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
   }
 
   function _validVoteType(uint8 _seed) internal returns (uint8) {
-    return uint8(_bound(
-      uint256(_seed),
-      uint256(type(GCF.VoteType).min),
-      uint256(type(GCF.VoteType).max)
-    ));
+    return uint8(
+      _bound(uint256(_seed), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max))
+    );
   }
 }
 
@@ -65,14 +63,8 @@ contract Deposit is FlexVotingClientHandlerTest {
     assertEq(flexClient.deposits(_user), 0);
 
     vm.startPrank(_user);
-    vm.expectCall(
-      address(flexClient),
-      abi.encodeCall(flexClient.deposit, _amount)
-    );
-    vm.expectCall(
-      address(token),
-      abi.encodeCall(token.approve, (address(flexClient), _amount))
-    );
+    vm.expectCall(address(flexClient), abi.encodeCall(flexClient.deposit, _amount));
+    vm.expectCall(address(token), abi.encodeCall(token.approve, (address(flexClient), _amount)));
     handler.deposit(_amount);
     vm.stopPrank();
 
@@ -85,10 +77,7 @@ contract Deposit is FlexVotingClientHandlerTest {
     address _user = _bytesToUser(abi.encodePacked(_amount));
 
     assertEq(handler.ghost_mintedTokens(), 0);
-    vm.expectCall(
-      address(token),
-      abi.encodeCall(token.exposed_mint, (_user, _amount))
-    );
+    vm.expectCall(address(token), abi.encodeCall(token.exposed_mint, (_user, _amount)));
 
     vm.startPrank(_user);
     handler.deposit(_amount);
@@ -109,10 +98,7 @@ contract Deposit is FlexVotingClientHandlerTest {
     assertEq(handler.lastActor(), _user);
   }
 
-  function testFuzz_tracksVoters(
-    uint128 _amountA,
-    uint128 _amountB
-  ) public {
+  function testFuzz_tracksVoters(uint128 _amountA, uint128 _amountB) public {
     address _userA = makeAddr("userA");
     uint128 _reservedForOtherActors = 1e24;
     uint128 _remaining = handler.MAX_TOKENS() - _reservedForOtherActors;
@@ -165,9 +151,7 @@ contract Deposit is FlexVotingClientHandlerTest {
     handler.deposit(_amount);
     vm.stopPrank();
 
-    if (_amount > handler.MAX_TOKENS()) {
-      assert(flexClient.deposits(_user) < _amount);
-    }
+    if (_amount > handler.MAX_TOKENS()) assert(flexClient.deposits(_user) < _amount);
 
     assert(handler.ghost_mintedTokens() <= handler.MAX_TOKENS());
   }
@@ -190,10 +174,7 @@ contract Withdraw is FlexVotingClientHandlerTest {
 
     // Deposits can be withdrawn from the flexClient through the handler.
     vm.startPrank(_user);
-    vm.expectCall(
-      address(flexClient),
-      abi.encodeCall(flexClient.withdraw, _initAmount)
-    );
+    vm.expectCall(address(flexClient), abi.encodeCall(flexClient.withdraw, _initAmount));
     handler.withdraw(_userSeed, _initAmount);
     vm.stopPrank();
 
@@ -252,10 +233,7 @@ contract ExpressVote is FlexVotingClientHandlerTest {
     // There's no proposal, so this should be a no-op.
     handler.expressVote(_proposalId, _voteType, _userSeed);
     assertFalse(handler.hasPendingVotes(_user, _proposalId));
-    assertEq(
-      handler.ghost_actorExpressedVotes(_user, _proposalId),
-      0
-    );
+    assertEq(handler.ghost_actorExpressedVotes(_user, _proposalId), 0);
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       flexClient.proposalVotes(_proposalId);
     assertEq(_againstVotes, 0);
@@ -269,8 +247,7 @@ contract ExpressVote is FlexVotingClientHandlerTest {
 
     // Finally, we can call expressVote.
     vm.expectCall(
-      address(flexClient),
-      abi.encodeCall(flexClient.expressVote, (_proposalId, _voteType))
+      address(flexClient), abi.encodeCall(flexClient.expressVote, (_proposalId, _voteType))
     );
     handler.expressVote(_proposalId, _voteType, _seedForVoter);
     assertTrue(handler.hasPendingVotes(_user, _proposalId));
@@ -291,9 +268,7 @@ contract ExpressVote is FlexVotingClientHandlerTest {
 }
 
 contract CastVote is FlexVotingClientHandlerTest {
-  function testFuzz_doesNotRequireProposalToExist(
-    uint256 _proposalSeed
-  ) public {
+  function testFuzz_doesNotRequireProposalToExist(uint256 _proposalSeed) public {
     assertEq(handler.lastProposal(), 0);
     // Won't revert even with no votes cast.
     // This avoids uninteresting reverts during invariant runs.
@@ -320,10 +295,7 @@ contract CastVote is FlexVotingClientHandlerTest {
     address _actor = handler.expressVote(_proposalSeed, _voteType, _userSeed);
     assertTrue(handler.hasPendingVotes(_actor, _proposalId));
 
-    vm.expectCall(
-      address(flexClient),
-      abi.encodeCall(flexClient.castVote, _proposalId)
-    );
+    vm.expectCall(address(flexClient), abi.encodeCall(flexClient.castVote, _proposalId));
     handler.castVote(_proposalSeed);
 
     // The actor should no longer have pending votes.
@@ -466,6 +438,7 @@ contract CastVote is FlexVotingClientHandlerTest {
   //   - castVote is called
   //   - ghost_VotesCast should = 40    <-- checks at the governor level
   //   - ghost_DepositsCast should = 40 <-- checks at the client level
+
   function testFuzz_tracksDepositsCast(
     uint256 _proposalSeed,
     uint128 _weightA,
@@ -485,11 +458,7 @@ contract CastVote is FlexVotingClientHandlerTest {
 
     // User B needs to have less weight than User A.
     uint128 _remainingTokens = handler.MAX_TOKENS() - _reserved;
-    _weightA = uint128(bound(
-      _weightA,
-      (_remainingTokens / 2) + 1,
-      _remainingTokens - 1
-    ));
+    _weightA = uint128(bound(_weightA, (_remainingTokens / 2) + 1, _remainingTokens - 1));
     _weightB = uint128(bound(_weightB, 1, _remainingTokens - _weightA));
 
     address _alice = makeAddr("alice");

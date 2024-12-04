@@ -44,6 +44,7 @@ contract FlexVotingClientHandler is Test {
   struct CallCounts {
     uint256 count;
   }
+
   mapping(bytes32 => CallCounts) public calls;
 
   uint256 public ghost_depositSum;
@@ -99,9 +100,12 @@ contract FlexVotingClientHandler is Test {
     return pendingVotes[_proposalId].contains(_user);
   }
 
-  function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed) internal returns (address) {
+  function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed)
+    internal
+    returns (address)
+  {
     uint256 len = _addressSet.length();
-    return len > 0 ?  _addressSet.at(_seed % len) : address(0);
+    return len > 0 ? _addressSet.at(_seed % len) : address(0);
   }
 
   function getProposals() external returns (uint256[] memory) {
@@ -136,6 +140,7 @@ contract FlexVotingClientHandler is Test {
     return len > 0 ? proposals.at(_seed % len) : 0;
   }
 
+  // forgefmt: disable-start
   function _validActorAddress(address _user) internal returns (bool) {
     return _user != address(0) &&
       _user != address(flexClient) &&
@@ -143,6 +148,7 @@ contract FlexVotingClientHandler is Test {
       _user != address(receiver) &&
       _user != address(token);
   }
+  // forgefmt: disable-end
 
   function remainingTokens() public returns (uint128) {
     return MAX_TOKENS - ghost_mintedTokens;
@@ -157,9 +163,7 @@ contract FlexVotingClientHandler is Test {
   }
 
   // TODO This always creates a new actor. Should it?
-  function deposit(
-    uint208 _amount
-  ) createActor maybeCreateVoter countCall("deposit") external {
+  function deposit(uint208 _amount) external createActor maybeCreateVoter countCall("deposit") {
     vm.assume(remainingTokens() > 0);
     _amount = uint208(_bound(_amount, 0, remainingTokens()));
 
@@ -180,13 +184,10 @@ contract FlexVotingClientHandler is Test {
   }
 
   // TODO We restrict withdrawals to addresses that have balances, should we?
-  function withdraw(
-    uint256 _userSeed,
-    uint208 _amount
-  )
+  function withdraw(uint256 _userSeed, uint208 _amount)
+    external
     useActor(_userSeed)
     countCall("withdraw")
-    external
   {
     // TODO We limit withdrawals to the total amount deposited, should we?
     //   instead we could limit the caller to withdraw some portion of its balance
@@ -201,9 +202,11 @@ contract FlexVotingClientHandler is Test {
     ghost_accountDeposits[currentActor] -= uint128(_amount);
   }
 
-  function propose(
-    string memory _proposalName
-  ) countCall("propose") external returns (uint256 _proposalId) {
+  function propose(string memory _proposalName)
+    external
+    countCall("propose")
+    returns (uint256 _proposalId)
+  {
     // Require there to be depositors.
     if (actors.length() < 90) return 0;
 
@@ -231,20 +234,19 @@ contract FlexVotingClientHandler is Test {
 
   // We only allow users to express on proposals created after they had
   // deposits. Should we let other users try to express too?
-  function expressVote(
-    uint256 _proposalSeed,
-    uint8 _support,
-    uint256 _userSeed
-  ) useVoter(_userSeed) countCall("expressVote") external returns (address _actor) {
+  function expressVote(uint256 _proposalSeed, uint8 _support, uint256 _userSeed)
+    external
+    useVoter(_userSeed)
+    countCall("expressVote")
+    returns (address _actor)
+  {
     _actor = currentActor;
-    if (proposals.length() == 0) return(_actor);
+    if (proposals.length() == 0) return (_actor);
 
     // TODO Should we allow people to try to vote with bogus support types?
-    _support = uint8(_bound(
-      uint256(_support),
-      uint256(type(GCF.VoteType).min),
-      uint256(type(GCF.VoteType).max)
-    ));
+    _support = uint8(
+      _bound(uint256(_support), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max))
+    );
     uint256 _proposalId = _randProposal(_proposalSeed);
     vm.startPrank(currentActor);
     flexClient.expressVote(_proposalId, _support);
@@ -266,7 +268,7 @@ contract FlexVotingClientHandler is Test {
     uint256 aggDepositWeight;
   }
 
-  function castVote(uint256 _proposalId) countCall("castVote") external {
+  function castVote(uint256 _proposalId) external countCall("castVote") {
     // If someone tries to castVotes when there is no proposal it just reverts.
     if (proposals.length() == 0) return;
 
@@ -274,31 +276,22 @@ contract FlexVotingClientHandler is Test {
 
     _proposalId = _randProposal(_proposalId);
 
-    (
-      _vars.initAgainstVotes,
-      _vars.initForVotes,
-      _vars.initAbstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (_vars.initAgainstVotes, _vars.initForVotes, _vars.initAbstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     vm.startPrank(msg.sender);
     flexClient.castVote(_proposalId);
     vm.stopPrank();
 
-    (
-      _vars.newAgainstVotes,
-      _vars.newForVotes,
-      _vars.newAbstainVotes
-    ) = governor.proposalVotes(_proposalId);
+    (_vars.newAgainstVotes, _vars.newForVotes, _vars.newAbstainVotes) =
+      governor.proposalVotes(_proposalId);
 
     // The voters who just had votes cast for them.
     EnumerableSet.AddressSet storage _voters = pendingVotes[_proposalId];
 
     // The aggregate voting weight just cast.
-    _vars.voteDelta = (
-      _vars.newAgainstVotes + _vars.newForVotes + _vars.newAbstainVotes
-    ) - (
-      _vars.initAgainstVotes + _vars.initForVotes + _vars.initAbstainVotes
-    );
+    _vars.voteDelta = (_vars.newAgainstVotes + _vars.newForVotes + _vars.newAbstainVotes)
+      - (_vars.initAgainstVotes + _vars.initForVotes + _vars.initAbstainVotes);
     ghost_votesCast[_proposalId] += _vars.voteDelta;
 
     // The aggregate deposit weight just cast.
@@ -306,10 +299,8 @@ contract FlexVotingClientHandler is Test {
       address _voter = _voters.at(i);
       // TODO Can this be done with internal accounting?
       // We need deposits less withdrawals for the user AT proposal time.
-      _vars.aggDepositWeight += flexClient.getPastRawBalance(
-        _voter,
-        governor.proposalSnapshot(_proposalId)
-      );
+      _vars.aggDepositWeight +=
+        flexClient.getPastRawBalance(_voter, governor.proposalSnapshot(_proposalId));
     }
     ghost_depositsCast[_proposalId] += _vars.aggDepositWeight;
 
@@ -349,6 +340,5 @@ contract FlexVotingClientHandler is Test {
       console2.log("  depositsCast", ghost_depositsCast[_proposalId]);
     }
     console2.log("-------------------");
-
   }
 }
