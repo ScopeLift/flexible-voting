@@ -170,7 +170,7 @@ contract FlexVotingClientHandler is Test {
     }
 
     vm.startPrank(currentActor);
-    // TODO we're pre-approving every deposit, should we?
+    // TODO We're pre-approving every deposit, should we?
     token.approve(address(flexClient), uint256(_amount));
     flexClient.deposit(_amount);
     vm.stopPrank();
@@ -179,7 +179,7 @@ contract FlexVotingClientHandler is Test {
     ghost_accountDeposits[currentActor] += uint128(_amount);
   }
 
-  // TODO we restrict withdrawals to addresses that have balances, should we?
+  // TODO We restrict withdrawals to addresses that have balances, should we?
   function withdraw(
     uint256 _userSeed,
     uint208 _amount
@@ -188,7 +188,7 @@ contract FlexVotingClientHandler is Test {
     countCall("withdraw")
     external
   {
-    // TODO we limit withdrawals to the total amount deposited, should we?
+    // TODO We limit withdrawals to the total amount deposited, should we?
     //   instead we could limit the caller to withdraw some portion of its balance
     //   or we could let the caller attempt to withdraw any uint208
     _amount = uint208(_bound(_amount, 0, ghost_accountDeposits[currentActor]));
@@ -229,7 +229,8 @@ contract FlexVotingClientHandler is Test {
     vm.roll(governor.proposalSnapshot(_proposalId) + 1);
   }
 
-  // TODO restrict expressVote to addresses that deposited BEFORE proposal.
+  // We only allow users to express on proposals created after they had
+  // deposits. Should we let other users try to express too?
   function expressVote(
     uint256 _proposalSeed,
     uint8 _support,
@@ -238,13 +239,12 @@ contract FlexVotingClientHandler is Test {
     _actor = currentActor;
     if (proposals.length() == 0) return(_actor);
 
-    // TODO should we allow people to try to vote with bogus support types?
+    // TODO Should we allow people to try to vote with bogus support types?
     _support = uint8(_bound(
       uint256(_support),
       uint256(type(GCF.VoteType).min),
       uint256(type(GCF.VoteType).max)
     ));
-    // TODO should users only express on proposals created after they had deposits?
     uint256 _proposalId = _randProposal(_proposalSeed);
     vm.startPrank(currentActor);
     flexClient.expressVote(_proposalId, _support);
