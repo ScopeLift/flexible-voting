@@ -87,61 +87,62 @@ contract FlexVotingClientHandler is Test {
   }
 
   modifier useActor(uint256 actorIndexSeed) {
-    currentActor = _randAdress(actors, actorIndexSeed);
+    currentActor = _randAddress(actors, actorIndexSeed);
     _;
   }
 
   modifier useVoter(uint256 _voterSeed) {
-    currentActor = _randAdress(voters, _voterSeed);
+    currentActor = _randAddress(voters, _voterSeed);
     _;
   }
 
-  function hasPendingVotes(address _user, uint256 _proposalId) external returns (bool) {
+  function hasPendingVotes(address _user, uint256 _proposalId) external view returns (bool) {
     return pendingVotes[_proposalId].contains(_user);
   }
 
-  function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed)
+  function _randAddress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed)
     internal
+    view
     returns (address)
   {
     uint256 len = _addressSet.length();
     return len > 0 ? _addressSet.at(_seed % len) : address(0);
   }
 
-  function getProposals() external returns (uint256[] memory) {
+  function getProposals() external view returns (uint256[] memory) {
     return proposals.values();
   }
 
-  function getVoters() external returns (address[] memory) {
+  function getVoters() external view returns (address[] memory) {
     return voters.values();
   }
 
-  function getActors() external returns (address[] memory) {
+  function getActors() external view returns (address[] memory) {
     return actors.values();
   }
 
-  function lastProposal() external returns (uint256) {
+  function lastProposal() external view returns (uint256) {
     if (proposals.length() == 0) return 0;
     return proposals.at(proposals.length() - 1);
   }
 
-  function lastActor() external returns (address) {
+  function lastActor() external view returns (address) {
     if (actors.length() == 0) return address(0);
     return actors.at(actors.length() - 1);
   }
 
-  function lastVoter() external returns (address) {
+  function lastVoter() external view returns (address) {
     if (voters.length() == 0) return address(0);
     return voters.at(voters.length() - 1);
   }
 
-  function _randProposal(uint256 _seed) internal returns (uint256) {
+  function _randProposal(uint256 _seed) internal view returns (uint256) {
     uint256 len = proposals.length();
     return len > 0 ? proposals.at(_seed % len) : 0;
   }
 
   // forgefmt: disable-start
-  function _validActorAddress(address _user) internal returns (bool) {
+  function _validActorAddress(address _user) internal view returns (bool) {
     return _user != address(0) &&
       _user != address(flexClient) &&
       _user != address(governor) &&
@@ -150,15 +151,15 @@ contract FlexVotingClientHandler is Test {
   }
   // forgefmt: disable-end
 
-  function remainingTokens() public returns (uint128) {
+  function remainingTokens() public view returns (uint128) {
     return MAX_TOKENS - ghost_mintedTokens;
   }
 
-  function proposal(uint256 _index) public returns (uint256) {
+  function proposal(uint256 _index) public view returns (uint256) {
     return proposals.at(_index);
   }
 
-  function proposalLength() public returns (uint256) {
+  function proposalLength() public view returns (uint256) {
     return proposals.length();
   }
 
@@ -312,7 +313,7 @@ contract FlexVotingClientHandler is Test {
     }
   }
 
-  function callSummary() external {
+  function callSummary() external view {
     console2.log("\nCall summary:");
     console2.log("-------------------");
     console2.log("deposit:", calls["deposit"].count);

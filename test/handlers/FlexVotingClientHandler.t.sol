@@ -6,7 +6,7 @@ import {FlexVotingInvariantSetup} from "test/FlexVotingClient.invariants.t.sol";
 import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
-  function _bytesToUser(bytes memory _entropy) internal returns (address) {
+  function _bytesToUser(bytes memory _entropy) internal pure returns (address) {
     return address(uint160(uint256(keccak256(_entropy))));
   }
 
@@ -20,7 +20,7 @@ contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
     }
   }
 
-  function _validVoteType(uint8 _seed) internal returns (uint8) {
+  function _validVoteType(uint8 _seed) internal pure returns (uint8) {
     return uint8(
       _bound(uint256(_seed), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max))
     );
@@ -278,8 +278,7 @@ contract CastVote is FlexVotingClientHandlerTest {
   function testFuzz_passesThroughToFlexClient(
     uint256 _proposalSeed,
     uint256 _userSeed,
-    uint8 _voteType,
-    uint128 _amount
+    uint8 _voteType
   ) public {
     _voteType = _validVoteType(_voteType);
     // We need actors to cross the proposal threshold on expressVote.
@@ -453,7 +452,6 @@ contract CastVote is FlexVotingClientHandlerTest {
 
     // The seeds that allow us to force use of the voter we want.
     uint256 _totalActors = _actorCount + 2; // Plus alice and bob.
-    uint256 _seedForBob = _totalActors - 1; // Bob was added last.
     uint256 _seedForAlice = _totalActors - 2; // Alice is second to last.
 
     // User B needs to have less weight than User A.
