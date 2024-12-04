@@ -58,18 +58,18 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   // // - stuff we can't imagine happens...
   // // - user A expresses again on proposal P
   // // - castVote is called for P, user A gets more votes through
-  // function invariant_OneVotePerActorPerProposal() public {
-  //   // TODO why are no proposals getting created here for this invariant?
-  //   handler.callSummary();
-  //   // TODO the logic for checking this should probably live here rather than in
-  //   // the handler, e.g.:
-  //   //   for proposal in handler.proposals {
-  //   //     for voter in handler.voters {
-  //   //       assert(ghost_actorExpressedVotes[voter][proposal] <= 1)
-  //   //     }
-  //   //   }
-  //   assertEq(handler.ghost_doubleVoteActors(), 0);
-  // }
+  function invariant_OneVotePerActorPerProposal() public {
+    // TODO why are no proposals getting created here for this invariant?
+    handler.callSummary();
+    // TODO the logic for checking this should probably live here rather than in
+    // the handler, e.g.:
+    //   for proposal in handler.proposals {
+    //     for voter in handler.voters {
+    //       assert(ghost_actorExpressedVotes[voter][proposal] <= 1)
+    //     }
+    //   }
+    assertEq(handler.ghost_doubleVoteActors(), 0);
+  }
 
   // Flex client should not allow anyone to increase effective voting
   // weight, i.e. cast voteWeight <= deposit amount. Example:
@@ -80,13 +80,13 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   //   - castVote is called
   //   - 100 votes are cast FOR proposal
   //   - user A's effective vote weight increased from 70 to 100
-  // function invariant_VoteWeightCannotIncrease() public {
-  //   handler.callSummary();
-  //   for (uint256 i; i < handler.proposalLength(); i++) {
-  //     uint256 _id = handler.proposal(i);
-  //     assert(handler.ghost_votesCast(_id) <= handler.ghost_depositsCast(_id));
-  //   }
-  // }
+  function invariant_VoteWeightCannotIncrease() public {
+    handler.callSummary();
+    for (uint256 i; i < handler.proposalLength(); i++) {
+      uint256 _id = handler.proposal(i);
+      assert(handler.ghost_votesCast(_id) <= handler.ghost_depositsCast(_id));
+    }
+  }
 
   // function invariant_SumOfRawBalancesEqualsTotalBalanceCheckpoint() public {
   // }
