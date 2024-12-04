@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
@@ -16,7 +16,7 @@ import {FractionalGovernor} from "test/FractionalGovernor.sol";
 import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 import {FlexVotingClientHandler} from "test/handlers/FlexVotingClientHandler.sol";
 
-contract FlexVotingInvariantTest is Test {
+contract FlexVotingInvariantSetup is Test {
   MockFlexVotingClient flexClient;
   GovToken token;
   FractionalGovernor governor;
@@ -48,33 +48,9 @@ contract FlexVotingInvariantTest is Test {
     targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     targetContract(address(handler));
   }
+}
 
-  // function testFuzz_castVote(
-  //   uint256 _proposalSeed,
-  //   uint256 _userSeed,
-  //   uint128 _amount
-  // ) public {
-  //   _amount = uint128(bound(_amount, 1, type(uint128).max));
-  //
-  //   // Won't revert even with no votes cast. This avoids uninteresting reverts.
-  //   handler.castVote(_proposalSeed);
-  //
-  //   uint8 _voteType = uint8(GCF.VoteType.Against);
-  //
-  //   handler.deposit(_amount);
-  //   handler.propose("a gorgeous proposal", _proposalSeed);
-  //   handler.expressVote(_proposalSeed, _voteType, _userSeed);
-  //   handler.castVote(_proposalSeed);
-  //
-  //   uint256 _proposalId = handler.lastProposal();
-  //   (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
-  //     governor.proposalVotes(_proposalId);
-  //
-  //   assertEq(_forVotes, 0);
-  //   assertEq(_againstVotes, _amount);
-  //   assertEq(_abstainVotes, 0);
-  // }
-
+contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   // // We want to make sure that things like this cannot happen:
   // // - user A deposits X
   // // - user A expresses FOR on proposal P
@@ -94,16 +70,16 @@ contract FlexVotingInvariantTest is Test {
   //   //   }
   //   assertEq(handler.ghost_doubleVoteActors(), 0);
   // }
-  //
-  // // Flex client should not allow anyone to increase effective voting
-  // // weight, i.e. cast voteWeight <= deposit amount. Example:
-  // //   - user A deposits 70
-  // //   - user B deposits 30
-  // //   - user A expresses FOR
-  // //   - user B does NOT express
-  // //   - castVote is called
-  // //   - 100 votes are cast FOR proposal
-  // //   - user A's effective vote weight increased from 70 to 100
+
+  // Flex client should not allow anyone to increase effective voting
+  // weight, i.e. cast voteWeight <= deposit amount. Example:
+  //   - user A deposits 70
+  //   - user B deposits 30
+  //   - user A expresses FOR
+  //   - user B does NOT express
+  //   - castVote is called
+  //   - 100 votes are cast FOR proposal
+  //   - user A's effective vote weight increased from 70 to 100
   // function invariant_VoteWeightCannotIncrease() public {
   //   handler.callSummary();
   //   for (uint256 i; i < handler.proposalLength(); i++) {
@@ -111,7 +87,7 @@ contract FlexVotingInvariantTest is Test {
   //     assert(handler.ghost_votesCast(_id) <= handler.ghost_depositsCast(_id));
   //   }
   // }
-  //
+
   // function invariant_SumOfRawBalancesEqualsTotalBalanceCheckpoint() public {
   // }
 
@@ -124,7 +100,7 @@ contract FlexVotingInvariantTest is Test {
   //   - voting (without borrows) w/ flex client should not decrease vote weight
 }
 
-contract FlexVotingClientHandlerTest is FlexVotingInvariantTest {
+contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
   function _bytesToUser(bytes memory _entropy) internal returns (address) {
     return address(uint160(uint256(keccak256(_entropy))));
   }
@@ -139,6 +115,13 @@ contract FlexVotingClientHandlerTest is FlexVotingInvariantTest {
     }
   }
 
+  function _validVoteType(uint8 _seed) internal returns (uint8) {
+    return uint8(_bound(
+      uint256(_seed),
+      uint256(type(GCF.VoteType).min),
+      uint256(type(GCF.VoteType).max)
+    ));
+  }
 }
 
 contract Propose is FlexVotingClientHandlerTest {
@@ -349,11 +332,7 @@ contract ExpressVote is FlexVotingClientHandlerTest {
     uint128 _actorCount = 89;
     uint128 _reserved = _actorCount * 1e24; // Tokens for other actors.
     _amount = uint128(bound(_amount, 1, handler.MAX_TOKENS() - _reserved));
-    _voteType = uint8(_bound(
-      uint256(_voteType),
-      uint256(type(GCF.VoteType).min),
-      uint256(type(GCF.VoteType).max)
-    ));
+    _voteType = _validVoteType(_voteType);
 
     _makeActors(_reserved / _actorCount, _actorCount);
 
@@ -399,5 +378,243 @@ contract ExpressVote is FlexVotingClientHandlerTest {
     handler.expressVote(_proposalId, _voteType, _seedForVoter);
 
     vm.stopPrank();
+  }
+}
+
+contract CastVote is FlexVotingClientHandlerTest {
+  function testFuzz_doesNotRequireProposalToExist(
+    uint256 _proposalSeed
+  ) public {
+    assertEq(handler.lastProposal(), 0);
+    // Won't revert even with no votes cast.
+    // This avoids uninteresting reverts during invariant runs.
+    handler.castVote(_proposalSeed);
+  }
+
+  function testFuzz_passesThroughToFlexClient(
+    uint256 _proposalSeed,
+    uint256 _userSeed,
+    uint8 _voteType,
+    uint128 _amount
+  ) public {
+    _voteType = _validVoteType(_voteType);
+    // We need actors to cross the proposal threshold on expressVote.
+    uint128 _actorCount = 90;
+    uint128 _voteSize = 1e24;
+    uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
+    _makeActors(_reserved / _actorCount, _actorCount);
+
+    uint256 _proposalId = handler.propose("a preposterous proposal");
+
+    assertFalse(handler.hasPendingVotes(makeAddr("joe"), _proposalId));
+
+    address _actor = handler.expressVote(_proposalSeed, _voteType, _userSeed);
+    assertTrue(handler.hasPendingVotes(_actor, _proposalId));
+
+    vm.expectCall(
+      address(flexClient),
+      abi.encodeCall(flexClient.castVote, _proposalId)
+    );
+    handler.castVote(_proposalSeed);
+
+    // The actor should no longer have pending votes.
+    assertFalse(handler.hasPendingVotes(_actor, _proposalId));
+
+    // The vote preference should have been sent to the Governor.
+    (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
+      governor.proposalVotes(_proposalId);
+    if (_voteType == uint8(GCF.VoteType.Against)) assertEq(_voteSize, _againstVotes);
+    if (_voteType == uint8(GCF.VoteType.For)) assertEq(_voteSize, _forVotes);
+    if (_voteType == uint8(GCF.VoteType.Abstain)) assertEq(_voteSize, _abstainVotes);
+  }
+
+  function testFuzz_aggregatesVotes(
+    uint256 _proposalSeed,
+    uint128 _weightA,
+    uint128 _weightB,
+    uint8 _voteTypeA,
+    uint8 _voteTypeB
+  ) public {
+    // We need actors to cross the proposal threshold on expressVote.
+    uint128 _actorCount = 90;
+    uint128 _voteSize = 1e24;
+    uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
+    _makeActors(_reserved / _actorCount, _actorCount);
+
+    _weightA = uint128(bound(_weightA, 1, handler.MAX_TOKENS() - _reserved - 1));
+    _weightB = uint128(bound(_weightB, 1, handler.MAX_TOKENS() - _reserved - _weightA));
+
+    address _alice = makeAddr("alice");
+    vm.startPrank(_alice);
+    handler.deposit(_weightA);
+    vm.stopPrank();
+
+    address _bob = makeAddr("bob");
+    vm.startPrank(_bob);
+    handler.deposit(_weightB);
+    vm.stopPrank();
+
+    uint256 _proposalId = handler.propose("a preposterous proposal");
+
+    assertFalse(handler.hasPendingVotes(_alice, _proposalId));
+    assertFalse(handler.hasPendingVotes(_bob, _proposalId));
+
+    // The seeds that allow us to force use of the voter we want.
+    uint256 _totalActors = _actorCount + 2; // Plus alice and bob.
+    uint256 _seedForBob = _totalActors - 1; // Bob was added last.
+    uint256 _seedForAlice = _totalActors - 2; // Alice is second to last.
+
+    // _proposalSeed doesn't matter because there's only one proposal.
+    _voteTypeA = _validVoteType(_voteTypeA);
+    handler.expressVote(_proposalSeed, _voteTypeA, _seedForAlice);
+    assertTrue(handler.hasPendingVotes(_alice, _proposalId));
+
+    _voteTypeB = _validVoteType(_voteTypeB);
+    handler.expressVote(_proposalSeed, _voteTypeB, _seedForBob);
+    assertTrue(handler.hasPendingVotes(_bob, _proposalId));
+
+    // No votes have been cast yet.
+    assertEq(handler.ghost_votesCast(_proposalId), 0);
+
+    // _proposalSeed doesn't matter because there's only one proposal.
+    handler.castVote(_proposalSeed);
+
+    // The actors should no longer have pending votes.
+    assertFalse(handler.hasPendingVotes(_alice, _proposalId));
+    assertFalse(handler.hasPendingVotes(_bob, _proposalId));
+
+    assertEq(handler.ghost_votesCast(_proposalId), _weightA + _weightB);
+    assertEq(handler.ghost_depositsCast(_proposalId), _weightA + _weightB);
+  }
+
+  function testFuzz_aggregatesVotesAcrossCasts(
+    uint256 _proposalSeed,
+    uint128 _weightA,
+    uint128 _weightB,
+    uint8 _voteTypeA,
+    uint8 _voteTypeB
+  ) public {
+    // We need actors to cross the proposal threshold on expressVote.
+    uint128 _actorCount = 90;
+    uint128 _voteSize = 1e24;
+    uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
+    _makeActors(_reserved / _actorCount, _actorCount);
+
+    _weightA = uint128(bound(_weightA, 1, handler.MAX_TOKENS() - _reserved - 1));
+    _weightB = uint128(bound(_weightB, 1, handler.MAX_TOKENS() - _reserved - _weightA));
+
+    address _alice = makeAddr("alice");
+    vm.startPrank(_alice);
+    handler.deposit(_weightA);
+    vm.stopPrank();
+
+    address _bob = makeAddr("bob");
+    vm.startPrank(_bob);
+    handler.deposit(_weightB);
+    vm.stopPrank();
+
+    uint256 _proposalId = handler.propose("a preposterous proposal");
+
+    assertFalse(handler.hasPendingVotes(_alice, _proposalId));
+    assertFalse(handler.hasPendingVotes(_bob, _proposalId));
+
+    // The seeds that allow us to force use of the voter we want.
+    uint256 _totalActors = _actorCount + 2; // Plus alice and bob.
+    uint256 _seedForBob = _totalActors - 1; // Bob was added last.
+    uint256 _seedForAlice = _totalActors - 2; // Alice is second to last.
+
+    // Now alice expresses her voting preference.
+    _voteTypeA = _validVoteType(_voteTypeA);
+    handler.expressVote(_proposalSeed, _voteTypeA, _seedForAlice);
+    assertTrue(handler.hasPendingVotes(_alice, _proposalId));
+
+    handler.castVote(_proposalSeed);
+
+    assertEq(handler.ghost_votesCast(_proposalId), _weightA);
+    assertEq(handler.ghost_depositsCast(_proposalId), _weightA);
+    assertFalse(handler.hasPendingVotes(_alice, _proposalId));
+
+    // Now bob expresses his voting preference.
+    _voteTypeB = _validVoteType(_voteTypeB);
+    handler.expressVote(_proposalSeed, _voteTypeB, _seedForBob);
+    assertTrue(handler.hasPendingVotes(_bob, _proposalId));
+
+    handler.castVote(_proposalSeed);
+
+    assertEq(handler.ghost_votesCast(_proposalId), _weightA + _weightB);
+    assertEq(handler.ghost_depositsCast(_proposalId), _weightA + _weightB);
+    assertFalse(handler.hasPendingVotes(_bob, _proposalId));
+  }
+  // Aggregates deposit weight via ghost_depositsCast.
+  //   - user A deposits 70
+  //   - user B deposits 30
+  //   - user A withdraws 30
+  //   - proposal is made
+  //   - user A expressesVote
+  //   - user B does NOT express
+  //   - the contract has 70 weight to vote with, but we want to make sure it
+  //     doesn't vote with all of it
+  //   - castVote is called
+  //   - ghost_VotesCast should = 40    <-- checks at the governor level
+  //   - ghost_DepositsCast should = 40 <-- checks at the client level
+  function testFuzz_tracksDepositsCast(
+    uint256 _proposalSeed,
+    uint128 _weightA,
+    uint128 _weightB,
+    uint8 _voteTypeA
+  ) public {
+    // We need actors to cross the proposal threshold on expressVote.
+    uint128 _actorCount = 90;
+    uint128 _voteSize = 1e24;
+    uint128 _reserved = _actorCount * _voteSize; // Tokens for actors.
+    _makeActors(_reserved / _actorCount, _actorCount);
+
+    // The seeds that allow us to force use of the voter we want.
+    uint256 _totalActors = _actorCount + 2; // Plus alice and bob.
+    uint256 _seedForBob = _totalActors - 1; // Bob was added last.
+    uint256 _seedForAlice = _totalActors - 2; // Alice is second to last.
+
+    // User B needs to have less weight than User A.
+    uint128 _remainingTokens = handler.MAX_TOKENS() - _reserved;
+    _weightA = uint128(bound(
+      _weightA,
+      (_remainingTokens / 2) + 1,
+      _remainingTokens - 1
+    ));
+    _weightB = uint128(bound(_weightB, 1, _remainingTokens - _weightA));
+
+    address _alice = makeAddr("alice");
+    vm.startPrank(_alice);
+    handler.deposit(_weightA);
+    vm.stopPrank();
+
+    address _bob = makeAddr("bob");
+    vm.startPrank(_bob);
+    handler.deposit(_weightB);
+    vm.stopPrank();
+
+    // Before anything is proposed, Alice withdraws equal to *Bob's* balance.
+    vm.startPrank(_alice);
+    handler.withdraw(_seedForAlice, _weightB);
+    vm.stopPrank();
+
+    uint256 _proposalId = handler.propose("a party");
+
+    // Now Alice expresses her voting preference.
+    // Bob does not express a preference.
+    _voteTypeA = _validVoteType(_voteTypeA);
+    handler.expressVote(_proposalSeed, _voteTypeA, _seedForAlice);
+    assertTrue(handler.hasPendingVotes(_alice, _proposalId));
+
+    // Votes are cast.
+    handler.castVote(_proposalSeed);
+
+    // Bob's weight should not have been used by Alice to vote..
+    assertEq(handler.ghost_votesCast(_proposalId), _weightA - _weightB);
+    assertEq(handler.ghost_depositsCast(_proposalId), _weightA - _weightB);
+
+    // TODO There is no way to make ghost_votesCast come apart from
+    // ghost_depositsCast in tests, so it's not clear they are tracking
+    // something different.
   }
 }

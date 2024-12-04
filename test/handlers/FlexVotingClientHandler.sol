@@ -2,8 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {Test} from "forge-std/Test.sol";
-import {Vm} from "forge-std/Vm.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -229,8 +227,9 @@ contract FlexVotingClientHandler is Test {
     uint256 _proposalSeed,
     uint8 _support,
     uint256 _userSeed
-  ) useVoter(_userSeed) countCall("expressVote") external {
-    if (proposals.length() == 0) return;
+  ) useVoter(_userSeed) countCall("expressVote") external returns (address _actor) {
+    _actor = currentActor;
+    if (proposals.length() == 0) return(_actor);
 
     // TODO should we allow people to try to vote with bogus support types?
     _support = uint8(_bound(
@@ -277,8 +276,9 @@ contract FlexVotingClientHandler is Test {
       _vars.initAbstainVotes
     ) = governor.proposalVotes(_proposalId);
 
-    vm.prank(msg.sender);
+    vm.startPrank(msg.sender);
     flexClient.castVote(_proposalId);
+    vm.stopPrank();
 
     (
       _vars.newAgainstVotes,
@@ -301,7 +301,7 @@ contract FlexVotingClientHandler is Test {
     for (uint256 i; i < _voters.length(); i++) {
       address _voter = _voters.at(i);
       // TODO Can this be done with internal accounting?
-      // We need deposits less withdrawals for the user AT proposal time
+      // We need deposits less withdrawals for the user AT proposal time.
       _vars.aggDepositWeight += flexClient.getPastRawBalance(
         _voter,
         governor.proposalSnapshot(_proposalId)
@@ -310,7 +310,11 @@ contract FlexVotingClientHandler is Test {
     ghost_depositsCast[_proposalId] += _vars.aggDepositWeight;
 
     // Delete the pending votes.
-    delete pendingVotes[_proposalId];
+    EnumerableSet.AddressSet storage set = pendingVotes[_proposalId];
+    // We need to iterate backwards b/c set.remove changes order.
+    for (uint256 i = set.length(); i > 0; i--) {
+      set.remove(set.at(i - 1));
+    }
   }
 
   function callSummary() external {
