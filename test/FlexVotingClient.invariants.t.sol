@@ -59,16 +59,17 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   // // - user A expresses again on proposal P
   // // - castVote is called for P, user A gets more votes through
   function invariant_OneVotePerActorPerProposal() public {
-    // TODO why are no proposals getting created here for this invariant?
     handler.callSummary();
-    // TODO the logic for checking this should probably live here rather than in
-    // the handler, e.g.:
-    //   for proposal in handler.proposals {
-    //     for voter in handler.voters {
-    //       assert(ghost_actorExpressedVotes[voter][proposal] <= 1)
-    //     }
-    //   }
-    assertEq(handler.ghost_doubleVoteActors(), 0);
+
+    uint256[] memory _proposals = handler.getProposals();
+    address[] memory _voters = handler.getVoters();
+    for (uint256 p; p < _proposals.length; p++) {
+      for (uint256 v; v < _voters.length; v++) {
+        address _voter = _voters[v];
+        uint256 _proposal = _proposals[p];
+        assertTrue(handler.ghost_actorExpressedVotes(_voter, _proposal) <= 1);
+      }
+    }
   }
 
   // Flex client should not allow anyone to increase effective voting

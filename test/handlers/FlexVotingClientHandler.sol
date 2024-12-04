@@ -55,7 +55,6 @@ contract FlexVotingClientHandler is Test {
   // E.g. actorExpressedVotes[0xBEEF][42] == the number of times 0xBEEF
   // expressed a voting preference on proposal 42.
   mapping(address => mapping(uint256 => uint256)) public ghost_actorExpressedVotes;
-  uint256 public ghost_doubleVoteActors;
 
   constructor(
     GovToken _token,
@@ -96,10 +95,6 @@ contract FlexVotingClientHandler is Test {
     _;
   }
 
-  function testhook_makeActor() createActor external returns (address) {
-    return currentActor;
-  }
-
   function hasPendingVotes(address _user, uint256 _proposalId) external returns (bool) {
     return pendingVotes[_proposalId].contains(_user);
   }
@@ -107,6 +102,14 @@ contract FlexVotingClientHandler is Test {
   function _randAdress(EnumerableSet.AddressSet storage _addressSet, uint256 _seed) internal returns (address) {
     uint256 len = _addressSet.length();
     return len > 0 ?  _addressSet.at(_seed % len) : address(0);
+  }
+
+  function getProposals() external returns (uint256[] memory) {
+    return proposals.values();
+  }
+
+  function getVoters() external returns (address[] memory) {
+    return voters.values();
   }
 
   function lastProposal() external returns (uint256) {
@@ -246,9 +249,6 @@ contract FlexVotingClientHandler is Test {
     pendingVotes[_proposalId].add(currentActor);
 
     ghost_actorExpressedVotes[currentActor][_proposalId] += 1;
-    if (ghost_actorExpressedVotes[currentActor][_proposalId] > 1) {
-      ghost_doubleVoteActors += 1;
-    }
   }
 
   struct CastVoteVars {
