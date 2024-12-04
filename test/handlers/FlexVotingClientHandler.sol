@@ -112,6 +112,10 @@ contract FlexVotingClientHandler is Test {
     return voters.values();
   }
 
+  function getActors() external returns (address[] memory) {
+    return actors.values();
+  }
+
   function lastProposal() external returns (uint256) {
     if (proposals.length() == 0) return 0;
     return proposals.at(proposals.length() - 1);

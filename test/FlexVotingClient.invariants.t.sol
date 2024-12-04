@@ -83,22 +83,40 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   //   - user A's effective vote weight increased from 70 to 100
   function invariant_VoteWeightCannotIncrease() public {
     handler.callSummary();
+
     for (uint256 i; i < handler.proposalLength(); i++) {
       uint256 _id = handler.proposal(i);
       assert(handler.ghost_votesCast(_id) <= handler.ghost_depositsCast(_id));
     }
   }
 
-  // function invariant_SumOfRawBalancesEqualsTotalBalanceCheckpoint() public {
-  // }
+  function invariant_SumOfDepositsEqualsTotalBalanceCheckpoint() public {
+    handler.callSummary();
+
+    uint256 _checkpoint = block.number;
+    vm.roll(_checkpoint + 1);
+    assertEq(
+      flexClient.getPastTotalBalance(_checkpoint),
+      handler.ghost_depositSum() - handler.ghost_withdrawSum()
+    );
+
+    uint256 _sum;
+    address[] memory _depositors = handler.getActors();
+    for (uint256 d; d < _depositors.length; d++) {
+      address _depositor = _depositors[d];
+      _sum += flexClient.getPastRawBalance(_depositor, _checkpoint);
+    }
+    assertEq(flexClient.getPastTotalBalance(_checkpoint), _sum);
+  }
 
   // system invariants:
   //   x one vote per person per proposal
   //   x flex client should not allow anyone to increase effective voting
   //     weight, i.e. voteWeight <= deposit amount
-  //   - sum of all user raw balances == total balance for all checkpoints
+  //   x sum of all user raw balances == total balance for all checkpoints
   //   - sum of ProposalVote attr == weight of users expressing votes
   //   - voting (without borrows) w/ flex client should not decrease vote weight
+  //   - sum of votes on governor <= deposits
 }
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
