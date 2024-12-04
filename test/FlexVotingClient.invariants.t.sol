@@ -37,6 +37,9 @@ contract FlexVotingInvariantSetup is Test {
 
     handler = new FlexVotingClientHandler(token, governor, flexClient, receiver);
 
+    // Proposal will underflow if we're on the zero block.
+    if (block.number == 0) vm.roll(1);
+
     bytes4[] memory selectors = new bytes4[](5);
     selectors[0] = FlexVotingClientHandler.deposit.selector;
     selectors[1] = FlexVotingClientHandler.propose.selector;
@@ -57,7 +60,7 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   // // - stuff we can't imagine happens...
   // // - user A expresses again on proposal P
   // // - castVote is called for P, user A gets more votes through
-  function invariant_OneVotePerActorPerProposal() public {
+  function invariant_OneVotePerActorPerProposal() public view {
     handler.callSummary();
 
     uint256[] memory _proposals = handler.getProposals();
@@ -80,7 +83,7 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   //   - castVote is called
   //   - 100 votes are cast FOR proposal
   //   - user A's effective vote weight increased from 70 to 100
-  function invariant_VoteWeightCannotIncrease() public {
+  function invariant_VoteWeightCannotIncrease() public view {
     handler.callSummary();
 
     for (uint256 i; i < handler.proposalLength(); i++) {
@@ -90,7 +93,7 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
   }
 
   // The flex client should not lend out more than it recieves.
-  function invariant_WithdrawalsDontExceedDepoists() public {
+  function invariant_WithdrawalsDontExceedDepoists() public view {
     handler.callSummary();
 
     assertTrue(handler.ghost_depositSum() >= handler.ghost_withdrawSum());
@@ -115,7 +118,7 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
     assertEq(flexClient.getPastTotalBalance(_checkpoint), _sum);
   }
 
-  function invariant_SumOfDepositsIsGTEProposalVotes() public {
+  function invariant_SumOfDepositsIsGTEProposalVotes() public view {
     handler.callSummary();
 
     uint256[] memory _proposals = handler.getProposals();

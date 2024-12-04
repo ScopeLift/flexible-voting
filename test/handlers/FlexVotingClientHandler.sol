@@ -232,8 +232,7 @@ contract FlexVotingClientHandler is Test {
     // Require there to be depositors.
     if (actors.length() < PROPOSAL_THRESHOLD) return 0;
 
-    // Proposal will underflow if we're on the zero block
-    if (block.number == 0) vm.roll(1);
+    // Don't dilute the pool of proposals.
     if (this.proposalLength() > 4) return 0;
 
     // Create a proposal
