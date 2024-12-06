@@ -88,6 +88,11 @@ abstract contract FlexVotingClient {
   /// given time.
   Checkpoints.Trace208 internal totalBalanceCheckpoints;
 
+  error FlexVotingClient__NoVotingWeight();
+  error FlexVotingClient__AlreadyVoted();
+  error FlexVotingClient__InvalidSupportValue();
+  error FlexVotingClient__NoVotesExpressed();
+
   /// @param _governor The address of the flex-voting-compatible governance contract.
   constructor(address _governor) {
     GOVERNOR = IFractionalGovernor(_governor);
@@ -116,9 +121,9 @@ abstract contract FlexVotingClient {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external {
     uint256 weight = getPastRawBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
-    require(weight > 0, "no weight");
+    if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
-    require(!proposalVotersHasVoted[proposalId][msg.sender], "already voted");
+    if (proposalVotersHasVoted[proposalId][msg.sender]) revert FlexVotingClient__AlreadyVoted();
     proposalVotersHasVoted[proposalId][msg.sender] = true;
 
     if (support == uint8(VoteType.Against)) {
@@ -128,7 +133,8 @@ abstract contract FlexVotingClient {
     } else if (support == uint8(VoteType.Abstain)) {
       proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
     } else {
-      revert("invalid support value, must be included in VoteType enum");
+      // Support value must be included in VoteType enum.
+      revert FlexVotingClient__InvalidSupportValue();
     }
   }
 
@@ -139,10 +145,10 @@ abstract contract FlexVotingClient {
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
-    require(
-      _proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes > 0,
-      "no votes expressed"
-    );
+    if (_proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes == 0) {
+      revert FlexVotingClient__NoVotesExpressed();
+    }
+
     uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
 
     // We use the snapshot of total raw balances to determine the weight with

@@ -9,6 +9,7 @@ import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
+import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
 import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
 import {GovToken} from "test/GovToken.sol";
 import {FractionalGovernor} from "test/FractionalGovernor.sol";
@@ -502,7 +503,7 @@ contract ExpressVote is FlexVotingClientTest {
 
     // Now try to express a voting preference on the proposal.
     assertEq(flexClient.deposits(_user), _voteWeight);
-    vm.expectRevert(bytes("no weight"));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
   }
@@ -524,7 +525,7 @@ contract ExpressVote is FlexVotingClientTest {
     uint256 _proposalId = _createAndSubmitProposal();
 
     // _user should NOT be able to express his/her vote on the proposal.
-    vm.expectRevert(bytes("no weight"));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
 
@@ -536,7 +537,7 @@ contract ExpressVote is FlexVotingClientTest {
     // _user should still NOT be able to express his/her vote on the proposal.
     // Despite having a deposit balance, he/she didn't have a balance at the
     // proposal snapshot.
-    vm.expectRevert(bytes("no weight"));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
   }
@@ -567,7 +568,7 @@ contract ExpressVote is FlexVotingClientTest {
     assertEq(_abstainVotesExpressedInit, _voteType == GCF.VoteType.Abstain ? _voteWeight : 0);
 
     // Vote early and often!
-    vm.expectRevert(bytes("already voted"));
+    vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
 
@@ -595,7 +596,7 @@ contract ExpressVote is FlexVotingClientTest {
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Now try to express a voting preference with a bogus support type.
-    vm.expectRevert(bytes("invalid support value, must be included in VoteType enum"));
+    vm.expectRevert(FVC.FlexVotingClient__InvalidSupportValue.selector);
     vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
   }
@@ -626,7 +627,7 @@ contract ExpressVote is FlexVotingClientTest {
     assert(_proposalId != _id);
 
     // Now try to express a voting preference on the bogus proposal.
-    vm.expectRevert("no weight");
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
     flexClient.expressVote(_proposalId, _supportType);
   }
@@ -1077,7 +1078,7 @@ contract CastVote is FlexVotingClientTest {
     uint256 _proposalId = _createAndSubmitProposal();
 
     // No one has expressed, there are no votes to cast.
-    vm.expectRevert(bytes("no votes expressed"));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotesExpressed.selector);
     flexClient.castVote(_proposalId);
 
     // _user expresses his/her vote on the proposal.
@@ -1088,7 +1089,7 @@ contract CastVote is FlexVotingClientTest {
     flexClient.castVote(_proposalId);
 
     // All votes have been cast, there's nothing new to send to the governor.
-    vm.expectRevert(bytes("no votes expressed"));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotesExpressed.selector);
     flexClient.castVote(_proposalId);
   }
 
