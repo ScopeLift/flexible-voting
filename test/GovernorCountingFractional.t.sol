@@ -723,14 +723,14 @@ contract GovernorCountingFractionalTest is Test {
     // These are the percentages of the total weight that will be cast with each
     // sequential vote, i.e. if _votePercentage1 is 25% then the first vote will
     // cast 25% of the voter's weight.
-    _votePercentage1 = bound(_votePercentage1, 0.0e18, 1.0e18);
-    _votePercentage2 = bound(_votePercentage2, 0.0e18, 1e18 - _votePercentage1);
-    _votePercentage3 = bound(_votePercentage3, 0.0e18, 1e18 - _votePercentage1 - _votePercentage2);
+    _votePercentage1 = _bound(_votePercentage1, 0.0e18, 1.0e18);
+    _votePercentage2 = _bound(_votePercentage2, 0.0e18, 1e18 - _votePercentage1);
+    _votePercentage3 = _bound(_votePercentage3, 0.0e18, 1e18 - _votePercentage1 - _votePercentage2);
 
     // Build the voter.
     Voter memory _voter;
     _voter.addr = _assumeAndLabelFuzzedVoter(_voterAddr);
-    _voter.weight = bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
+    _voter.weight = _bound(_weight, MIN_VOTE_WEIGHT, MAX_VOTE_WEIGHT);
     _voter.voteSplit = _voteSplit;
 
     // Mint, delegate, and propose.
