@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
 import {FlexVotingInvariantSetup} from "test/FlexVotingClient.invariants.t.sol";
+import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
 import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
@@ -268,7 +269,7 @@ contract ExpressVote is FlexVotingClientHandlerTest {
     if (_voteType == uint8(GCF.VoteType.Abstain)) assertEq(_amount, _abstainVotes);
 
     // The user should not be able to vote again.
-    vm.expectRevert(bytes("already voted"));
+    vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
     handler.expressVote(_proposalId, _voteType, _seedForVoter);
 
     vm.stopPrank();
