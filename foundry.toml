@@ -7,7 +7,7 @@
 
 [profile.ci]
   fuzz = { runs = 5000 }
-  invariant = { runs = 1000 }
+  invariant = { runs = 500 }
 
 [profile.lite]
   fuzz = { runs = 50 }

@@ -18,7 +18,7 @@ contract FractionalGovernor is GovernorVotes, GovernorCountingFractional {
   }
 
   function votingPeriod() public pure override returns (uint256) {
-    return 50_400; // 7 days assuming 12 second block times
+    return 50_400; // 50k blocks = 7 days assuming 12 second block times.
   }
 
   function exposed_quorumReached(uint256 _proposalId) public view returns (bool) {
