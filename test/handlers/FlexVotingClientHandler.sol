@@ -179,6 +179,13 @@ contract FlexVotingClientHandler is Test {
     return actors.length();
   }
 
+  // Simulate the passage of time, which materially changes governance behavior.
+  function roll(uint256 _seed) external countCall("roll") {
+    vm.assume(proposals.length() > 0);
+    uint256 _blocks = _bound(_seed, 1, governor.votingPeriod() / 10);
+    vm.roll(block.number + _blocks);
+  }
+
   // TODO This always creates a new actor. Should it?
   function deposit(uint208 _amount)
     external
@@ -341,6 +348,7 @@ contract FlexVotingClientHandler is Test {
     console2.log("expressVote:", calls["expressVote"].count);
     console2.log("castVote:", calls["castVote"].count);
     console2.log("propose:", calls["propose"].count);
+    console2.log("roll:", calls["roll"].count);
     console2.log("-------------------");
     console2.log("actor count:", actors.length());
     console2.log("voter count:", voters.length());

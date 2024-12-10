@@ -40,12 +40,13 @@ contract FlexVotingInvariantSetup is Test {
     // Proposal will underflow if we're on the zero block.
     if (block.number == 0) vm.roll(1);
 
-    bytes4[] memory selectors = new bytes4[](5);
+    bytes4[] memory selectors = new bytes4[](6);
     selectors[0] = FlexVotingClientHandler.deposit.selector;
     selectors[1] = FlexVotingClientHandler.propose.selector;
     selectors[2] = FlexVotingClientHandler.expressVote.selector;
     selectors[3] = FlexVotingClientHandler.castVote.selector;
     selectors[4] = FlexVotingClientHandler.withdraw.selector;
+    selectors[5] = FlexVotingClientHandler.roll.selector;
 
     targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     targetContract(address(handler));
@@ -53,13 +54,13 @@ contract FlexVotingInvariantSetup is Test {
 }
 
 contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
-  // // We want to make sure that things like this cannot happen:
-  // // - user A deposits X
-  // // - user A expresses FOR on proposal P
-  // // - castVote is called for P, user A's votes are cast
-  // // - stuff we can't imagine happens...
-  // // - user A expresses again on proposal P
-  // // - castVote is called for P, user A gets more votes through
+  // We want to make sure that things like this cannot happen:
+  // - user A deposits X
+  // - user A expresses FOR on proposal P
+  // - castVote is called for P, user A's votes are cast
+  // - stuff we can't imagine happens...
+  // - user A expresses again on proposal P
+  // - castVote is called for P, user A gets more votes through
   function invariant_OneVotePerActorPerProposal() public view {
     handler.callSummary();
 
