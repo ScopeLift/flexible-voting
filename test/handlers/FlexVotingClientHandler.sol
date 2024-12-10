@@ -186,7 +186,7 @@ contract FlexVotingClientHandler is Test {
     vm.roll(block.number + _blocks);
   }
 
-  // TODO This always creates a new actor. Should it?
+  // NOTE: This always creates a new actor.
   function deposit(uint208 _amount)
     external
     maybeCreateActor(_amount)
@@ -203,7 +203,7 @@ contract FlexVotingClientHandler is Test {
     }
 
     vm.startPrank(currentActor);
-    // TODO We're pre-approving every deposit, should we?
+    // NOTE: We're pre-approving every deposit.
     token.approve(address(flexClient), uint256(_amount));
     flexClient.deposit(_amount);
     vm.stopPrank();
@@ -212,15 +212,13 @@ contract FlexVotingClientHandler is Test {
     ghost_accountDeposits[currentActor] += uint128(_amount);
   }
 
-  // TODO We restrict withdrawals to addresses that have balances, should we?
+  // NOTE: We restrict withdrawals to addresses that have balances.
   function withdraw(uint256 _userSeed, uint208 _amount)
     external
     useActor(_userSeed)
     countCall("withdraw")
   {
-    // TODO We limit withdrawals to the total amount deposited, should we?
-    //   instead we could limit the caller to withdraw some portion of its balance
-    //   or we could let the caller attempt to withdraw any uint208
+    // NOTE: We limit withdrawals to the account's deposit balance.
     _amount = uint208(_bound(_amount, 0, ghost_accountDeposits[currentActor]));
 
     vm.startPrank(currentActor);
@@ -271,7 +269,7 @@ contract FlexVotingClientHandler is Test {
     _actor = currentActor;
     if (proposals.length() == 0) return (_actor);
 
-    // TODO Should we allow people to try to vote with bogus support types?
+    // NOTE: We don't allow people to try to vote with bogus support types.
     _support = uint8(
       _bound(uint256(_support), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max))
     );
@@ -325,7 +323,6 @@ contract FlexVotingClientHandler is Test {
     // The aggregate deposit weight just cast.
     for (uint256 i; i < _voters.length(); i++) {
       address _voter = _voters.at(i);
-      // TODO Can this be done with internal accounting?
       // We need deposits less withdrawals for the user AT proposal time.
       _vars.aggDepositWeight +=
         flexClient.getPastRawBalance(_voter, governor.proposalSnapshot(_proposalId));
