@@ -11,11 +11,11 @@ import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
 import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
-import {GovToken} from "test/GovToken.sol";
+import {GovToken, TimestampGovToken} from "test/GovToken.sol";
 import {FractionalGovernor} from "test/FractionalGovernor.sol";
 import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
-contract FlexVotingClientTest is Test {
+abstract contract FlexVotingClientTest is Test {
   MockFlexVotingClient flexClient;
   GovToken token;
   FractionalGovernor governor;
@@ -28,8 +28,14 @@ contract FlexVotingClientTest is Test {
   // The highest valid vote type, represented as a uint256.
   uint256 MAX_VOTE_TYPE = uint256(type(GCF.VoteType).max);
 
+  function _useTimestampClock() internal virtual returns (bool);
+
   function setUp() public {
-    token = new GovToken();
+    if (_useTimestampClock()) {
+      token = new TimestampGovToken();
+    } else {
+      token = new GovToken();
+    }
     vm.label(address(token), "token");
 
     governor = new FractionalGovernor("Governor", IVotes(token));
@@ -107,7 +113,7 @@ contract FlexVotingClientTest is Test {
   }
 }
 
-contract Deployment is FlexVotingClientTest {
+abstract contract Deployment is FlexVotingClientTest {
   function test_FlexVotingClientDeployment() public view {
     assertEq(token.name(), "Governance Token");
     assertEq(token.symbol(), "GOV");
@@ -120,7 +126,7 @@ contract Deployment is FlexVotingClientTest {
   }
 }
 
-contract Constructor is FlexVotingClientTest {
+abstract contract Constructor is FlexVotingClientTest {
   function test_SetsGovernor() public view {
     assertEq(address(flexClient.GOVERNOR()), address(governor));
   }
@@ -131,7 +137,7 @@ contract Constructor is FlexVotingClientTest {
 }
 
 // Contract name has a leading underscore for scopelint spec support.
-contract _RawBalanceOf is FlexVotingClientTest {
+abstract contract _RawBalanceOf is FlexVotingClientTest {
   function testFuzz_ReturnsZeroForNonDepositors(address _user) public view {
     _assumeSafeUser(_user);
     assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
@@ -180,7 +186,7 @@ contract _RawBalanceOf is FlexVotingClientTest {
 }
 
 // Contract name has a leading underscore for scopelint spec support.
-contract _CastVoteReasonString is FlexVotingClientTest {
+abstract contract _CastVoteReasonString is FlexVotingClientTest {
   function test_ReturnsDescriptiveString() public {
     assertEq(
       flexClient.exposed_castVoteReasonString(), "rolled-up vote from governance token holders"
@@ -189,7 +195,7 @@ contract _CastVoteReasonString is FlexVotingClientTest {
 }
 
 // Contract name has a leading underscore for scopelint spec support.
-contract _SelfDelegate is FlexVotingClientTest {
+abstract contract _SelfDelegate is FlexVotingClientTest {
   function testFuzz_SetsClientAsTheDelegate(address _delegatee) public {
     vm.assume(_delegatee != address(0));
     vm.assume(_delegatee != address(flexClient));
@@ -206,7 +212,7 @@ contract _SelfDelegate is FlexVotingClientTest {
 }
 
 // Contract name has a leading underscore for scopelint spec support.
-contract _CheckpointRawBalanceOf is FlexVotingClientTest {
+abstract contract _CheckpointRawBalanceOf is FlexVotingClientTest {
   function testFuzz_StoresTheRawBalanceWithTheBlockNumber(
     address _user,
     uint208 _amount,
@@ -225,7 +231,7 @@ contract _CheckpointRawBalanceOf is FlexVotingClientTest {
   }
 }
 
-contract GetPastRawBalance is FlexVotingClientTest {
+abstract contract GetPastRawBalance is FlexVotingClientTest {
   function testFuzz_ReturnsZeroForUsersWithoutDeposits(
     address _depositor,
     address _nonDepositor,
@@ -288,7 +294,7 @@ contract GetPastRawBalance is FlexVotingClientTest {
   }
 }
 
-contract GetPastTotalBalance is FlexVotingClientTest {
+abstract contract GetPastTotalBalance is FlexVotingClientTest {
   function test_ReturnsZeroWithoutDeposits() public view {
     uint48 _zeroBlock = 0;
     uint48 _futureBlock = uint48(block.number) + 42;
@@ -361,7 +367,7 @@ contract GetPastTotalBalance is FlexVotingClientTest {
   // parallel of last test for getPastRawBalance
 }
 
-contract Withdraw is FlexVotingClientTest {
+abstract contract Withdraw is FlexVotingClientTest {
   function testFuzz_UserCanWithdrawGovTokens(address _lender, address _borrower, uint208 _amount)
     public
   {
@@ -393,7 +399,7 @@ contract Withdraw is FlexVotingClientTest {
   // `borrow`s affects on vote weights are tested in Vote contract below.
 }
 
-contract Deposit is FlexVotingClientTest {
+abstract contract Deposit is FlexVotingClientTest {
   function testFuzz_UserCanDepositGovTokens(address _user, uint208 _amount) public {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
     vm.assume(_user != address(flexClient));
@@ -455,7 +461,7 @@ contract Deposit is FlexVotingClientTest {
   }
 }
 
-contract ExpressVote is FlexVotingClientTest {
+abstract contract ExpressVote is FlexVotingClientTest {
   function testFuzz_IncrementsInternalAccouting(
     address _user,
     uint208 _voteWeight,
@@ -633,7 +639,7 @@ contract ExpressVote is FlexVotingClientTest {
   }
 }
 
-contract CastVote is FlexVotingClientTest {
+abstract contract CastVote is FlexVotingClientTest {
   function testFuzz_SubmitsVotesToGovernor(address _user, uint208 _voteWeight, uint8 _supportType)
     public
   {
@@ -1128,7 +1134,7 @@ contract CastVote is FlexVotingClientTest {
   }
 }
 
-contract Borrow is FlexVotingClientTest {
+abstract contract Borrow is FlexVotingClientTest {
   function testFuzz_UsersCanBorrowTokens(
     address _depositer,
     uint208 _depositAmount,
@@ -1163,3 +1169,83 @@ contract Borrow is FlexVotingClientTest {
     assertEq(flexClient.getPastTotalBalance(_blockAtTimeOfBorrow), _depositAmount);
   }
 }
+
+contract BlockNumberClock_Deployment is Deployment {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_Constructor is Constructor {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock__RawBalanceOf is _RawBalanceOf {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock__CastVoteReasonString is _CastVoteReasonString {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock__SelfDelegate is _SelfDelegate {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_GetPastRawBalance is GetPastRawBalance {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_GetPastTotalBalance is GetPastTotalBalance {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_Withdraw is Withdraw {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_Deposit is Deposit {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_ExpressVote is ExpressVote {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_CastVote is CastVote {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+contract BlockNumberClock_Borrow is Borrow {
+  function _useTimestampClock() internal override returns (bool) { return false; }
+}
+//
+// contract TimestampClock_Deployment is Deployment {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_Constructor is Constructor {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock__RawBalanceOf is _RawBalanceOf {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock__CastVoteReasonString is _CastVoteReasonString {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock__SelfDelegate is _SelfDelegate {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_GetPastTotalBalance is GetPastTotalBalance {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_Withdraw is Withdraw {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_Deposit is Deposit {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_ExpressVote is ExpressVote {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_CastVote is CastVote {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
+// contract TimestampClock_Borrow is Borrow {
+//   function _useTimestampClock() internal override returns (bool) { return true; }
+// }
