@@ -29,11 +29,8 @@ abstract contract FlexVotingClientTest is Test {
   uint256 MAX_VOTE_TYPE = uint256(type(GCF.VoteType).max);
 
   function setUp() public {
-    if (_timestampClock()) {
-      token = new TimestampGovToken();
-    } else {
-      token = new GovToken();
-    }
+    if (_timestampClock()) token = new TimestampGovToken();
+    else token = new GovToken();
     vm.label(address(token), "token");
 
     governor = new FractionalGovernor("Governor", IVotes(token));
@@ -53,19 +50,13 @@ abstract contract FlexVotingClientTest is Test {
   }
 
   function _advanceTimeBy(uint256 _timeUnits) internal {
-    if (_timestampClock()) {
-      vm.warp(block.timestamp + _timeUnits);
-    } else {
-      vm.roll(block.number + _timeUnits);
-    }
+    if (_timestampClock()) vm.warp(block.timestamp + _timeUnits);
+    else vm.roll(block.number + _timeUnits);
   }
 
   function _advanceTimeTo(uint256 _timepoint) internal {
-    if (_timestampClock()) {
-      vm.warp(_timepoint);
-    } else {
-      vm.roll(_timepoint);
-    }
+    if (_timestampClock()) vm.warp(_timepoint);
+    else vm.roll(_timepoint);
   }
 
   function _mintGovAndApproveFlexClient(address _user, uint208 _amount) public {
@@ -1197,82 +1188,158 @@ abstract contract Borrow is FlexVotingClientTest {
 
 // Block number tests.
 contract BlockNumberClock_Deployment is Deployment {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_Constructor is Constructor {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock__RawBalanceOf is _RawBalanceOf {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock__CastVoteReasonString is _CastVoteReasonString {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock__SelfDelegate is _SelfDelegate {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_GetPastRawBalance is GetPastRawBalance {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_GetPastTotalBalance is GetPastTotalBalance {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_Withdraw is Withdraw {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_Deposit is Deposit {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_ExpressVote is ExpressVote {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_CastVote is CastVote {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
+
 contract BlockNumberClock_Borrow is Borrow {
-  function _timestampClock() internal pure override returns (bool) { return false; }
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
 }
 
 // Timestamp tests.
 contract TimestampClock_Deployment is Deployment {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_Constructor is Constructor {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock__RawBalanceOf is _RawBalanceOf {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock__CastVoteReasonString is _CastVoteReasonString {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock__SelfDelegate is _SelfDelegate {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_GetPastTotalBalance is GetPastTotalBalance {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_Withdraw is Withdraw {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_Deposit is Deposit {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_ExpressVote is ExpressVote {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_CastVote is CastVote {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }
+
 contract TimestampClock_Borrow is Borrow {
-  function _timestampClock() internal pure override returns (bool) { return true; }
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
 }

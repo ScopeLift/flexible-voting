@@ -170,9 +170,8 @@ abstract contract FlexVotingClient {
     uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshot);
 
     // We need 256 bits because of the multiplication we're about to do.
-    uint256 _votingWeightAtSnapshot = IVotingToken(address(GOVERNOR.token())).getPastVotes(
-      address(this), _proposalSnapshot
-    );
+    uint256 _votingWeightAtSnapshot =
+      IVotingToken(address(GOVERNOR.token())).getPastVotes(address(this), _proposalSnapshot);
 
     //      forVotesRaw          forVoteWeight
     // --------------------- = ------------------
@@ -205,10 +204,7 @@ abstract contract FlexVotingClient {
 
   /// @dev Checkpoints the _user's current raw balance.
   function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(
-      IVotingToken(GOVERNOR.token()).clock(),
-      _rawBalanceOf(_user)
-    );
+    balanceCheckpoints[_user].push(IVotingToken(GOVERNOR.token()).clock(), _rawBalanceOf(_user));
   }
 
   /// @notice Returns the `_user`'s raw balance at `_timepoint`.
