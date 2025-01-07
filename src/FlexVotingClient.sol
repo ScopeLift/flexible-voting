@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
-import {IFractionalGovernor} from "./interfaces/IFractionalGovernor.sol";
-import {IVotingToken} from "./interfaces/IVotingToken.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
 /// @notice This is an abstract contract designed to make it easy to build clients
 /// for governance systems that inherit from GovernorCountingFractional, a.k.a.
@@ -51,8 +51,8 @@ abstract contract FlexVotingClient {
 
   // @dev Trace208 is used instead of Trace224 because the former allocates 48
   // bits to its _key. We need at least 48 bits because the _key is going to be
-  // a block number. And EIP-6372 specifies that when block numbers are used for
-  // internal clocks (as they are for ERC20Votes) they need to be uint48s.
+  // a timepoint. Timepoints in the context of ERC20Votes and ERC721Votes
+  // conform to the EIP-6372 standard, which specifies they be uint48s.
   using Checkpoints for Checkpoints.Trace208;
 
   /// @notice The voting options corresponding to those used in the Governor.
@@ -149,7 +149,7 @@ abstract contract FlexVotingClient {
       revert FlexVotingClient__NoVotesExpressed();
     }
 
-    uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
+    uint256 _proposalSnapshot = GOVERNOR.proposalSnapshot(proposalId);
 
     // We use the snapshot of total raw balances to determine the weight with
     // which to vote. We do this for two reasons:
@@ -167,11 +167,11 @@ abstract contract FlexVotingClient {
     // Using the total raw balance to proportion votes in this way means that in
     // many circumstances this function will not cast votes with all of its
     // weight.
-    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshotBlockNumber);
+    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshot);
 
     // We need 256 bits because of the multiplication we're about to do.
     uint256 _votingWeightAtSnapshot = IVotingToken(address(GOVERNOR.token())).getPastVotes(
-      address(this), _proposalSnapshotBlockNumber
+      address(this), _proposalSnapshot
     );
 
     //      forVotesRaw          forVoteWeight
@@ -205,21 +205,28 @@ abstract contract FlexVotingClient {
 
   /// @dev Checkpoints the _user's current raw balance.
   function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(SafeCast.toUint48(block.number), _rawBalanceOf(_user));
+    balanceCheckpoints[_user].push(
+      IVotingToken(GOVERNOR.token()).clock(),
+      _rawBalanceOf(_user)
+    );
   }
 
-  /// @notice Returns the `_user`'s raw balance at `_blockNumber`.
+  /// @notice Returns the `_user`'s raw balance at `_timepoint`.
   /// @param _user The account that's historical raw balance will be looked up.
-  /// @param _blockNumber The block at which to lookup the _user's raw balance.
-  function getPastRawBalance(address _user, uint256 _blockNumber) public view returns (uint256) {
-    uint48 key = SafeCast.toUint48(_blockNumber);
+  /// @param _timepoint The timepoint at which to lookup the _user's raw
+  /// balance, either a block number or a timestamp as determined by
+  /// {GOVERNOR.token().clock()}.
+  function getPastRawBalance(address _user, uint256 _timepoint) public view returns (uint256) {
+    uint48 key = SafeCast.toUint48(_timepoint);
     return balanceCheckpoints[_user].upperLookup(key);
   }
 
-  /// @notice Returns the sum total of raw balances of all users at `_blockNumber`.
-  /// @param _blockNumber The block at which to lookup the total balance.
-  function getPastTotalBalance(uint256 _blockNumber) public view returns (uint256) {
-    uint48 key = SafeCast.toUint48(_blockNumber);
+  /// @notice Returns the sum total of raw balances of all users at `_timepoint`.
+  /// @param _timepoint The timepoint at which to lookup the total balance,
+  /// either a block number or a timestamp as determined by
+  /// {GOVERNOR.token().clock()}.
+  function getPastTotalBalance(uint256 _timepoint) public view returns (uint256) {
+    uint48 key = SafeCast.toUint48(_timepoint);
     return totalBalanceCheckpoints.upperLookup(key);
   }
 }
