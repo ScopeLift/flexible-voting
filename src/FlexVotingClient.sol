@@ -207,6 +207,33 @@ abstract contract FlexVotingClient {
     balanceCheckpoints[_user].push(IVotingToken(GOVERNOR.token()).clock(), _rawBalanceOf(_user));
   }
 
+  /// @dev Checkpoints the total balance after applying `_delta`.
+  function _checkpointTotalBalance(int256 _delta) internal {
+    // The casting in this function is safe since:
+    // - if oldTotal + delta > int256.max it will panic and revert.
+    // - if |delta| <= oldTotal
+    //   * there is no risk of wrapping
+    // - if |delta| > oldTotal
+    //   * uint256(oldTotal + delta) will wrap but the wrapped value will
+    //     necessarily be greater than uint208.max, so SafeCast will revert.
+    //   * the lowest that oldTotal + delta can be is int256.min (when
+    //     oldTotal is 0 and delta is int256.min). The wrapped value of a
+    //     negative signed integer is:
+    //       wrapped(integer) = uint256.max + integer
+    //     Substituting:
+    //       wrapped(int256.min) = uint256.max + int256.min
+    //     But:
+    //       uint256.max + int256.min > uint208.max
+    //     Substituting again:
+    //       wrapped(int256.min) > uint208.max, which will revert when safecast.
+    uint256 _oldTotal = uint256(totalBalanceCheckpoints.latest());
+    uint256 _newTotal = uint256(int256(_oldTotal) + _delta);
+
+    totalBalanceCheckpoints.push(
+      IVotingToken(GOVERNOR.token()).clock(), SafeCast.toUint208(_newTotal)
+    );
+  }
+
   /// @notice Returns the `_user`'s raw balance at `_timepoint`.
   /// @param _user The account that's historical raw balance will be looked up.
   /// @param _timepoint The timepoint at which to lookup the _user's raw

@@ -33,6 +33,14 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _rawBalanceOf(_user);
   }
 
+  function exposed_latestTotalBalance() external view returns (uint208) {
+    return totalBalanceCheckpoints.latest();
+  }
+
+  function exposed_checkpointTotalBalance(int256 _delta) external {
+    return _checkpointTotalBalance(_delta);
+  }
+
   function exposed_castVoteReasonString() external returns (string memory) {
     return _castVoteReasonString();
   }
@@ -55,11 +63,7 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[msg.sender] += _amount;
 
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
-
-    FlexVotingClient.totalBalanceCheckpoints.push(
-      IVotingToken(GOVERNOR.token()).clock(),
-      FlexVotingClient.totalBalanceCheckpoints.latest() + _amount
-    );
+    FlexVotingClient._checkpointTotalBalance(int256(uint256(_amount)));
 
     // Assumes revert on failure.
     TOKEN.transferFrom(msg.sender, address(this), _amount);
@@ -72,11 +76,7 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[msg.sender] -= _amount;
 
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
-
-    FlexVotingClient.totalBalanceCheckpoints.push(
-      IVotingToken(GOVERNOR.token()).clock(),
-      FlexVotingClient.totalBalanceCheckpoints.latest() - _amount
-    );
+    FlexVotingClient._checkpointTotalBalance(-1 * int256(uint256(_amount)));
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
   }
