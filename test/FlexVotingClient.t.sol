@@ -278,7 +278,7 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     assertEq(flexClient.getPastTotalBalance(_timepoint), uint256(_initBalance + _delta));
   }
 
-  function testFuzz_RevertsIf_negativeDeltaWraps(int256 delta, uint208 balance) public {
+  function testFuzz_RevertIf_negativeDeltaWraps(int256 delta, uint208 balance) public {
     // Math.abs(delta) must be > balance for the concerning scenario to arise.
     delta = bound(delta, type(int256).min, -int256(uint256(balance)) - 1);
     assertTrue(SignedMath.abs(delta) > balance);
@@ -313,13 +313,13 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     SafeCast.toUint208(netBalanceUint256);
   }
 
-  function testFuzz_RevertsIf_withdrawalFromZero(int256 _withdraw) public {
+  function testFuzz_RevertIf_withdrawalFromZero(int256 _withdraw) public {
     _withdraw = bound(_withdraw, type(int208).min, -1);
     vm.expectRevert();
     flexClient.exposed_checkpointTotalBalance(_withdraw);
   }
 
-  function testFuzz_RevertsIf_withdrawalExceedsDeposit(int256 _deposit, int256 _withdraw) public {
+  function testFuzz_RevertIf_withdrawalExceedsDeposit(int256 _deposit, int256 _withdraw) public {
     _deposit = bound(_deposit, 1, type(int208).max - 1);
     _withdraw = bound(_withdraw, type(int208).min, (-1 * _deposit) - 1);
 
@@ -328,7 +328,7 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     flexClient.exposed_checkpointTotalBalance(_withdraw);
   }
 
-  function testFuzz_RevertsIf_depositsOverflow(int256 _deposit1, int256 _deposit2) public {
+  function testFuzz_RevertIf_depositsOverflow(int256 _deposit1, int256 _deposit2) public {
     int256 _max = int256(uint256(type(uint208).max));
     _deposit1 = bound(_deposit1, 1, _max);
     _deposit2 = bound(_deposit2, 1 + _max - _deposit1, _max);
