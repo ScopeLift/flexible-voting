@@ -5,7 +5,8 @@ import {Test, console2} from "forge-std/Test.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
-import {GovernorCountingSimple as GCS} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import {GovernorCountingSimple as GCS} from
+  "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";

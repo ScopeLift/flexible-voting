@@ -91,7 +91,6 @@ abstract contract FlexVotingClient {
   // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/7b74442c5e87ea51dde41c7f18a209fa5154f1a4/contracts/governance/extensions/GovernorCountingFractional.sol#L37
   uint8 internal constant VOTE_TYPE_FRACTIONAL = 255;
 
-
   error FlexVotingClient__NoVotingWeight();
   error FlexVotingClient__AlreadyVoted();
   error FlexVotingClient__InvalidSupportValue();

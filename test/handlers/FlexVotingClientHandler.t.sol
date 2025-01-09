@@ -4,7 +4,8 @@ pragma solidity ^0.8.20;
 import {Test, console2} from "forge-std/Test.sol";
 import {FlexVotingInvariantSetup} from "test/FlexVotingClient.invariants.t.sol";
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
-import {GovernorCountingSimple as GCS} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import {GovernorCountingSimple as GCS} from
+  "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
   // Amounts evenly divisible by 9 do not create new users.

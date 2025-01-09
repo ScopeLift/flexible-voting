@@ -5,7 +5,8 @@ import {Test, console2} from "forge-std/Test.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {IERC20Errors} from "@openzeppelin/contracts/interfaces/draft-IERC6093.sol";
-import {GovernorCountingFractional as GCF} from "@openzeppelin/contracts/governance/extensions/GovernorCountingFractional.sol";
+import {GovernorCountingFractional as GCF} from
+  "@openzeppelin/contracts/governance/extensions/GovernorCountingFractional.sol";
 
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
