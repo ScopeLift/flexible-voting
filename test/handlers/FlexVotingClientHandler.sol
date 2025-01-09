@@ -5,8 +5,8 @@ import {Test, console2} from "forge-std/Test.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {GovernorCountingSimple as GCS} from "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 
-import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
@@ -271,7 +271,7 @@ contract FlexVotingClientHandler is Test {
 
     // NOTE: We don't allow people to try to vote with bogus support types.
     _support = uint8(
-      _bound(uint256(_support), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max))
+      _bound(uint256(_support), uint256(type(GCS.VoteType).min), uint256(type(GCS.VoteType).max))
     );
     uint256 _proposalId = _randProposal(_proposalSeed);
     vm.startPrank(currentActor);

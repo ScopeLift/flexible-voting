@@ -457,7 +457,8 @@ contract Vote is FractionalPoolTest {
     // Try to submit them again.
     vm.expectRevert(
       abi.encodeWithSelector(
-        GovernorCountingFractional.GovernorCountingFractional__VoteWeightExceeded.selector
+        IGovernor.GovernorAlreadyCastVote.selector,
+        address(pool)
       )
     );
     pool.castVote(_proposalId);

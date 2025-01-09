@@ -88,6 +88,10 @@ abstract contract FlexVotingClient {
   /// given time.
   Checkpoints.Trace208 internal totalBalanceCheckpoints;
 
+  // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/7b74442c5e87ea51dde41c7f18a209fa5154f1a4/contracts/governance/extensions/GovernorCountingFractional.sol#L37
+  uint8 internal constant VOTE_TYPE_FRACTIONAL = 255;
+
+
   error FlexVotingClient__NoVotingWeight();
   error FlexVotingClient__AlreadyVoted();
   error FlexVotingClient__InvalidSupportValue();
@@ -188,17 +192,13 @@ abstract contract FlexVotingClient {
       (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalRawBalanceAtSnapshot
     );
 
-    // This param is ignored by the governor when voting with fractional
-    // weights. It makes no difference what vote type this is.
-    uint8 unusedSupportParam = uint8(VoteType.Abstain);
-
     // Clear the stored votes so that we don't double-cast them.
     delete proposalVotes[proposalId];
 
     bytes memory fractionalizedVotes =
       abi.encodePacked(_againstVotesToCast, _forVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(
-      proposalId, unusedSupportParam, _castVoteReasonString(), fractionalizedVotes
+      proposalId, VOTE_TYPE_FRACTIONAL, _castVoteReasonString(), fractionalizedVotes
     );
   }
 
