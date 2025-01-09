@@ -261,6 +261,7 @@ abstract contract GovernorCountingFractional is Governor {
             uint128 abstainVotes
         )
     {
+        /// @solidity memory-safe-assembly
         assembly {
             againstVotes := shr(128, mload(add(voteData, 0x20)))
             forVotes := and(_MASK_HALF_WORD_RIGHT, mload(add(voteData, 0x20)))
