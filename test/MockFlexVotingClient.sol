@@ -5,6 +5,7 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 
 contract MockFlexVotingClient is FlexVotingClient {
@@ -32,6 +33,14 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _rawBalanceOf(_user);
   }
 
+  function exposed_latestTotalBalance() external view returns (uint208) {
+    return totalBalanceCheckpoints.latest();
+  }
+
+  function exposed_checkpointTotalBalance(int256 _delta) external {
+    return _checkpointTotalBalance(_delta);
+  }
+
   function exposed_castVoteReasonString() external returns (string memory) {
     return _castVoteReasonString();
   }
@@ -54,10 +63,7 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[msg.sender] += _amount;
 
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
-
-    FlexVotingClient.totalBalanceCheckpoints.push(
-      SafeCast.toUint48(block.number), FlexVotingClient.totalBalanceCheckpoints.latest() + _amount
-    );
+    FlexVotingClient._checkpointTotalBalance(int256(uint256(_amount)));
 
     // Assumes revert on failure.
     TOKEN.transferFrom(msg.sender, address(this), _amount);
@@ -70,10 +76,7 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[msg.sender] -= _amount;
 
     FlexVotingClient._checkpointRawBalanceOf(msg.sender);
-
-    FlexVotingClient.totalBalanceCheckpoints.push(
-      SafeCast.toUint48(block.number), FlexVotingClient.totalBalanceCheckpoints.latest() - _amount
-    );
+    FlexVotingClient._checkpointTotalBalance(-1 * int256(uint256(_amount)));
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
   }
