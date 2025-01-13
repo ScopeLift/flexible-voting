@@ -4,7 +4,8 @@ pragma solidity ^0.8.20;
 import {Test, console2} from "forge-std/Test.sol";
 import {FlexVotingInvariantSetup} from "test/FlexVotingClient.invariants.t.sol";
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
-import {GovernorCountingFractional as GCF} from "src/GovernorCountingFractional.sol";
+import {GovernorCountingSimple as GCS} from
+  "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
   // Amounts evenly divisible by 9 do not create new users.
@@ -28,7 +29,7 @@ contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
 
   function _validVoteType(uint8 _seed) internal pure returns (uint8) {
     return uint8(
-      _bound(uint256(_seed), uint256(type(GCF.VoteType).min), uint256(type(GCF.VoteType).max))
+      _bound(uint256(_seed), uint256(type(GCS.VoteType).min), uint256(type(GCS.VoteType).max))
     );
   }
 }
@@ -264,9 +265,9 @@ contract ExpressVote is FlexVotingClientHandlerTest {
 
     // The vote preference should have been recorded by the client.
     (_againstVotes, _forVotes, _abstainVotes) = flexClient.proposalVotes(_proposalId);
-    if (_voteType == uint8(GCF.VoteType.Against)) assertEq(_amount, _againstVotes);
-    if (_voteType == uint8(GCF.VoteType.For)) assertEq(_amount, _forVotes);
-    if (_voteType == uint8(GCF.VoteType.Abstain)) assertEq(_amount, _abstainVotes);
+    if (_voteType == uint8(GCS.VoteType.Against)) assertEq(_amount, _againstVotes);
+    if (_voteType == uint8(GCS.VoteType.For)) assertEq(_amount, _forVotes);
+    if (_voteType == uint8(GCS.VoteType.Abstain)) assertEq(_amount, _abstainVotes);
 
     // The user should not be able to vote again.
     vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
@@ -312,9 +313,9 @@ contract CastVote is FlexVotingClientHandlerTest {
     // The vote preference should have been sent to the Governor.
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       governor.proposalVotes(_proposalId);
-    if (_voteType == uint8(GCF.VoteType.Against)) assertEq(_voteSize, _againstVotes);
-    if (_voteType == uint8(GCF.VoteType.For)) assertEq(_voteSize, _forVotes);
-    if (_voteType == uint8(GCF.VoteType.Abstain)) assertEq(_voteSize, _abstainVotes);
+    if (_voteType == uint8(GCS.VoteType.Against)) assertEq(_voteSize, _againstVotes);
+    if (_voteType == uint8(GCS.VoteType.For)) assertEq(_voteSize, _forVotes);
+    if (_voteType == uint8(GCS.VoteType.Abstain)) assertEq(_voteSize, _abstainVotes);
   }
 
   function testFuzz_aggregatesVotes(

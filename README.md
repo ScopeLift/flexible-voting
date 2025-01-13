@@ -31,7 +31,7 @@ To add Flexible Voting to your own Foundry project, use [forge install](https://
 $ forge install scopelift/flexible-voting
 ```
 
-If you're using a developer framework other than Foundry, we recommend vendoring the code by adding `src/GovernorCountingFractional.sol` and/or `src/FlexVotingClient.sol` to your repo directly. In the future, we may offer an npm package for use with other frameworks.
+If you're using a developer framework other than Foundry, we recommend vendoring the code by adding files like `src/FlexVotingClient.sol` to your repo directly. In the future, we may offer an npm package for use with other frameworks.
 
 ### Constructing a Governor
 
@@ -41,13 +41,11 @@ If you're constructing a new Governor with Flexible Voting—either to upgrade a
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Governor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {GovernorVotes} from "@openzeppelin/contracts/governance/extensions/GovernorVotes.sol";
 import {GovernorSettings} from "@openzeppelin/contracts/governance/extensions/GovernorSettings.sol";
-import {GovernorTimelockControl} from
-  "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
-import {
-  Governor, GovernorCountingFractional
-} from "flexible-voting/src/GovernorCountingFractional.sol";
+import {GovernorTimelockControl} from "@openzeppelin/contracts/governance/extensions/GovernorTimelockControl.sol";
+import {GovernorCountingFractional} from "@openzeppelin/contracts/governance/extensions/GovernorCountingFractional.sol";
 
 contract FlexibleVotingGovernor is
   GovernorCountingFractional,
@@ -98,10 +96,18 @@ To read more about Flexible Voting adoption, read the documentation pages on [co
 
 ## Repo Contents
 
-* [`src/GovernorCountingFractional.sol`](https://github.com/ScopeLift/flexible-voting/blob/master/src/GovernorCountingFractional.sol) - The Governor extension which enables Flexible Voting. A DAO adopting Flexible Voting would deploy a new Governor which used this extension.
 * [`src/FlexVotingClient.sol`](https://github.com/ScopeLift/flexible-voting/blob/master/src/FlexVotingClient.sol) - An abstract contract designed to make it easy to build clients for Flexible Voting governors. Inherit from this contract if you're building an integration or voting scheme for DAO(s) that use Flexible Voting.
 * [`src/FractionalPool.sol`](https://github.com/ScopeLift/flexible-voting/blob/master/src/FractionalPool.sol) - A proof-of-concept contract demonstrating how Flexible Voting can be used. It implements a simple token pool that allows holders to express their votes on proposals even when their tokens are deposited in the pool.
 * [`test/`](https://github.com/ScopeLift/flexible-voting/tree/master/test) - A full suite of unit and fuzz tests exercising the contracts.
+
+Note that `GovernorCountingFractional` has been removed from this repo.
+[It has since been
+incorporated](https://github.com/OpenZeppelin/openzeppelin-contracts/blob/7b74442c5e87ea51dde41c7f18a209fa5154f1a4/contracts/governance/extensions/GovernorCountingFractional.sol) into [OpenZeppelin's
+contracts library](https://github.com/OpenZeppelin/openzeppelin-contracts)
+as of [v5.1.0](https://github.com/OpenZeppelin/openzeppelin-contracts/releases/tag/v5.1.0).
+If you are unable to use v5.1.0 or later of OpenZeppelin's contracts, you can find the original
+`GovernorCountingFractional` implementation in previous releases of this repo,
+e.g. [`v1.2.0`](https://github.com/ScopeLift/flexible-voting/releases/tag/v1.2.0).
 
 ## Development
 
@@ -130,4 +136,4 @@ Code contributions to this repo are also welcome! Fork the project, create a new
 
 Fractional Voting is available under the [MIT](LICENSE.txt) license.
 
-Copyright (c) 2023 ScopeLift
+Copyright (c) 2025 ScopeLift

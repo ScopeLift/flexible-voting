@@ -54,6 +54,9 @@ contract FractionalPool {
   /// @notice Map proposalId to vote totals expressed on this proposal.
   mapping(uint256 => ProposalVote) public proposalVotes;
 
+  // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/7b74442c5e87ea51dde41c7f18a209fa5154f1a4/contracts/governance/extensions/GovernorCountingFractional.sol#L37
+  uint8 internal constant VOTE_TYPE_FRACTIONAL = 255;
+
   /// @param _token The governance token held and lent by this pool.
   /// @param _governor The governor contract associated with this governance token.
   constructor(IVotingToken _token, IFractionalGovernor _governor) {
@@ -122,7 +125,6 @@ contract FractionalPool {
   /// @param proposalId The ID of the proposal which the Pool will now vote on.
   function castVote(uint256 proposalId) external {
     if (internalVotingPeriodEnd(proposalId) > block.number) revert("cannot castVote yet");
-    uint8 unusedSupportParam = uint8(VoteType.Abstain);
     ProposalVote memory _proposalVote = proposalVotes[proposalId];
 
     uint256 _proposalSnapshotBlockNumber = GOVERNOR.proposalSnapshot(proposalId);
@@ -154,7 +156,7 @@ contract FractionalPool {
     bytes memory fractionalizedVotes =
       abi.encodePacked(_againstVotesToCast, _forVotesToCast, _abstainVotesToCast);
     GOVERNOR.castVoteWithReasonAndParams(
-      proposalId, unusedSupportParam, "crowd-sourced vote", fractionalizedVotes
+      proposalId, VOTE_TYPE_FRACTIONAL, "crowd-sourced vote", fractionalizedVotes
     );
   }
 
