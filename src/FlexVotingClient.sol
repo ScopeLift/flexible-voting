@@ -81,7 +81,7 @@ abstract contract FlexVotingClient {
 
   /// @dev Mapping from address to the checkpoint history of raw balances
   /// of that address.
-  mapping(address => Checkpoints.Trace208) private balanceCheckpoints;
+  mapping(address => Checkpoints.Trace208) internal balanceCheckpoints;
 
   /// @dev History of the sum total of raw balances in the system. May or may
   /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
@@ -122,12 +122,22 @@ abstract contract FlexVotingClient {
   /// Governor until `castVote` is called.
   /// @param proposalId The proposalId in the associated Governor
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
-  function expressVote(uint256 proposalId, uint8 support) external {
-    uint256 weight = getPastRawBalance(msg.sender, GOVERNOR.proposalSnapshot(proposalId));
+  function expressVote(uint256 proposalId, uint8 support) external virtual {
+    address voter = msg.sender;
+    uint256 weight = getPastRawBalance(voter, GOVERNOR.proposalSnapshot(proposalId));
+    _expressVote(voter, proposalId, support, weight);
+  }
+
+  function _expressVote(
+    address voter,
+    uint256 proposalId,
+    uint8 support,
+    uint256 weight
+  ) internal virtual {
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
-    if (proposalVotersHasVoted[proposalId][msg.sender]) revert FlexVotingClient__AlreadyVoted();
-    proposalVotersHasVoted[proposalId][msg.sender] = true;
+    if (proposalVotersHasVoted[proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
+    proposalVotersHasVoted[proposalId][voter] = true;
 
     if (support == uint8(VoteType.Against)) {
       proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
