@@ -19,7 +19,7 @@ import {FractionalGovernor} from "test/FractionalGovernor.sol";
 import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
 abstract contract FlexVotingClientTest is Test {
-  address client;
+  MockFlexVotingClient flexClient;
   GovToken token;
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
@@ -39,8 +39,8 @@ abstract contract FlexVotingClientTest is Test {
     governor = new FractionalGovernor("Governor", IVotes(token));
     vm.label(address(governor), "governor");
 
-    _deployClient(address(governor));
-    vm.label(address(client), "client");
+    _deployFlexClient(address(governor));
+    vm.label(address(flexClient), "flexclient");
 
     receiver = new ProposalReceiverMock();
     vm.label(address(receiver), "receiver");
@@ -48,13 +48,8 @@ abstract contract FlexVotingClientTest is Test {
 
   function _timestampClock() internal pure virtual returns (bool);
 
-  // Function to deploy FlexVotingClient and write to `client` storage var.
-  function _deployClient(address _governor) internal virtual;
-
-  // Function to cast the stored client address to the contract type under test.
-  // This is done to facilitate re-use of these tests for FlexVotingClient
-  // extensions. If you're reading this I'm sorry. Like really sorry.
-  function flexClient() public view virtual returns (MockFlexVotingClient);
+  // Function to deploy FlexVotingClient and write to `flexClient` storage var.
+  function _deployFlexClient(address _governor) internal virtual;
 
   function _now() internal view returns (uint48) {
     return token.clock();
@@ -74,13 +69,13 @@ abstract contract FlexVotingClientTest is Test {
     vm.assume(_user != address(0));
     token.exposed_mint(_user, _amount);
     vm.prank(_user);
-    token.approve(client, type(uint256).max);
+    token.approve(address(flexClient), type(uint256).max);
   }
 
   function _mintGovAndDepositIntoFlexClient(address _address, uint208 _amount) internal {
     _mintGovAndApproveFlexClient(_address, _amount);
     vm.prank(_address);
-    flexClient().deposit(_amount);
+    flexClient.deposit(_amount);
   }
 
   function _createAndSubmitProposal() internal returns (uint256 proposalId) {
@@ -106,7 +101,7 @@ abstract contract FlexVotingClientTest is Test {
   }
 
   function _assumeSafeUser(address _user) internal view {
-    vm.assume(_user != client);
+    vm.assume(_user != address(flexClient));
     vm.assume(_user != address(0));
   }
 
@@ -140,8 +135,8 @@ abstract contract Deployment is FlexVotingClientTest {
     assertEq(token.name(), "Governance Token");
     assertEq(token.symbol(), "GOV");
 
-    assertEq(address(flexClient().GOVERNOR()), address(governor));
-    assertEq(token.delegates(client), client);
+    assertEq(address(flexClient.GOVERNOR()), address(governor));
+    assertEq(token.delegates(address(flexClient)), address(flexClient));
 
     assertEq(governor.name(), "Governor");
     assertEq(address(governor.token()), address(token));
@@ -150,11 +145,11 @@ abstract contract Deployment is FlexVotingClientTest {
 
 abstract contract Constructor is FlexVotingClientTest {
   function test_SetsGovernor() public view {
-    assertEq(address(flexClient().GOVERNOR()), address(governor));
+    assertEq(address(flexClient.GOVERNOR()), address(governor));
   }
 
   function test_SelfDelegates() public view {
-    assertEq(token.delegates(client), client);
+    assertEq(token.delegates(address(flexClient)), address(flexClient));
   }
 }
 
@@ -162,7 +157,7 @@ abstract contract Constructor is FlexVotingClientTest {
 abstract contract _RawBalanceOf is FlexVotingClientTest {
   function testFuzz_ReturnsZeroForNonDepositors(address _user) public view {
     _assumeSafeUser(_user);
-    assertEq(flexClient().exposed_rawBalanceOf(_user), 0);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
   }
 
   function testFuzz_IncreasesOnDeposit(address _user, uint208 _amount) public {
@@ -172,7 +167,7 @@ abstract contract _RawBalanceOf is FlexVotingClientTest {
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(flexClient().exposed_rawBalanceOf(_user), _amount);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _amount);
   }
 
   function testFuzz_DecreasesOnWithdrawal(address _user, uint208 _amount) public {
@@ -182,11 +177,11 @@ abstract contract _RawBalanceOf is FlexVotingClientTest {
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(flexClient().exposed_rawBalanceOf(_user), _amount);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _amount);
 
     vm.prank(_user);
-    flexClient().withdraw(_amount);
-    assertEq(flexClient().exposed_rawBalanceOf(_user), 0);
+    flexClient.withdraw(_amount);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
   }
 
   function testFuzz_UnaffectedByBorrow(address _user, uint208 _deposit, uint208 _borrow) public {
@@ -197,13 +192,13 @@ abstract contract _RawBalanceOf is FlexVotingClientTest {
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _deposit);
 
-    assertEq(flexClient().exposed_rawBalanceOf(_user), _deposit);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _deposit);
 
     vm.prank(_user);
-    flexClient().borrow(_borrow);
+    flexClient.borrow(_borrow);
 
     // Raw balance is unchanged.
-    assertEq(flexClient().exposed_rawBalanceOf(_user), _deposit);
+    assertEq(flexClient.exposed_rawBalanceOf(_user), _deposit);
   }
 }
 
@@ -211,7 +206,7 @@ abstract contract _RawBalanceOf is FlexVotingClientTest {
 abstract contract _CastVoteReasonString is FlexVotingClientTest {
   function test_ReturnsDescriptiveString() public {
     assertEq(
-      flexClient().exposed_castVoteReasonString(), "rolled-up vote from governance token holders"
+      flexClient.exposed_castVoteReasonString(), "rolled-up vote from governance token holders"
     );
   }
 }
@@ -220,16 +215,16 @@ abstract contract _CastVoteReasonString is FlexVotingClientTest {
 abstract contract _SelfDelegate is FlexVotingClientTest {
   function testFuzz_SetsClientAsTheDelegate(address _delegatee) public {
     vm.assume(_delegatee != address(0));
-    vm.assume(_delegatee != client);
+    vm.assume(_delegatee != address(flexClient));
 
     // We self-delegate in the constructor, so we need to first un-delegate for
     // this test to be meaningful.
-    vm.prank(client);
+    vm.prank(address(flexClient));
     token.delegate(_delegatee);
-    assertEq(token.delegates(client), _delegatee);
+    assertEq(token.delegates(address(flexClient)), _delegatee);
 
-    flexClient().exposed_selfDelegate();
-    assertEq(token.delegates(client), client);
+    flexClient.exposed_selfDelegate();
+    assertEq(token.delegates(address(flexClient)), address(flexClient));
   }
 }
 
@@ -240,17 +235,17 @@ abstract contract _CheckpointRawBalanceOf is FlexVotingClientTest {
     uint208 _amount,
     uint48 _timepoint
   ) public {
-    vm.assume(_user != client);
+    vm.assume(_user != address(flexClient));
     _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
-    flexClient().exposed_setDeposits(_user, _amount);
-    assertEq(flexClient().getPastRawBalance(_user, _timepoint), 0);
+    flexClient.exposed_setDeposits(_user, _amount);
+    assertEq(flexClient.getPastRawBalance(_user, _timepoint), 0);
 
     _advanceTimeTo(_timepoint);
 
-    flexClient().exposed_checkpointRawBalanceOf(_user);
-    assertEq(flexClient().getPastRawBalance(_user, _timepoint), _amount);
+    flexClient.exposed_checkpointRawBalanceOf(_user);
+    assertEq(flexClient.getPastRawBalance(_user, _timepoint), _amount);
   }
 }
 
@@ -260,14 +255,14 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
   function testFuzz_writesACheckpointAtClockTime(int256 _value, uint48 _timepoint) public {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _value = bound(_value, 1, MAX_UINT208);
-    assertEq(flexClient().exposed_latestTotalBalance(), 0);
+    assertEq(flexClient.exposed_latestTotalBalance(), 0);
 
     _advanceTimeTo(_timepoint);
-    flexClient().exposed_checkpointTotalBalance(_value);
+    flexClient.exposed_checkpointTotalBalance(_value);
     _advanceTimeBy(1);
 
-    assertEq(flexClient().getPastTotalBalance(_timepoint), uint256(_value));
-    assertEq(flexClient().exposed_latestTotalBalance(), uint256(_value));
+    assertEq(flexClient.getPastTotalBalance(_timepoint), uint256(_value));
+    assertEq(flexClient.exposed_latestTotalBalance(), uint256(_value));
   }
 
   function testFuzz_checkpointsTheTotalBalanceDeltaAtClockTime(
@@ -278,13 +273,13 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _initBalance = bound(_initBalance, 1, MAX_UINT208 - 1);
     _delta = bound(_delta, -_initBalance, MAX_UINT208 - _initBalance);
-    flexClient().exposed_checkpointTotalBalance(_initBalance);
+    flexClient.exposed_checkpointTotalBalance(_initBalance);
 
     _advanceTimeTo(_timepoint);
-    flexClient().exposed_checkpointTotalBalance(_delta);
+    flexClient.exposed_checkpointTotalBalance(_delta);
     _advanceTimeBy(1);
 
-    assertEq(flexClient().getPastTotalBalance(_timepoint), uint256(_initBalance + _delta));
+    assertEq(flexClient.getPastTotalBalance(_timepoint), uint256(_initBalance + _delta));
   }
 
   function testFuzz_RevertIf_negativeDeltaWraps(int256 delta, uint208 balance) public {
@@ -325,16 +320,16 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
   function testFuzz_RevertIf_withdrawalFromZero(int256 _withdraw) public {
     _withdraw = bound(_withdraw, type(int208).min, -1);
     vm.expectRevert();
-    flexClient().exposed_checkpointTotalBalance(_withdraw);
+    flexClient.exposed_checkpointTotalBalance(_withdraw);
   }
 
   function testFuzz_RevertIf_withdrawalExceedsDeposit(int256 _deposit, int256 _withdraw) public {
     _deposit = bound(_deposit, 1, type(int208).max - 1);
     _withdraw = bound(_withdraw, type(int208).min, (-1 * _deposit) - 1);
 
-    flexClient().exposed_checkpointTotalBalance(_deposit);
+    flexClient.exposed_checkpointTotalBalance(_deposit);
     vm.expectRevert();
-    flexClient().exposed_checkpointTotalBalance(_withdraw);
+    flexClient.exposed_checkpointTotalBalance(_withdraw);
   }
 
   function testFuzz_RevertIf_depositsOverflow(int256 _deposit1, int256 _deposit2) public {
@@ -342,9 +337,9 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     _deposit1 = bound(_deposit1, 1, _max);
     _deposit2 = bound(_deposit2, 1 + _max - _deposit1, _max);
 
-    flexClient().exposed_checkpointTotalBalance(_deposit1);
+    flexClient.exposed_checkpointTotalBalance(_deposit1);
     vm.expectRevert();
-    flexClient().exposed_checkpointTotalBalance(_deposit2);
+    flexClient.exposed_checkpointTotalBalance(_deposit2);
   }
 }
 
@@ -354,20 +349,20 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     address _nonDepositor,
     uint208 _amount
   ) public {
-    vm.assume(_depositor != client);
-    vm.assume(_nonDepositor != client);
+    vm.assume(_depositor != address(flexClient));
+    vm.assume(_nonDepositor != address(flexClient));
     vm.assume(_nonDepositor != _depositor);
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     _advanceTimeBy(1);
-    assertEq(flexClient().getPastRawBalance(_depositor, 0), 0);
-    assertEq(flexClient().getPastRawBalance(_nonDepositor, 0), 0);
+    assertEq(flexClient.getPastRawBalance(_depositor, 0), 0);
+    assertEq(flexClient.getPastRawBalance(_nonDepositor, 0), 0);
 
     _mintGovAndDepositIntoFlexClient(_depositor, _amount);
     _advanceTimeBy(1);
 
-    assertEq(flexClient().getPastRawBalance(_depositor, _now() - 1), _amount);
-    assertEq(flexClient().getPastRawBalance(_nonDepositor, _now() - 1), 0);
+    assertEq(flexClient.getPastRawBalance(_depositor, _now() - 1), _amount);
+    assertEq(flexClient.getPastRawBalance(_nonDepositor, _now() - 1), 0);
   }
 
   function testFuzz_ReturnsCurrentValueForFutureTimepoints(
@@ -375,18 +370,18 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     uint208 _amount,
     uint48 _timepoint
   ) public {
-    vm.assume(_user != client);
+    vm.assume(_user != address(flexClient));
     _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(flexClient().getPastRawBalance(_user, _now()), _amount);
-    assertEq(flexClient().getPastRawBalance(_user, _timepoint), _amount);
+    assertEq(flexClient.getPastRawBalance(_user, _now()), _amount);
+    assertEq(flexClient.getPastRawBalance(_user, _timepoint), _amount);
 
     _advanceTimeTo(_timepoint);
 
-    assertEq(flexClient().getPastRawBalance(_user, _now()), _amount);
+    assertEq(flexClient.getPastRawBalance(_user, _now()), _amount);
   }
 
   function testFuzz_ReturnsUserBalanceAtAGivenTimepoint(
@@ -395,7 +390,7 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     uint208 _amountB,
     uint48 _timepoint
   ) public {
-    vm.assume(_user != client);
+    vm.assume(_user != address(flexClient));
     _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
     _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
@@ -409,17 +404,17 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     _advanceTimeBy(1);
 
     uint48 _zeroTimepoint = 0;
-    assertEq(flexClient().getPastRawBalance(_user, _zeroTimepoint), 0);
-    assertEq(flexClient().getPastRawBalance(_user, _initTimepoint), _amountA);
-    assertEq(flexClient().getPastRawBalance(_user, _timepoint), _amountA + _amountB);
+    assertEq(flexClient.getPastRawBalance(_user, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastRawBalance(_user, _initTimepoint), _amountA);
+    assertEq(flexClient.getPastRawBalance(_user, _timepoint), _amountA + _amountB);
   }
 }
 
 abstract contract GetPastTotalBalance is FlexVotingClientTest {
   function testFuzz_ReturnsZeroWithoutDeposits(uint48 _future) public view {
     uint48 _zeroTimepoint = 0;
-    assertEq(flexClient().getPastTotalBalance(_zeroTimepoint), 0);
-    assertEq(flexClient().getPastTotalBalance(_future), 0);
+    assertEq(flexClient.getPastTotalBalance(_zeroTimepoint), 0);
+    assertEq(flexClient.getPastTotalBalance(_future), 0);
   }
 
   function testFuzz_ReturnsCurrentValueForFutureTimepoints(
@@ -427,18 +422,18 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
     uint208 _amount,
     uint48 _future
   ) public {
-    vm.assume(_user != client);
+    vm.assume(_user != address(flexClient));
     _future = uint48(bound(_future, _now() + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(flexClient().getPastTotalBalance(_now()), _amount);
-    assertEq(flexClient().getPastTotalBalance(_future), _amount);
+    assertEq(flexClient.getPastTotalBalance(_now()), _amount);
+    assertEq(flexClient.getPastTotalBalance(_future), _amount);
 
     _advanceTimeTo(_future);
 
-    assertEq(flexClient().getPastTotalBalance(_now()), _amount);
+    assertEq(flexClient.getPastTotalBalance(_now()), _amount);
   }
 
   function testFuzz_SumsAllUserDeposits(
@@ -447,8 +442,8 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
     address _userB,
     uint208 _amountB
   ) public {
-    vm.assume(_userA != client);
-    vm.assume(_userB != client);
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
     vm.assume(_userA != _userB);
 
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
@@ -459,7 +454,7 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
 
     _advanceTimeBy(1);
 
-    assertEq(flexClient().getPastTotalBalance(_now()), _amountA + _amountB);
+    assertEq(flexClient.getPastTotalBalance(_now()), _amountA + _amountB);
   }
 
   function testFuzz_ReturnsTotalDepositsAtAGivenTimepoint(
@@ -469,22 +464,22 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
     uint208 _amountB,
     uint48 _future
   ) public {
-    vm.assume(_userA != client);
-    vm.assume(_userB != client);
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
     vm.assume(_userA != _userB);
     _future = uint48(bound(_future, _now() + 1, type(uint48).max));
 
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
     _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
-    assertEq(flexClient().getPastTotalBalance(_now()), 0);
+    assertEq(flexClient.getPastTotalBalance(_now()), 0);
 
     _mintGovAndDepositIntoFlexClient(_userA, _amountA);
     _advanceTimeTo(_future);
     _mintGovAndDepositIntoFlexClient(_userB, _amountB);
 
-    assertEq(flexClient().getPastTotalBalance(_now() - _future + 1), _amountA);
-    assertEq(flexClient().getPastTotalBalance(_now()), _amountA + _amountB);
+    assertEq(flexClient.getPastTotalBalance(_now() - _future + 1), _amountA);
+    assertEq(flexClient.getPastTotalBalance(_now()), _amountA + _amountB);
   }
 }
 
@@ -493,28 +488,28 @@ abstract contract Withdraw is FlexVotingClientTest {
     public
   {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
-    vm.assume(_lender != client);
-    vm.assume(_borrower != client);
+    vm.assume(_lender != address(flexClient));
+    vm.assume(_borrower != address(flexClient));
     vm.assume(_borrower != address(0));
     vm.assume(_lender != _borrower);
 
     uint256 _initBalance = token.balanceOf(_borrower);
-    assertEq(flexClient().deposits(_borrower), 0);
-    assertEq(flexClient().borrowTotal(_borrower), 0);
+    assertEq(flexClient.deposits(_borrower), 0);
+    assertEq(flexClient.borrowTotal(_borrower), 0);
 
     _mintGovAndDepositIntoFlexClient(_lender, _amount);
-    assertEq(flexClient().deposits(_lender), _amount);
+    assertEq(flexClient.deposits(_lender), _amount);
 
     // Borrow the funds.
     vm.prank(_borrower);
-    flexClient().borrow(_amount);
+    flexClient.borrow(_amount);
 
     assertEq(token.balanceOf(_borrower), _initBalance + _amount);
-    assertEq(flexClient().borrowTotal(_borrower), _amount);
+    assertEq(flexClient.borrowTotal(_borrower), _amount);
 
     // Deposit totals are unaffected.
-    assertEq(flexClient().deposits(_lender), _amount);
-    assertEq(flexClient().deposits(_borrower), 0);
+    assertEq(flexClient.deposits(_lender), _amount);
+    assertEq(flexClient.deposits(_borrower), 0);
   }
 
   // `borrow`s affects on vote weights are tested in Vote contract below.
@@ -523,18 +518,18 @@ abstract contract Withdraw is FlexVotingClientTest {
 abstract contract Deposit is FlexVotingClientTest {
   function testFuzz_UserCanDepositGovTokens(address _user, uint208 _amount) public {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
-    vm.assume(_user != client);
+    vm.assume(_user != address(flexClient));
     uint256 initialBalance = token.balanceOf(_user);
-    assertEq(flexClient().deposits(_user), 0);
+    assertEq(flexClient.deposits(_user), 0);
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(token.balanceOf(client), _amount);
+    assertEq(token.balanceOf(address(flexClient)), _amount);
     assertEq(token.balanceOf(_user), initialBalance);
-    assertEq(token.getVotes(client), _amount);
+    assertEq(token.getVotes(address(flexClient)), _amount);
 
     // Confirm internal accounting has updated.
-    assertEq(flexClient().deposits(_user), _amount);
+    assertEq(flexClient.deposits(_user), _amount);
   }
 
   function testFuzz_DepositsAreCheckpointed(
@@ -548,14 +543,14 @@ abstract contract Deposit is FlexVotingClientTest {
 
     // Deposit some gov.
     _mintGovAndDepositIntoFlexClient(_user, _amountA);
-    assertEq(flexClient().deposits(_user), _amountA);
+    assertEq(flexClient.deposits(_user), _amountA);
 
     _advanceTimeBy(1); // Advance so that we can look at checkpoints.
 
     // We can still retrieve the user's balance at the given time.
     uint256 _checkpoint1 = _now() - 1;
     assertEq(
-      flexClient().getPastRawBalance(_user, _checkpoint1),
+      flexClient.getPastRawBalance(_user, _checkpoint1),
       _amountA,
       "user's first deposit was not properly checkpointed"
     );
@@ -565,17 +560,17 @@ abstract contract Deposit is FlexVotingClientTest {
 
     // Deposit some more.
     _mintGovAndDepositIntoFlexClient(_user, _amountB);
-    assertEq(flexClient().deposits(_user), _amountA + _amountB);
+    assertEq(flexClient.deposits(_user), _amountA + _amountB);
 
     _advanceTimeBy(1); // Advance so that we can look at checkpoints.
 
     assertEq(
-      flexClient().getPastRawBalance(_user, _checkpoint1),
+      flexClient.getPastRawBalance(_user, _checkpoint1),
       _amountA,
       "user's first deposit was not properly checkpointed"
     );
     assertEq(
-      flexClient().getPastRawBalance(_user, _checkpoint2),
+      flexClient.getPastRawBalance(_user, _checkpoint2),
       _amountA + _amountB,
       "user's second deposit was not properly checkpointed"
     );
@@ -599,9 +594,9 @@ abstract contract ExpressVote is FlexVotingClientTest {
 
     // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient().proposalVotes(_proposalId);
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -629,10 +624,10 @@ abstract contract ExpressVote is FlexVotingClientTest {
     _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
 
     // Now try to express a voting preference on the proposal.
-    assertEq(flexClient().deposits(_user), _voteWeight);
+    assertEq(flexClient.deposits(_user), _voteWeight);
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
   }
 
   function testFuzz_RevertWhen_NoClientWeightButTokenWeight(
@@ -646,7 +641,7 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // Mint gov but do not deposit.
     _mintGovAndApproveFlexClient(_user, _voteWeight);
     assertEq(token.balanceOf(_user), _voteWeight);
-    assertEq(flexClient().deposits(_user), 0);
+    assertEq(flexClient.deposits(_user), 0);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -654,19 +649,19 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // _user should NOT be able to express his/her vote on the proposal.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
 
     // Deposit into the client.
     vm.prank(_user);
-    flexClient().deposit(_voteWeight);
-    assertEq(flexClient().deposits(_user), _voteWeight);
+    flexClient.deposit(_voteWeight);
+    assertEq(flexClient.deposits(_user), _voteWeight);
 
     // _user should still NOT be able to express his/her vote on the proposal.
     // Despite having a deposit balance, he/she didn't have a balance at the
     // proposal snapshot.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
   }
 
   function testFuzz_RevertOn_DoubleVotes(address _user, uint208 _voteWeight, uint8 _supportType)
@@ -683,13 +678,13 @@ abstract contract ExpressVote is FlexVotingClientTest {
 
     // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
 
     (
       uint256 _againstVotesExpressedInit,
       uint256 _forVotesExpressedInit,
       uint256 _abstainVotesExpressedInit
-    ) = flexClient().proposalVotes(_proposalId);
+    ) = flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressedInit, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressedInit, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressedInit, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -697,11 +692,11 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // Vote early and often!
     vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
 
     // No votes changed.
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient().proposalVotes(_proposalId);
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, _forVotesExpressedInit);
     assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
     assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
@@ -725,7 +720,7 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // Now try to express a voting preference with a bogus support type.
     vm.expectRevert(FVC.FlexVotingClient__InvalidSupportValue.selector);
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, _supportType);
+    flexClient.expressVote(_proposalId, _supportType);
   }
 
   function testFuzz_RevertOn_UnknownProposal(
@@ -756,7 +751,7 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // Now try to express a voting preference on the bogus proposal.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, _supportType);
+    flexClient.expressVote(_proposalId, _supportType);
   }
 }
 
@@ -775,9 +770,9 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient().proposalVotes(_proposalId);
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -790,7 +785,7 @@ abstract contract CastVote is FlexVotingClientTest {
     assertEq(_abstainVotes, 0);
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // Governor should now record votes from the flexClient.
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
@@ -820,17 +815,17 @@ abstract contract CastVote is FlexVotingClientTest {
     _mintGovAndDepositIntoFlexClient(_user, _voteWeightB);
 
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
 
     // The internal proposal vote weight should not reflect the new deposit weight.
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient().proposalVotes(_proposalId);
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeightA : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeightA : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeightA : 0);
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // Votes cast should likewise reflect only the earlier balance.
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
@@ -861,12 +856,12 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // users should now be able to express their votes on the proposal.
     vm.prank(_userA);
-    flexClient().expressVote(_proposalId, uint8(GCS.VoteType.Against));
+    flexClient.expressVote(_proposalId, uint8(GCS.VoteType.Against));
     vm.prank(_userB);
-    flexClient().expressVote(_proposalId, uint8(GCS.VoteType.Abstain));
+    flexClient.expressVote(_proposalId, uint8(GCS.VoteType.Abstain));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient().proposalVotes(_proposalId);
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, 0);
     assertEq(_againstVotesExpressed, _voteWeightA);
     assertEq(_abstainVotesExpressed, _voteWeightB);
@@ -879,7 +874,7 @@ abstract contract CastVote is FlexVotingClientTest {
     assertEq(_abstainVotes, 0);
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // Governor should now record votes for the flexClient.
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
@@ -927,33 +922,33 @@ abstract contract CastVote is FlexVotingClientTest {
     // Mint and deposit.
     _mintGovAndDepositIntoFlexClient(_vars.userA, _vars.voteWeightA);
     _mintGovAndDepositIntoFlexClient(_vars.userB, _vars.voteWeightB);
-    uint256 _initDepositWeight = token.balanceOf(client);
+    uint256 _initDepositWeight = token.balanceOf(address(flexClient));
 
     // Borrow from the flexClient, decreasing its token balance.
     vm.prank(_vars.userC);
-    flexClient().borrow(_vars.borrowAmountC);
+    flexClient.borrow(_vars.borrowAmountC);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Jump ahead to the proposal snapshot to lock in the flexClient's balance.
     _advanceTimeTo(governor.proposalSnapshot(_proposalId) + 1);
-    uint256 _expectedVotingWeight = token.balanceOf(client);
+    uint256 _expectedVotingWeight = token.balanceOf(address(flexClient));
     assert(_expectedVotingWeight < _initDepositWeight);
 
     // A+B express votes
     vm.prank(_vars.userA);
-    flexClient().expressVote(_proposalId, _vars.supportTypeA);
+    flexClient.expressVote(_proposalId, _vars.supportTypeA);
     vm.prank(_vars.userB);
-    flexClient().expressVote(_proposalId, _vars.supportTypeB);
+    flexClient.expressVote(_proposalId, _vars.supportTypeB);
 
     // Borrow more from the flexClient, just to confirm that the vote weight will be based
     // on the snapshot blocktime/number.
     vm.prank(_vars.userD);
-    flexClient().borrow(_vars.borrowAmountD);
+    flexClient.borrow(_vars.borrowAmountD);
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // Vote should be cast as a percentage of the depositer's expressed types, since
     // the actual weight is different from the deposit weight.
@@ -1028,29 +1023,29 @@ abstract contract CastVote is FlexVotingClientTest {
     // Mint and deposit.
     _mintGovAndDepositIntoFlexClient(_users[0], _voteWeightA);
     _mintGovAndDepositIntoFlexClient(_users[1], _voteWeightB);
-    uint256 _initDepositWeight = token.balanceOf(client);
+    uint256 _initDepositWeight = token.balanceOf(address(flexClient));
 
     // Borrow from the flexClient, decreasing its token balance.
     vm.prank(_users[2]);
-    flexClient().borrow(_borrowAmount);
+    flexClient.borrow(_borrowAmount);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
 
     // Jump ahead to the proposal snapshot to lock in the flexClient's balance.
     _advanceTimeTo(governor.proposalSnapshot(_proposalId) + 1);
-    uint256 _totalPossibleVotingWeight = token.balanceOf(client);
+    uint256 _totalPossibleVotingWeight = token.balanceOf(address(flexClient));
 
-    uint256 _fullVotingWeight = token.balanceOf(client);
+    uint256 _fullVotingWeight = token.balanceOf(address(flexClient));
     assert(_fullVotingWeight < _initDepositWeight);
     assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB - _borrowAmount);
 
     // Only user A expresses a vote.
     vm.prank(_users[0]);
-    flexClient().expressVote(_proposalId, uint8(_voteTypeA));
+    flexClient.expressVote(_proposalId, uint8(_voteTypeA));
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // Vote should be cast as a percentage of the depositer's expressed types, since
     // the actual weight is different from the deposit weight.
@@ -1103,7 +1098,7 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // Mint and deposit for just userA.
     _mintGovAndDepositIntoFlexClient(_users[0], _voteWeightA);
-    uint256 _initDepositWeight = token.balanceOf(client);
+    uint256 _initDepositWeight = token.balanceOf(address(flexClient));
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -1114,16 +1109,16 @@ abstract contract CastVote is FlexVotingClientTest {
     // Now mint and deposit for userB.
     _mintGovAndDepositIntoFlexClient(_users[1], _voteWeightB);
 
-    uint256 _fullVotingWeight = token.balanceOf(client);
+    uint256 _fullVotingWeight = token.balanceOf(address(flexClient));
     assert(_fullVotingWeight > _initDepositWeight);
     assertEq(_fullVotingWeight, _voteWeightA + _voteWeightB);
 
     // Only user A expresses a vote.
     vm.prank(_users[0]);
-    flexClient().expressVote(_proposalId, uint8(_voteTypeA));
+    flexClient.expressVote(_proposalId, uint8(_voteTypeA));
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       governor.proposalVotes(_proposalId);
@@ -1143,8 +1138,8 @@ abstract contract CastVote is FlexVotingClientTest {
     _voteWeightA = uint208(bound(_voteWeightA, 1, type(uint120).max));
     _voteWeightB = uint208(bound(_voteWeightB, 1, type(uint120).max));
 
-    vm.assume(_userA != client);
-    vm.assume(_userB != client);
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
     vm.assume(_userA != _userB);
 
     // Deposit some funds.
@@ -1156,10 +1151,10 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // users should now be able to express their votes on the proposal.
     vm.prank(_userA);
-    flexClient().expressVote(_proposalId, uint8(GCS.VoteType.Against));
+    flexClient.expressVote(_proposalId, uint8(GCS.VoteType.Against));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient().proposalVotes(_proposalId);
+      flexClient.proposalVotes(_proposalId);
     assertEq(_forVotesExpressed, 0);
     assertEq(_againstVotesExpressed, _voteWeightA);
     assertEq(_abstainVotesExpressed, 0);
@@ -1172,7 +1167,7 @@ abstract contract CastVote is FlexVotingClientTest {
     assertEq(_abstainVotes, 0);
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // Governor should now record votes for the flexClient.
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
@@ -1182,8 +1177,8 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // The second user now decides to express and cast.
     vm.prank(_userB);
-    flexClient().expressVote(_proposalId, uint8(GCS.VoteType.Abstain));
-    flexClient().castVote(_proposalId);
+    flexClient.expressVote(_proposalId, uint8(GCS.VoteType.Abstain));
+    flexClient.castVote(_proposalId);
 
     // Governor should now record votes for both users.
     (_againstVotes, _forVotes, _abstainVotes) = governor.proposalVotes(_proposalId);
@@ -1206,18 +1201,18 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // No one has expressed, there are no votes to cast.
     vm.expectRevert(FVC.FlexVotingClient__NoVotesExpressed.selector);
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // _user expresses his/her vote on the proposal.
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
 
     // Submit votes on behalf of the flexClient.
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
 
     // All votes have been cast, there's nothing new to send to the governor.
     vm.expectRevert(FVC.FlexVotingClient__NoVotesExpressed.selector);
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
   }
 
   function testFuzz_RevertWhen_AfterVotingPeriod(
@@ -1236,7 +1231,7 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // Express vote preference.
     vm.prank(_user);
-    flexClient().expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_proposalId, uint8(_voteType));
 
     // Jump ahead so that we're outside of the proposal's voting period.
     _advanceTimeTo(governor.proposalDeadline(_proposalId) + 1);
@@ -1251,7 +1246,7 @@ abstract contract CastVote is FlexVotingClientTest {
         bytes32(1 << uint8(IGovernor.ProposalState.Active))
       )
     );
-    flexClient().castVote(_proposalId);
+    flexClient.castVote(_proposalId);
   }
 }
 
@@ -1272,21 +1267,21 @@ abstract contract Borrow is FlexVotingClientTest {
     // Borrow some funds.
     uint256 _initBalance = token.balanceOf(_borrower);
     vm.prank(_borrower);
-    flexClient().borrow(_borrowAmount);
+    flexClient.borrow(_borrowAmount);
 
     // Tokens should have been transferred.
     assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
-    assertEq(token.balanceOf(client), _depositAmount - _borrowAmount);
+    assertEq(token.balanceOf(address(flexClient)), _depositAmount - _borrowAmount);
 
     // Borrow total has been tracked.
-    assertEq(flexClient().borrowTotal(_borrower), _borrowAmount);
+    assertEq(flexClient.borrowTotal(_borrower), _borrowAmount);
 
     // The deposit balance of the depositer should not have changed.
-    assertEq(flexClient().deposits(_depositer), _depositAmount);
+    assertEq(flexClient.deposits(_depositer), _depositAmount);
 
     _advanceTimeBy(1); // Advance so we can check the snapshot.
 
     // The total deposit snapshot should not have changed.
-    assertEq(flexClient().getPastTotalBalance(_now() - 1), _depositAmount);
+    assertEq(flexClient.getPastTotalBalance(_now() - 1), _depositAmount);
   }
 }
