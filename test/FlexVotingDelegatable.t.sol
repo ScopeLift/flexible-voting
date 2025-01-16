@@ -142,8 +142,12 @@ abstract contract Deployment is FlexVotingDelegatableTest {
 
 abstract contract Delegation is FlexVotingDelegatableTest {
   // TODO
-  // Users should need to delegate to themselves before they can express?
-  // We need to checkpoint delegates.
+  // - Test nominal case, user voting with his own weight should work normally
+  // - User can withdraw after delegating to someone, the delegatee can still vote
+  //   after the withdrawal
+  // - test multiple delegatees to the same delegate
+  // - test no double voting for delegatee
+  // - test that delegator can't vote after delegate votes
   function test_delegation(
     address _delegator,
     address _delegatee,
@@ -197,8 +201,6 @@ abstract contract Delegation is FlexVotingDelegatableTest {
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _weight : 0);
   }
 }
-
-// TODO test no double voting
 
 contract BlockNumberClock_Deployment is Deployment {
   function _timestampClock() internal pure override returns (bool) {
