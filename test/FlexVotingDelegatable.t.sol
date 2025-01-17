@@ -34,11 +34,6 @@ abstract contract Delegation is FlexVotingClientTest {
     return MockFlexVotingDelegatableClient(address(flexClient));
   }
 
-  // TODO
-  // - delegating adds to a delegate's own votes
-  // - test multiple delegatees to the same delegate
-  // - test no double voting for delegatee
-  // - test that delegator can't vote after delegate votes
   function testFuzz_selfDelegationByDefault(
     address _delegator
   ) public {
@@ -111,12 +106,88 @@ abstract contract Delegation is FlexVotingClientTest {
     assertEq(client().getPastRawBalance(_delegate, _now() - 1), _combined);
 
     // Create the proposal.
-    uint48 _proposalTimepoint = _now();
     uint256 _proposalId = _createAndSubmitProposal();
 
     // The delegate expresses a vote.
     vm.prank(_delegate);
     client().expressVote(_proposalId, uint8(_voteType));
+
+    (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
+      client().proposalVotes(_proposalId);
+    assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _combined : 0);
+    assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _combined : 0);
+    assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _combined : 0);
+  }
+
+  struct Delegator {
+    address addr;
+    uint208 weight;
+  }
+
+  function testFuzz_multipleAddressesDelegate(
+    Delegator memory _delegatorA,
+    Delegator memory _delegatorB,
+    Delegator memory _delegatorC,
+    Delegator memory _delegatorD,
+    Delegator memory _delegate,
+    uint8 _supportType
+  ) public {
+    Delegator[] memory _users = new Delegator[](5);
+    _users[0] = _delegatorA;
+    _users[1] = _delegatorB;
+    _users[2] = _delegatorC;
+    _users[3] = _delegatorD;
+    _users[4] = _delegate;
+
+    for (uint256 i = 0; i < _users.length; i++) {
+      _assumeSafeUser(_users[i].addr);
+    }
+
+    vm.assume(_delegatorA.addr != _delegatorB.addr);
+    vm.assume(_delegatorA.addr != _delegatorC.addr);
+    vm.assume(_delegatorA.addr != _delegatorD.addr);
+    vm.assume(_delegatorA.addr != _delegate.addr);
+    vm.assume(_delegatorB.addr != _delegatorC.addr);
+    vm.assume(_delegatorB.addr != _delegatorD.addr);
+    vm.assume(_delegatorB.addr != _delegate.addr);
+    vm.assume(_delegatorC.addr != _delegatorD.addr);
+    vm.assume(_delegatorC.addr != _delegate.addr);
+    vm.assume(_delegatorD.addr != _delegate.addr);
+
+    _delegatorA.weight = uint208(bound(_delegatorA.weight, 1, MAX_VOTES - 4));
+    _delegatorB.weight = uint208(bound(_delegatorB.weight, 1, MAX_VOTES - _delegatorA.weight - 3));
+    _delegatorC.weight = uint208(bound(_delegatorC.weight, 1, MAX_VOTES - _delegatorA.weight - _delegatorB.weight - 2));
+    _delegatorD.weight = uint208(bound(_delegatorD.weight, 1, MAX_VOTES - _delegatorA.weight - _delegatorB.weight - _delegatorC.weight - 1));
+    _delegate.weight = uint208(bound(_delegate.weight, 1, MAX_VOTES - _delegatorA.weight - _delegatorB.weight - _delegatorC.weight - _delegatorD.weight));
+
+    GCS.VoteType _voteType = _randVoteType(_supportType);
+
+    // Deposit some funds.
+    for (uint256 i = 0; i < _users.length; i++) {
+      _mintGovAndDepositIntoFlexClient(_users[i].addr, _users[i].weight);
+    }
+
+    _advanceTimeBy(1);
+
+    // Delegate.
+    for (uint256 i = 0; i < _users.length - 1; i++) {
+      vm.prank(_users[i].addr);
+      client().delegate(_delegate.addr);
+    }
+
+    _advanceTimeBy(1);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // The delegate expresses a vote.
+    vm.prank(_delegate.addr);
+    client().expressVote(_proposalId, uint8(_voteType));
+
+    uint256 _combined;
+    for (uint256 i = 0; i < _users.length; i++) {
+      _combined += _users[i].weight;
+    }
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
       client().proposalVotes(_proposalId);
@@ -145,7 +216,6 @@ abstract contract Delegation is FlexVotingClientTest {
     assertEq(client().delegates(_delegator), _delegate);
 
     // Create the proposal.
-    uint48 _proposalTimepoint = _now();
     uint256 _proposalId = _createAndSubmitProposal();
 
     // The delegator withdraws their funds without voting.
@@ -162,6 +232,38 @@ abstract contract Delegation is FlexVotingClientTest {
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _weight : 0);
+  }
+
+  function testFuzz_RevertIf_delegateDoubleVotes(
+    address _delegator,
+    address _delegate,
+    uint208 _weight,
+    uint8 _supportType
+  ) public {
+    GCS.VoteType _voteType;
+    (_weight, _voteType) = _assumeSafeVoteParams(_delegator, _weight, _supportType);
+    _assumeSafeUser(_delegate);
+    vm.assume(_delegator != _delegate);
+
+    // Deposit some funds.
+    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+
+    // Delegate.
+    vm.prank(_delegator);
+    client().delegate(_delegate);
+    assertEq(client().delegates(_delegator), _delegate);
+
+    // Create the proposal.
+    uint256 _proposalId = _createAndSubmitProposal();
+
+    // The delegate expresses a voting preference.
+    vm.prank(_delegate);
+    client().expressVote(_proposalId, uint8(_voteType));
+
+    // Even if you're voting for multiple people, you can't double vote.
+    vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
+    vm.prank(_delegate);
+    client().expressVote(_proposalId, uint8(_voteType));
   }
 
   function testFuzz_delegateCanExpressVoteWithoutDepositing(
@@ -222,6 +324,110 @@ contract BlockNumberClock_Deployment is Deployment {
     flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
   }
 }
+contract BlockNumber_Constructor is Constructor {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber__RawBalanceOf is _RawBalanceOf {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber__CastVoteReasonString is _CastVoteReasonString {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber__SelfDelegate is _SelfDelegate {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber__CheckpointTotalBalance is _CheckpointTotalBalance {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_GetPastRawBalance is GetPastRawBalance {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_GetPastTotalBalance is GetPastTotalBalance {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_Withdraw is Withdraw {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_Deposit is Deposit {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_ExpressVote is ExpressVote {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_CastVote is CastVote {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract BlockNumber_Borrow is Borrow {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
 contract BlockNumberClock_Delegation is Delegation {
   function _timestampClock() internal pure override returns (bool) {
     return false;
@@ -230,7 +436,8 @@ contract BlockNumberClock_Delegation is Delegation {
     flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
   }
 }
-contract TimestampClock_Deployment is Deployment {
+
+contract TimestampClockClock_Deployment is Deployment {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
@@ -238,7 +445,111 @@ contract TimestampClock_Deployment is Deployment {
     flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
   }
 }
-contract TimestampClock_Delegation is Delegation {
+contract TimestampClock_Constructor is Constructor {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock__RawBalanceOf is _RawBalanceOf {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock__CastVoteReasonString is _CastVoteReasonString {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock__SelfDelegate is _SelfDelegate {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock__CheckpointTotalBalance is _CheckpointTotalBalance {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_GetPastTotalBalance is GetPastTotalBalance {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_Withdraw is Withdraw {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_Deposit is Deposit {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_ExpressVote is ExpressVote {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_CastVote is CastVote {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClock_Borrow is Borrow {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+  }
+}
+contract TimestampClockClock_Delegation is Delegation {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
