@@ -233,19 +233,19 @@ abstract contract _CheckpointRawBalanceOf is FlexVotingClientTest {
   function testFuzz_StoresTheRawBalanceWithTheTimepoint(
     address _user,
     uint208 _amount,
-    uint48 _timepoint
+    uint48 _future
   ) public {
     vm.assume(_user != address(flexClient));
-    _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
+    _future = uint48(bound(_future, _now() + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
+    uint48 _past = _now();
 
+    _advanceTimeTo(_future);
     flexClient.exposed_setDeposits(_user, _amount);
-    assertEq(flexClient.getPastRawBalance(_user, _timepoint), 0);
-
-    _advanceTimeTo(_timepoint);
-
     flexClient.exposed_checkpointRawBalanceOf(_user);
-    assertEq(flexClient.getPastRawBalance(_user, _timepoint), _amount);
+
+    assertEq(flexClient.getPastRawBalance(_user, _past), 0);
+    assertEq(flexClient.getPastRawBalance(_user, _future), _amount);
   }
 }
 

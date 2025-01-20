@@ -30,6 +30,38 @@ contract MockFlexVotingDelegatableClient is FlexVotingDelegatable {
     return deposits[_user];
   }
 
+  // Test hooks
+  // ---------------------------------------------------------------------------
+  function exposed_rawBalanceOf(address _user) external view returns (uint208) {
+    return _rawBalanceOf(_user);
+  }
+
+  function exposed_latestTotalBalance() external view returns (uint208) {
+    return totalBalanceCheckpoints.latest();
+  }
+
+  function exposed_checkpointTotalBalance(int256 _delta) external {
+    return _checkpointTotalBalance(_delta);
+  }
+
+  function exposed_castVoteReasonString() external returns (string memory) {
+    return _castVoteReasonString();
+  }
+
+  function exposed_selfDelegate() external {
+    return _selfDelegate();
+  }
+
+  function exposed_setDeposits(address _user, uint208 _amount) external {
+    deposits[_user] = _amount;
+  }
+
+  function exposed_checkpointRawBalanceOf(address _user) external {
+    return _checkpointRawBalanceOf(_user);
+  }
+  // End test hooks
+  // ---------------------------------------------------------------------------
+
   /// @notice Allow a holder of the governance token to deposit it into the pool.
   /// @param _amount The amount to be deposited.
   function deposit(uint208 _amount) public {

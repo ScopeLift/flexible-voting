@@ -29,6 +29,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     return deposits[_user];
   }
 
+  // Test hooks
+  // ---------------------------------------------------------------------------
   function exposed_rawBalanceOf(address _user) external view returns (uint208) {
     return _rawBalanceOf(_user);
   }
@@ -56,6 +58,8 @@ contract MockFlexVotingClient is FlexVotingClient {
   function exposed_checkpointRawBalanceOf(address _user) external {
     return _checkpointRawBalanceOf(_user);
   }
+  // End test hooks
+  // ---------------------------------------------------------------------------
 
   /// @notice Allow a holder of the governance token to deposit it into the pool.
   /// @param _amount The amount to be deposited.
