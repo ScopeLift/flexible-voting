@@ -128,12 +128,10 @@ abstract contract FlexVotingClient {
     _expressVote(voter, proposalId, support, weight);
   }
 
-  function _expressVote(
-    address voter,
-    uint256 proposalId,
-    uint8 support,
-    uint256 weight
-  ) internal virtual {
+  function _expressVote(address voter, uint256 proposalId, uint8 support, uint256 weight)
+    internal
+    virtual
+  {
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
     if (proposalVotersHasVoted[proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
