@@ -148,25 +148,22 @@ abstract contract Delegation is FlexVotingClientTest {
     vm.assume(_delegatorC.addr != _delegate.addr);
     vm.assume(_delegatorD.addr != _delegate.addr);
 
-    _delegatorA.weight = uint208(bound(_delegatorA.weight, 1, MAX_VOTES - 4));
-    _delegatorB.weight = uint208(bound(_delegatorB.weight, 1, MAX_VOTES - _delegatorA.weight - 3));
-    _delegatorC.weight =
-      uint208(bound(_delegatorC.weight, 1, MAX_VOTES - _delegatorA.weight - _delegatorB.weight - 2));
-    _delegatorD.weight = uint208(
-      bound(
-        _delegatorD.weight,
-        1,
-        MAX_VOTES - _delegatorA.weight - _delegatorB.weight - _delegatorC.weight - 1
-      )
-    );
-    _delegate.weight = uint208(
-      bound(
-        _delegate.weight,
-        1,
-        MAX_VOTES - _delegatorA.weight - _delegatorB.weight - _delegatorC.weight
-          - _delegatorD.weight
-      )
-    );
+    vm.label(_delegatorA.addr, "delegatorA");
+    vm.label(_delegatorB.addr, "delegatorB");
+    vm.label(_delegatorC.addr, "delegatorC");
+    vm.label(_delegatorD.addr, "delegatorD");
+    vm.label(_delegate.addr, "delegate");
+
+    uint256 _remaining = uint256(MAX_VOTES) - 4;
+    _delegatorA.weight = uint208(bound(_delegatorA.weight, 1, _remaining));
+    _remaining -= _delegatorA.weight - 1;
+    _delegatorB.weight = uint208(bound(_delegatorB.weight, 1, _remaining));
+    _remaining -= _delegatorB.weight - 1;
+    _delegatorC.weight = uint208(bound(_delegatorC.weight, 1, _remaining));
+    _remaining -= _delegatorC.weight - 1;
+    _delegatorD.weight = uint208(bound(_delegatorD.weight, 1, _remaining));
+    _remaining -= _delegatorD.weight - 1;
+    _delegate.weight = uint208(bound(_delegate.weight, 1, _remaining));
 
     GCS.VoteType _voteType = _randVoteType(_supportType);
 
