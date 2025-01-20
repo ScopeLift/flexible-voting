@@ -22,13 +22,6 @@ abstract contract FlexVotingDelegatable is Context, FlexVotingClient {
 
   mapping(address account => address) private _delegatee;
 
-  function expressVote(uint256 proposalId, uint8 support) external virtual override {
-    address voter = _msgSender();
-    uint256 weight =
-      FlexVotingClient.getPastRawBalance(voter, GOVERNOR.proposalSnapshot(proposalId));
-    _expressVote(voter, proposalId, support, weight);
-  }
-
   // @dev Delegates votes from the sender to `delegatee`.
   function delegate(address delegatee) public virtual {
     address account = _msgSender();
