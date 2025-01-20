@@ -43,39 +43,31 @@ abstract contract FlexVotingDelegatable is Context, FlexVotingClient {
     address oldDelegate = delegates(account);
     _delegatee[account] = delegatee;
 
+    int256 _delta = int256(uint256(_rawBalanceOf(account)));
     emit DelegateChanged(account, oldDelegate, delegatee);
-    _updateDelegateBalance(oldDelegate, delegatee, _rawBalanceOf(account));
+    _updateDelegateBalance(oldDelegate, delegatee, _delta);
+  }
+
+  function _checkpointRawBalanceOf(
+    address _user,
+    int256 _delta
+  ) internal virtual override {
+    address _proxy = delegates(_user);
+    _applyDeltaToCheckpoint(balanceCheckpoints[_proxy], _delta);
   }
 
   // @dev Moves delegated votes from one delegate to another.
-  function _updateDelegateBalance(address from, address to, uint208 amount) internal virtual {
-    if (from == to || amount == 0) return;
+  function _updateDelegateBalance(address from, address to, int256 _delta) internal virtual {
+    if (from == to || _delta == 0) return;
 
-    if (from != address(0)) {
-      (uint256 oldValue, uint256 newValue) =
-        _push(FlexVotingClient.balanceCheckpoints[from], _subtract, amount);
-      emit DelegateWeightChanged(from, oldValue, newValue);
-    }
-    if (to != address(0)) {
-      (uint256 oldValue, uint256 newValue) =
-        _push(FlexVotingClient.balanceCheckpoints[to], _add, amount);
-      emit DelegateWeightChanged(to, oldValue, newValue);
-    }
-  }
+    // Decrement old delegate's weight.
+    (uint208 _oldFrom, uint208 _newFrom) =
+      _applyDeltaToCheckpoint(balanceCheckpoints[from], -_delta);
+    emit DelegateWeightChanged(from, _oldFrom, _newFrom);
 
-  function _push(
-    Checkpoints.Trace208 storage store,
-    function(uint208, uint208) view returns (uint208) fn,
-    uint208 delta
-  ) private returns (uint208 oldValue, uint208 newValue) {
-    return store.push(IVotingToken(GOVERNOR.token()).clock(), fn(store.latest(), delta));
-  }
-
-  function _add(uint208 a, uint208 b) private pure returns (uint208) {
-    return a + b;
-  }
-
-  function _subtract(uint208 a, uint208 b) private pure returns (uint208) {
-    return a - b;
+    // Increment new delegate's weight.
+    (uint208 _oldTo, uint208 _newTo) =
+      _applyDeltaToCheckpoint(balanceCheckpoints[to], _delta);
+    emit DelegateWeightChanged(to, _oldTo, _newTo);
   }
 }

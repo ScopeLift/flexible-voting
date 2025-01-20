@@ -242,7 +242,8 @@ abstract contract _CheckpointRawBalanceOf is FlexVotingClientTest {
 
     _advanceTimeTo(_future);
     flexClient.exposed_setDeposits(_user, _amount);
-    flexClient.exposed_checkpointRawBalanceOf(_user);
+    int256 _delta = int256(uint256(_amount));
+    flexClient.exposed_checkpointRawBalanceOf(_user, _delta);
 
     assertEq(flexClient.getPastRawBalance(_user, _past), 0);
     assertEq(flexClient.getPastRawBalance(_user, _future), _amount);

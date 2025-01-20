@@ -202,13 +202,11 @@ abstract contract FlexVotingClient {
     );
   }
 
-  /// @dev Checkpoints the _user's current raw balance.
-  function _checkpointRawBalanceOf(address _user) internal {
-    balanceCheckpoints[_user].push(IVotingToken(GOVERNOR.token()).clock(), _rawBalanceOf(_user));
-  }
+  function _applyDeltaToCheckpoint(
+    Checkpoints.Trace208 storage _checkpoint,
+    int256 _delta
+  ) internal returns (uint208 _prevTotal, uint208 _newTotal) {
 
-  /// @dev Checkpoints the total balance after applying `_delta`.
-  function _checkpointTotalBalance(int256 _delta) internal {
     // The casting in this function is safe since:
     // - if oldTotal + delta > int256.max it will panic and revert.
     // - if |delta| <= oldTotal
@@ -226,12 +224,25 @@ abstract contract FlexVotingClient {
     //       uint256.max + int256.min > uint208.max
     //     Substituting again:
     //       wrapped(int256.min) > uint208.max, which will revert when safecast.
-    uint256 _oldTotal = uint256(totalBalanceCheckpoints.latest());
-    uint256 _newTotal = uint256(int256(_oldTotal) + _delta);
+    _prevTotal = _checkpoint.latest();
+    int256 _castTotal = int256(uint256(_prevTotal));
+    _newTotal = SafeCast.toUint208(uint256(_castTotal + _delta));
 
-    totalBalanceCheckpoints.push(
-      IVotingToken(GOVERNOR.token()).clock(), SafeCast.toUint208(_newTotal)
-    );
+    uint48 _timepoint = IVotingToken(GOVERNOR.token()).clock();
+    _checkpoint.push(_timepoint, _newTotal);
+  }
+
+  /// @dev Checkpoints the _user's current raw balance.
+  function _checkpointRawBalanceOf(
+    address _user,
+    int256 _delta
+  ) internal virtual {
+    _applyDeltaToCheckpoint(balanceCheckpoints[_user], _delta);
+  }
+
+  /// @dev Checkpoints the total balance after applying `_delta`.
+  function _checkpointTotalBalance(int256 _delta) internal virtual {
+    _applyDeltaToCheckpoint(totalBalanceCheckpoints, _delta);
   }
 
   /// @notice Returns the `_user`'s raw balance at `_timepoint`.
