@@ -79,11 +79,15 @@ abstract contract FlexVotingClientTest is Test {
   }
 
   function _createAndSubmitProposal() internal returns (uint256 proposalId) {
+    return _createAndSubmitProposal("mockReceiverFunction()");
+  }
+
+  function _createAndSubmitProposal(string memory _sig) internal returns (uint256 proposalId) {
     // Proposal will underflow if we're on the zero block
     if (_now() == 0) _advanceTimeBy(1);
 
     // Create a proposal
-    bytes memory receiverCallData = abi.encodeWithSignature("mockReceiverFunction()");
+    bytes memory receiverCallData = abi.encodeWithSignature(_sig);
     address[] memory targets = new address[](1);
     uint256[] memory values = new uint256[](1);
     bytes[] memory calldatas = new bytes[](1);

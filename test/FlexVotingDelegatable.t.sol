@@ -28,6 +28,11 @@ import {
 } from "test/SharedFlexVoting.t.sol";
 
 abstract contract Delegation is FlexVotingClientTest {
+  struct Delegator {
+    address addr;
+    uint208 weight;
+  }
+
   // We cast the flexClient to the delegatable client to access the delegate
   // function.
   function client() internal view returns (MockFlexVotingDelegatableClient) {
@@ -111,11 +116,6 @@ abstract contract Delegation is FlexVotingClientTest {
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _combined : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _combined : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _combined : 0);
-  }
-
-  struct Delegator {
-    address addr;
-    uint208 weight;
   }
 
   function testFuzz_multipleAddressesDelegate(
@@ -269,6 +269,86 @@ abstract contract Delegation is FlexVotingClientTest {
     vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
     vm.prank(_delegate);
     client().expressVote(_proposalId, uint8(_voteType));
+  }
+
+  function testFuzz_delegatorCanChangeDelegates(
+    address _delegator,
+    address _delegateA,
+    address _delegateB,
+    uint208 _weight,
+    uint8 _supportType
+  ) public {
+    _assumeSafeUser(_delegator);
+    _assumeSafeUser(_delegateA);
+    _assumeSafeUser(_delegateB);
+
+    vm.assume(_delegator != _delegateA);
+    vm.assume(_delegator != _delegateB);
+    vm.assume(_delegateA != _delegateB);
+
+    vm.label(_delegator, "delegator");
+    vm.label(_delegateA, "delegateA");
+    vm.label(_delegateB, "delegateB");
+
+    GCS.VoteType _voteType = _randVoteType(_supportType);
+    _weight = uint208(bound(_weight, 1, MAX_VOTES));
+    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+
+    _advanceTimeBy(1);
+
+    // Delegate to first account.
+    vm.prank(_delegator);
+    client().delegate(_delegateA);
+
+    _advanceTimeBy(1);
+
+    // Create the first proposal.
+    uint256 _proposalA = _createAndSubmitProposal();
+
+    _advanceTimeBy(1);
+
+    // Change delegate to second account.
+    vm.prank(_delegator);
+    client().delegate(_delegateB);
+
+    // Create the second proposal.
+    uint256 _proposalB = _createAndSubmitProposal("anotherReceiverFunction()");
+
+    // The delegator and delegateB should not be able to vote on proposalA.
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
+    vm.prank(_delegator);
+    client().expressVote(_proposalA, uint8(_voteType));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
+    vm.prank(_delegateB);
+    client().expressVote(_proposalA, uint8(_voteType));
+
+    // The delegator and delegateA should not be able to vote on proposalB.
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
+    vm.prank(_delegator);
+    client().expressVote(_proposalB, uint8(_voteType));
+    vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
+    vm.prank(_delegateA);
+    client().expressVote(_proposalB, uint8(_voteType));
+
+    // Delegate A should be able to express a vote on the first proposal.
+    vm.prank(_delegateA);
+    client().expressVote(_proposalA, uint8(_voteType));
+
+    // Delegate B should be able to express a vote on the second proposal.
+    vm.prank(_delegateB);
+    client().expressVote(_proposalB, uint8(_voteType));
+
+    (uint256 _againstA, uint256 _forA, uint256 _abstainA) =
+      client().proposalVotes(_proposalA);
+    assertEq(_forA,     _voteType == GCS.VoteType.For ? _weight : 0);
+    assertEq(_againstA, _voteType == GCS.VoteType.Against ? _weight : 0);
+    assertEq(_abstainA, _voteType == GCS.VoteType.Abstain ? _weight : 0);
+
+    (uint256 _againstB, uint256 _forB, uint256 _abstainB) =
+      client().proposalVotes(_proposalB);
+    assertEq(_forB, _voteType == GCS.VoteType.For ? _weight : 0);
+    assertEq(_againstB, _voteType == GCS.VoteType.Against ? _weight : 0);
+    assertEq(_abstainB, _voteType == GCS.VoteType.Abstain ? _weight : 0);
   }
 
   function testFuzz_delegateCanExpressVoteWithoutDepositing(
