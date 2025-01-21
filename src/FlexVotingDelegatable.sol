@@ -7,6 +7,22 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol
 
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 
+/// @notice This is an abstract contract designed to make it easy to build
+/// clients for governance systems that inherit from GovernorCountingFractional,
+/// a.k.a. Flexible Voting governors.
+///
+/// This contract extends FlexVotingBase, adding the ability to subdelegate one's
+/// internal voting weight. It is meant to be inherited from in conjunction with
+/// FlexVotingClient. Doing so makes the following usecase possible:
+///   - user A deposits 100 governance tokens in a FlexVotingClient
+///   - user B deposits 50 governance tokens into the same client
+///   - user A delegates voting weight to user B
+///   - a proposal is created in the Governor contract
+///   - user B expresses a voting preference P on the proposal to the client
+///   - the client casts its votes on the proposal to the Governor contract
+///   - user B's voting weight is combined with user A's voting weight so that
+///     150 tokens are effectively cast with voting preference P on behalf of
+///     users A and B.
 abstract contract FlexVotingDelegatable is Context, FlexVotingBase {
   using Checkpoints for Checkpoints.Trace208;
 

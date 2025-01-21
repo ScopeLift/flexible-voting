@@ -6,9 +6,9 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
-/// @notice This is an abstract contract designed to make it easy to build clients
-/// for governance systems that inherit from GovernorCountingFractional, a.k.a.
-/// Flexible Voting governors.
+/// @notice This is an abstract contract designed to make it easy to build
+/// clients for governance systems that inherit from GovernorCountingFractional,
+/// a.k.a. Flexible Voting governors.
 ///
 /// A "client" in this sense is a contract that:
 
