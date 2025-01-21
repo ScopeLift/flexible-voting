@@ -9,10 +9,10 @@ import {FlexVotingBase} from "src/FlexVotingBase.sol";
 contract MockFlexVotingDelegatableClient is MockFlexVotingClient, FlexVotingDelegatable {
   constructor(address _governor) MockFlexVotingClient(_governor) {}
 
-  function _checkpointVoteWeightOf(
-    address _user,
-    int256 _delta
-  ) internal override(FlexVotingBase, FlexVotingDelegatable) {
+  function _checkpointVoteWeightOf(address _user, int256 _delta)
+    internal
+    override(FlexVotingBase, FlexVotingDelegatable)
+  {
     return FlexVotingDelegatable._checkpointVoteWeightOf(_user, _delta);
   }
 }

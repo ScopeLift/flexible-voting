@@ -86,10 +86,10 @@ abstract contract FlexVotingBase {
     IVotingToken(GOVERNOR.token()).delegate(address(this));
   }
 
-  function _applyDeltaToCheckpoint(
-    Checkpoints.Trace208 storage _checkpoint,
-    int256 _delta
-  ) internal returns (uint208 _prevTotal, uint208 _newTotal) {
+  function _applyDeltaToCheckpoint(Checkpoints.Trace208 storage _checkpoint, int256 _delta)
+    internal
+    returns (uint208 _prevTotal, uint208 _newTotal)
+  {
     // The casting in this function is safe since:
     // - if oldTotal + delta > int256.max it will panic and revert.
     // - if |delta| <= oldTotal there is no risk of wrapping
@@ -115,10 +115,7 @@ abstract contract FlexVotingBase {
   }
 
   /// @dev Checkpoints internal voting weight of `user` after applying `_delta`.
-  function _checkpointVoteWeightOf(
-    address _user,
-    int256 _delta
-  ) internal virtual {
+  function _checkpointVoteWeightOf(address _user, int256 _delta) internal virtual {
     _applyDeltaToCheckpoint(voteWeightCheckpoints[_user], _delta);
   }
 
