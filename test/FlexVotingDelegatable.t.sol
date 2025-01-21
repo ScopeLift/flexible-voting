@@ -338,14 +338,12 @@ abstract contract Delegation is FlexVotingClientTest {
     vm.prank(_delegateB);
     client().expressVote(_proposalB, uint8(_voteType));
 
-    (uint256 _againstA, uint256 _forA, uint256 _abstainA) =
-      client().proposalVotes(_proposalA);
-    assertEq(_forA,     _voteType == GCS.VoteType.For ? _weight : 0);
+    (uint256 _againstA, uint256 _forA, uint256 _abstainA) = client().proposalVotes(_proposalA);
+    assertEq(_forA, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstA, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainA, _voteType == GCS.VoteType.Abstain ? _weight : 0);
 
-    (uint256 _againstB, uint256 _forB, uint256 _abstainB) =
-      client().proposalVotes(_proposalB);
+    (uint256 _againstB, uint256 _forB, uint256 _abstainB) = client().proposalVotes(_proposalB);
     assertEq(_forB, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstB, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainB, _voteType == GCS.VoteType.Abstain ? _weight : 0);

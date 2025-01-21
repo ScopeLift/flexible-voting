@@ -185,15 +185,12 @@ abstract contract FlexVotingClient {
     //     totalVotesInternal         totalTokenWeight
     //
     // userVoteWeight = userVotesInternal * totalTokenWeight / totalVotesInternal
-    uint128 _forVotesToCast = SafeCast.toUint128(
-      (_totalTokenWeight * _proposalVote.forVotes) / _totalVotesInternal
-    );
-    uint128 _againstVotesToCast = SafeCast.toUint128(
-      (_totalTokenWeight * _proposalVote.againstVotes) / _totalVotesInternal
-    );
-    uint128 _abstainVotesToCast = SafeCast.toUint128(
-      (_totalTokenWeight * _proposalVote.abstainVotes) / _totalVotesInternal
-    );
+    uint128 _forVotesToCast =
+      SafeCast.toUint128((_totalTokenWeight * _proposalVote.forVotes) / _totalVotesInternal);
+    uint128 _againstVotesToCast =
+      SafeCast.toUint128((_totalTokenWeight * _proposalVote.againstVotes) / _totalVotesInternal);
+    uint128 _abstainVotesToCast =
+      SafeCast.toUint128((_totalTokenWeight * _proposalVote.abstainVotes) / _totalVotesInternal);
 
     // Clear the stored votes so that we don't double-cast them.
     delete proposalVotes[proposalId];
@@ -205,10 +202,10 @@ abstract contract FlexVotingClient {
     );
   }
 
-  function _applyDeltaToCheckpoint(
-    Checkpoints.Trace208 storage _checkpoint,
-    int256 _delta
-  ) internal returns (uint208 _prevTotal, uint208 _newTotal) {
+  function _applyDeltaToCheckpoint(Checkpoints.Trace208 storage _checkpoint, int256 _delta)
+    internal
+    returns (uint208 _prevTotal, uint208 _newTotal)
+  {
     // The casting in this function is safe since:
     // - if oldTotal + delta > int256.max it will panic and revert.
     // - if |delta| <= oldTotal there is no risk of wrapping
@@ -234,10 +231,7 @@ abstract contract FlexVotingClient {
   }
 
   /// @dev Checkpoints internal voting weight of `user` after applying `_delta`.
-  function _checkpointVoteWeightOf(
-    address _user,
-    int256 _delta
-  ) internal virtual {
+  function _checkpointVoteWeightOf(address _user, int256 _delta) internal virtual {
     _applyDeltaToCheckpoint(voteWeightCheckpoints[_user], _delta);
   }
 
