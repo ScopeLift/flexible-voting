@@ -48,12 +48,12 @@ abstract contract FlexVotingDelegatable is Context, FlexVotingClient {
     _updateDelegateBalance(oldDelegate, delegatee, _delta);
   }
 
-  function _checkpointRawBalanceOf(
+  function _checkpointVoteWeightOf(
     address _user,
     int256 _delta
   ) internal virtual override {
     address _proxy = delegates(_user);
-    _applyDeltaToCheckpoint(balanceCheckpoints[_proxy], _delta);
+    _applyDeltaToCheckpoint(voteWeightCheckpoints[_proxy], _delta);
   }
 
   // @dev Moves delegated votes from one delegate to another.
@@ -62,12 +62,12 @@ abstract contract FlexVotingDelegatable is Context, FlexVotingClient {
 
     // Decrement old delegate's weight.
     (uint208 _oldFrom, uint208 _newFrom) =
-      _applyDeltaToCheckpoint(balanceCheckpoints[from], -_delta);
+      _applyDeltaToCheckpoint(voteWeightCheckpoints[from], -_delta);
     emit DelegateWeightChanged(from, _oldFrom, _newFrom);
 
     // Increment new delegate's weight.
     (uint208 _oldTo, uint208 _newTo) =
-      _applyDeltaToCheckpoint(balanceCheckpoints[to], _delta);
+      _applyDeltaToCheckpoint(voteWeightCheckpoints[to], _delta);
     emit DelegateWeightChanged(to, _oldTo, _newTo);
   }
 }

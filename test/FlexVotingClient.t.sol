@@ -8,8 +8,8 @@ import {
   _RawBalanceOf,
   _CastVoteReasonString,
   _SelfDelegate,
-  _CheckpointRawBalanceOf,
-  _CheckpointTotalBalance,
+  _CheckpointVoteWeightOf,
+  _CheckpointTotalVoteWeight,
   GetPastRawBalance,
   GetPastTotalBalance,
   Withdraw,
@@ -70,7 +70,7 @@ contract BlockNumberClock__SelfDelegate is _SelfDelegate {
   }
 }
 
-contract BlockNumberClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+contract BlockNumberClock__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -90,7 +90,7 @@ contract BlockNumberClock_GetPastRawBalance is GetPastRawBalance {
   }
 }
 
-contract BlockNumber__CheckpointTotalBalance is _CheckpointTotalBalance {
+contract BlockNumber__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -211,7 +211,7 @@ contract TimestampClock__SelfDelegate is _SelfDelegate {
   }
 }
 
-contract TimestampClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+contract TimestampClock__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
@@ -231,7 +231,7 @@ contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
   }
 }
 
-contract TimestampClock__CheckpointTotalBalance is _CheckpointTotalBalance {
+contract TimestampClock__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }

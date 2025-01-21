@@ -326,7 +326,7 @@ contract FlexVotingClientHandler is Test {
       address _voter = _voters.at(i);
       // We need deposits less withdrawals for the user AT proposal time.
       _vars.aggDepositWeight +=
-        flexClient.getPastRawBalance(_voter, governor.proposalSnapshot(_proposalId));
+        flexClient.getPastVoteWeight(_voter, governor.proposalSnapshot(_proposalId));
     }
     ghost_depositsCast[_proposalId] += _vars.aggDepositWeight;
 

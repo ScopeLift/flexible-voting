@@ -35,12 +35,12 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _rawBalanceOf(_user);
   }
 
-  function exposed_latestTotalBalance() external view returns (uint208) {
-    return totalBalanceCheckpoints.latest();
+  function exposed_latestTotalWeight() external view returns (uint208) {
+    return totalVoteWeightCheckpoints.latest();
   }
 
-  function exposed_checkpointTotalBalance(int256 _delta) external {
-    return _checkpointTotalBalance(_delta);
+  function exposed_checkpointTotalVoteWeight(int256 _delta) external {
+    return _checkpointTotalVoteWeight(_delta);
   }
 
   function exposed_castVoteReasonString() external returns (string memory) {
@@ -55,8 +55,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[_user] = _amount;
   }
 
-  function exposed_checkpointRawBalanceOf(address _user, int256 _delta) external {
-    _checkpointRawBalanceOf(_user, _delta);
+  function exposed_checkpointVoteWeightOf(address _user, int256 _delta) external {
+    _checkpointVoteWeightOf(_user, _delta);
   }
   // End test hooks
   // ---------------------------------------------------------------------------
@@ -67,8 +67,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[msg.sender] += _amount;
 
     int256 _delta = int256(uint256(_amount));
-    _checkpointRawBalanceOf(msg.sender, _delta);
-    _checkpointTotalBalance(_delta);
+    _checkpointVoteWeightOf(msg.sender, _delta);
+    _checkpointTotalVoteWeight(_delta);
 
     // Assumes revert on failure.
     TOKEN.transferFrom(msg.sender, address(this), _amount);
@@ -81,8 +81,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[msg.sender] -= _amount;
 
     int256 _delta = -1 * int256(uint256(_amount));
-    _checkpointRawBalanceOf(msg.sender, _delta);
-    _checkpointTotalBalance(_delta);
+    _checkpointVoteWeightOf(msg.sender, _delta);
+    _checkpointTotalVoteWeight(_delta);
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
   }

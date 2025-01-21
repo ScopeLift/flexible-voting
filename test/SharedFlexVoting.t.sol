@@ -233,7 +233,7 @@ abstract contract _SelfDelegate is FlexVotingClientTest {
 }
 
 // Contract name has a leading underscore for scopelint spec support.
-abstract contract _CheckpointRawBalanceOf is FlexVotingClientTest {
+abstract contract _CheckpointVoteWeightOf is FlexVotingClientTest {
   function testFuzz_StoresTheRawBalanceWithTheTimepoint(
     address _user,
     uint208 _amount,
@@ -247,27 +247,27 @@ abstract contract _CheckpointRawBalanceOf is FlexVotingClientTest {
     _advanceTimeTo(_future);
     flexClient.exposed_setDeposits(_user, _amount);
     int256 _delta = int256(uint256(_amount));
-    flexClient.exposed_checkpointRawBalanceOf(_user, _delta);
+    flexClient.exposed_checkpointVoteWeightOf(_user, _delta);
 
-    assertEq(flexClient.getPastRawBalance(_user, _past), 0);
-    assertEq(flexClient.getPastRawBalance(_user, _future), _amount);
+    assertEq(flexClient.getPastVoteWeight(_user, _past), 0);
+    assertEq(flexClient.getPastVoteWeight(_user, _future), _amount);
   }
 }
 
-abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
+abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
   int256 MAX_UINT208 = int256(uint256(type(uint208).max));
 
   function testFuzz_writesACheckpointAtClockTime(int256 _value, uint48 _timepoint) public {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _value = bound(_value, 1, MAX_UINT208);
-    assertEq(flexClient.exposed_latestTotalBalance(), 0);
+    assertEq(flexClient.exposed_latestTotalWeight(), 0);
 
     _advanceTimeTo(_timepoint);
-    flexClient.exposed_checkpointTotalBalance(_value);
+    flexClient.exposed_checkpointTotalVoteWeight(_value);
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastTotalBalance(_timepoint), uint256(_value));
-    assertEq(flexClient.exposed_latestTotalBalance(), uint256(_value));
+    assertEq(flexClient.getPastTotalVoteWeight(_timepoint), uint256(_value));
+    assertEq(flexClient.exposed_latestTotalWeight(), uint256(_value));
   }
 
   function testFuzz_checkpointsTheTotalBalanceDeltaAtClockTime(
@@ -278,13 +278,13 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _initBalance = bound(_initBalance, 1, MAX_UINT208 - 1);
     _delta = bound(_delta, -_initBalance, MAX_UINT208 - _initBalance);
-    flexClient.exposed_checkpointTotalBalance(_initBalance);
+    flexClient.exposed_checkpointTotalVoteWeight(_initBalance);
 
     _advanceTimeTo(_timepoint);
-    flexClient.exposed_checkpointTotalBalance(_delta);
+    flexClient.exposed_checkpointTotalVoteWeight(_delta);
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastTotalBalance(_timepoint), uint256(_initBalance + _delta));
+    assertEq(flexClient.getPastTotalVoteWeight(_timepoint), uint256(_initBalance + _delta));
   }
 
   function testFuzz_RevertIf_negativeDeltaWraps(int256 delta, uint208 balance) public {
@@ -325,16 +325,16 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
   function testFuzz_RevertIf_withdrawalFromZero(int256 _withdraw) public {
     _withdraw = bound(_withdraw, type(int208).min, -1);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalBalance(_withdraw);
+    flexClient.exposed_checkpointTotalVoteWeight(_withdraw);
   }
 
   function testFuzz_RevertIf_withdrawalExceedsDeposit(int256 _deposit, int256 _withdraw) public {
     _deposit = bound(_deposit, 1, type(int208).max - 1);
     _withdraw = bound(_withdraw, type(int208).min, (-1 * _deposit) - 1);
 
-    flexClient.exposed_checkpointTotalBalance(_deposit);
+    flexClient.exposed_checkpointTotalVoteWeight(_deposit);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalBalance(_withdraw);
+    flexClient.exposed_checkpointTotalVoteWeight(_withdraw);
   }
 
   function testFuzz_RevertIf_depositsOverflow(int256 _deposit1, int256 _deposit2) public {
@@ -342,9 +342,9 @@ abstract contract _CheckpointTotalBalance is FlexVotingClientTest {
     _deposit1 = bound(_deposit1, 1, _max);
     _deposit2 = bound(_deposit2, 1 + _max - _deposit1, _max);
 
-    flexClient.exposed_checkpointTotalBalance(_deposit1);
+    flexClient.exposed_checkpointTotalVoteWeight(_deposit1);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalBalance(_deposit2);
+    flexClient.exposed_checkpointTotalVoteWeight(_deposit2);
   }
 }
 
@@ -360,14 +360,14 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
     _advanceTimeBy(1);
-    assertEq(flexClient.getPastRawBalance(_depositor, 0), 0);
-    assertEq(flexClient.getPastRawBalance(_nonDepositor, 0), 0);
+    assertEq(flexClient.getPastVoteWeight(_depositor, 0), 0);
+    assertEq(flexClient.getPastVoteWeight(_nonDepositor, 0), 0);
 
     _mintGovAndDepositIntoFlexClient(_depositor, _amount);
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastRawBalance(_depositor, _now() - 1), _amount);
-    assertEq(flexClient.getPastRawBalance(_nonDepositor, _now() - 1), 0);
+    assertEq(flexClient.getPastVoteWeight(_depositor, _now() - 1), _amount);
+    assertEq(flexClient.getPastVoteWeight(_nonDepositor, _now() - 1), 0);
   }
 
   function testFuzz_ReturnsCurrentValueForFutureTimepoints(
@@ -381,12 +381,12 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(flexClient.getPastRawBalance(_user, _now()), _amount);
-    assertEq(flexClient.getPastRawBalance(_user, _timepoint), _amount);
+    assertEq(flexClient.getPastVoteWeight(_user, _now()), _amount);
+    assertEq(flexClient.getPastVoteWeight(_user, _timepoint), _amount);
 
     _advanceTimeTo(_timepoint);
 
-    assertEq(flexClient.getPastRawBalance(_user, _now()), _amount);
+    assertEq(flexClient.getPastVoteWeight(_user, _now()), _amount);
   }
 
   function testFuzz_ReturnsUserBalanceAtAGivenTimepoint(
@@ -409,17 +409,17 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     _advanceTimeBy(1);
 
     uint48 _zeroTimepoint = 0;
-    assertEq(flexClient.getPastRawBalance(_user, _zeroTimepoint), 0);
-    assertEq(flexClient.getPastRawBalance(_user, _initTimepoint), _amountA);
-    assertEq(flexClient.getPastRawBalance(_user, _timepoint), _amountA + _amountB);
+    assertEq(flexClient.getPastVoteWeight(_user, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_user, _initTimepoint), _amountA);
+    assertEq(flexClient.getPastVoteWeight(_user, _timepoint), _amountA + _amountB);
   }
 }
 
 abstract contract GetPastTotalBalance is FlexVotingClientTest {
   function testFuzz_ReturnsZeroWithoutDeposits(uint48 _future) public view {
     uint48 _zeroTimepoint = 0;
-    assertEq(flexClient.getPastTotalBalance(_zeroTimepoint), 0);
-    assertEq(flexClient.getPastTotalBalance(_future), 0);
+    assertEq(flexClient.getPastTotalVoteWeight(_zeroTimepoint), 0);
+    assertEq(flexClient.getPastTotalVoteWeight(_future), 0);
   }
 
   function testFuzz_ReturnsCurrentValueForFutureTimepoints(
@@ -433,12 +433,12 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
 
     _mintGovAndDepositIntoFlexClient(_user, _amount);
 
-    assertEq(flexClient.getPastTotalBalance(_now()), _amount);
-    assertEq(flexClient.getPastTotalBalance(_future), _amount);
+    assertEq(flexClient.getPastTotalVoteWeight(_now()), _amount);
+    assertEq(flexClient.getPastTotalVoteWeight(_future), _amount);
 
     _advanceTimeTo(_future);
 
-    assertEq(flexClient.getPastTotalBalance(_now()), _amount);
+    assertEq(flexClient.getPastTotalVoteWeight(_now()), _amount);
   }
 
   function testFuzz_SumsAllUserDeposits(
@@ -459,7 +459,7 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
 
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastTotalBalance(_now()), _amountA + _amountB);
+    assertEq(flexClient.getPastTotalVoteWeight(_now()), _amountA + _amountB);
   }
 
   function testFuzz_ReturnsTotalDepositsAtAGivenTimepoint(
@@ -477,14 +477,14 @@ abstract contract GetPastTotalBalance is FlexVotingClientTest {
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
     _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
-    assertEq(flexClient.getPastTotalBalance(_now()), 0);
+    assertEq(flexClient.getPastTotalVoteWeight(_now()), 0);
 
     _mintGovAndDepositIntoFlexClient(_userA, _amountA);
     _advanceTimeTo(_future);
     _mintGovAndDepositIntoFlexClient(_userB, _amountB);
 
-    assertEq(flexClient.getPastTotalBalance(_now() - _future + 1), _amountA);
-    assertEq(flexClient.getPastTotalBalance(_now()), _amountA + _amountB);
+    assertEq(flexClient.getPastTotalVoteWeight(_now() - _future + 1), _amountA);
+    assertEq(flexClient.getPastTotalVoteWeight(_now()), _amountA + _amountB);
   }
 }
 
@@ -555,7 +555,7 @@ abstract contract Deposit is FlexVotingClientTest {
     // We can still retrieve the user's balance at the given time.
     uint256 _checkpoint1 = _now() - 1;
     assertEq(
-      flexClient.getPastRawBalance(_user, _checkpoint1),
+      flexClient.getPastVoteWeight(_user, _checkpoint1),
       _amountA,
       "user's first deposit was not properly checkpointed"
     );
@@ -570,12 +570,12 @@ abstract contract Deposit is FlexVotingClientTest {
     _advanceTimeBy(1); // Advance so that we can look at checkpoints.
 
     assertEq(
-      flexClient.getPastRawBalance(_user, _checkpoint1),
+      flexClient.getPastVoteWeight(_user, _checkpoint1),
       _amountA,
       "user's first deposit was not properly checkpointed"
     );
     assertEq(
-      flexClient.getPastRawBalance(_user, _checkpoint2),
+      flexClient.getPastVoteWeight(_user, _checkpoint2),
       _amountA + _amountB,
       "user's second deposit was not properly checkpointed"
     );
@@ -1287,6 +1287,6 @@ abstract contract Borrow is FlexVotingClientTest {
     _advanceTimeBy(1); // Advance so we can check the snapshot.
 
     // The total deposit snapshot should not have changed.
-    assertEq(flexClient.getPastTotalBalance(_now() - 1), _depositAmount);
+    assertEq(flexClient.getPastTotalVoteWeight(_now() - 1), _depositAmount);
   }
 }

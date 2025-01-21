@@ -16,8 +16,8 @@ import {
   _RawBalanceOf,
   _CastVoteReasonString,
   _SelfDelegate,
-  _CheckpointRawBalanceOf,
-  _CheckpointTotalBalance,
+  _CheckpointVoteWeightOf,
+  _CheckpointTotalVoteWeight,
   GetPastRawBalance,
   GetPastTotalBalance,
   Withdraw,
@@ -88,8 +88,8 @@ abstract contract Delegation is FlexVotingClientTest {
     _mintGovAndDepositIntoFlexClient(_delegate, _delegateWeight);
 
     _advanceTimeBy(1); // Make past balances retrievable.
-    assertEq(client().getPastRawBalance(_delegate, _now() - 1), _delegateWeight);
-    assertEq(client().getPastRawBalance(_delegator, _now() - 1), _delegatorWeight);
+    assertEq(client().getPastVoteWeight(_delegate, _now() - 1), _delegateWeight);
+    assertEq(client().getPastVoteWeight(_delegator, _now() - 1), _delegatorWeight);
 
     // Delegate.
     vm.expectEmit();
@@ -101,8 +101,8 @@ abstract contract Delegation is FlexVotingClientTest {
 
     uint256 _combined = _delegatorWeight + _delegateWeight;
     _advanceTimeBy(1); // Make past balances retrievable.
-    assertEq(client().getPastRawBalance(_delegator, _now() - 1), 0);
-    assertEq(client().getPastRawBalance(_delegate, _now() - 1), _combined);
+    assertEq(client().getPastVoteWeight(_delegator, _now() - 1), 0);
+    assertEq(client().getPastVoteWeight(_delegate, _now() - 1), _combined);
 
     // Create the proposal.
     uint256 _proposalId = _createAndSubmitProposal();
@@ -382,14 +382,14 @@ abstract contract Delegation is FlexVotingClientTest {
 
     // The delegator has no weight to vote with, despite having a deposit balance.
     assertEq(client().deposits(_delegator), _weight);
-    assertEq(client().getPastRawBalance(_delegator, _proposalTimepoint), 0);
+    assertEq(client().getPastVoteWeight(_delegator, _proposalTimepoint), 0);
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_delegator);
     client().expressVote(_proposalId, uint8(_voteType));
 
     // The delegate *has* weight to vote with, despite having no deposit balance.
     assertEq(client().deposits(_delegate), 0);
-    assertEq(client().getPastRawBalance(_delegate, _proposalTimepoint), _weight);
+    assertEq(client().getPastVoteWeight(_delegate, _proposalTimepoint), _weight);
     vm.prank(_delegate);
     client().expressVote(_proposalId, uint8(_voteType));
 
@@ -451,7 +451,7 @@ contract BlockNumber__SelfDelegate is _SelfDelegate {
   }
 }
 
-contract BlockNumber__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+contract BlockNumber__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -461,7 +461,7 @@ contract BlockNumber__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
   }
 }
 
-contract BlockNumber__CheckpointTotalBalance is _CheckpointTotalBalance {
+contract BlockNumber__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -601,7 +601,7 @@ contract TimestampClock__SelfDelegate is _SelfDelegate {
   }
 }
 
-contract TimestampClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
+contract TimestampClock__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
@@ -611,7 +611,7 @@ contract TimestampClock__CheckpointRawBalanceOf is _CheckpointRawBalanceOf {
   }
 }
 
-contract TimestampClock__CheckpointTotalBalance is _CheckpointTotalBalance {
+contract TimestampClock__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }

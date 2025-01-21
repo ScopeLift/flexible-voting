@@ -79,14 +79,15 @@ abstract contract FlexVotingClient {
   /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
   IFractionalGovernor public immutable GOVERNOR;
 
-  /// @dev Mapping from address to the checkpoint history of raw balances
-  /// of that address.
-  mapping(address => Checkpoints.Trace208) internal balanceCheckpoints;
+  /// @dev Mapping from address to the checkpoint history of internal voting
+  /// weight for that address, i.e. how much weight they can call `expressVote`
+  /// with at a given time.
+  mapping(address => Checkpoints.Trace208) internal voteWeightCheckpoints;
 
-  /// @dev History of the sum total of raw balances in the system. May or may
+  /// @dev History of the sum total of voting weight in the system. May or may
   /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
   /// given time.
-  Checkpoints.Trace208 internal totalBalanceCheckpoints;
+  Checkpoints.Trace208 internal totalVoteWeightCheckpoints;
 
   // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/7b74442c5e87ea51dde41c7f18a209fa5154f1a4/contracts/governance/extensions/GovernorCountingFractional.sol#L37
   uint8 internal constant VOTE_TYPE_FRACTIONAL = 255;
@@ -124,7 +125,7 @@ abstract contract FlexVotingClient {
   /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
   function expressVote(uint256 proposalId, uint8 support) external virtual {
     address voter = msg.sender;
-    uint256 weight = getPastRawBalance(voter, GOVERNOR.proposalSnapshot(proposalId));
+    uint256 weight = getPastVoteWeight(voter, GOVERNOR.proposalSnapshot(proposalId));
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
     if (proposalVotersHasVoted[proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
@@ -143,10 +144,12 @@ abstract contract FlexVotingClient {
   }
 
   /// @notice Causes this contract to cast a vote to the Governor for all of the
-  /// accumulated votes expressed by users. Uses the sum of all raw balances to
-  /// proportionally split its voting weight. Can be called by anyone. Can be
-  /// called multiple times during the lifecycle of a given proposal.
-  /// @param proposalId The ID of the proposal which the Pool will now vote on.
+  /// accumulated votes expressed by users. Uses the total internal vote weight
+  /// to proportionally split weight among expressed votes. Can be called by
+  /// anyone. It is idempotent and can be called multiple times during the
+  /// lifecycle of a given proposal.
+  /// @param proposalId The ID of the proposal which the FlexVotingClient will
+  /// now vote on.
   function castVote(uint256 proposalId) external {
     ProposalVote storage _proposalVote = proposalVotes[proposalId];
     if (_proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes == 0) {
@@ -155,7 +158,7 @@ abstract contract FlexVotingClient {
 
     uint256 _proposalSnapshot = GOVERNOR.proposalSnapshot(proposalId);
 
-    // We use the snapshot of total raw balances to determine the weight with
+    // We use the snapshot of total vote weight to determine the weight with
     // which to vote. We do this for two reasons:
     //   (1) We cannot use the proposalVote numbers alone, since some people with
     //       balances at the snapshot might never express their preferences. If a
@@ -168,28 +171,28 @@ abstract contract FlexVotingClient {
     //       earlier call to this function. The weight of those preferences
     //       should still be taken into consideration when determining how much
     //       weight to vote with this time.
-    // Using the total raw balance to proportion votes in this way means that in
+    // Using the total vote weight to proportion votes in this way means that in
     // many circumstances this function will not cast votes with all of its
     // weight.
-    uint256 _totalRawBalanceAtSnapshot = getPastTotalBalance(_proposalSnapshot);
+    uint256 _totalVotesInternal = getPastTotalVoteWeight(_proposalSnapshot);
 
     // We need 256 bits because of the multiplication we're about to do.
-    uint256 _votingWeightAtSnapshot =
+    uint256 _totalTokenWeight =
       IVotingToken(address(GOVERNOR.token())).getPastVotes(address(this), _proposalSnapshot);
 
-    //      forVotesRaw          forVoteWeight
-    // --------------------- = ------------------
-    //     totalRawBalance      totalVoteWeight
+    //     userVotesInternal          userVoteWeight
+    // ------------------------- = --------------------
+    //     totalVotesInternal         totalTokenWeight
     //
-    // forVoteWeight = forVotesRaw * totalVoteWeight / totalRawBalance
+    // userVoteWeight = userVotesInternal * totalTokenWeight / totalVotesInternal
     uint128 _forVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.forVotes) / _totalRawBalanceAtSnapshot
+      (_totalTokenWeight * _proposalVote.forVotes) / _totalVotesInternal
     );
     uint128 _againstVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.againstVotes) / _totalRawBalanceAtSnapshot
+      (_totalTokenWeight * _proposalVote.againstVotes) / _totalVotesInternal
     );
     uint128 _abstainVotesToCast = SafeCast.toUint128(
-      (_votingWeightAtSnapshot * _proposalVote.abstainVotes) / _totalRawBalanceAtSnapshot
+      (_totalTokenWeight * _proposalVote.abstainVotes) / _totalVotesInternal
     );
 
     // Clear the stored votes so that we don't double-cast them.
@@ -206,11 +209,9 @@ abstract contract FlexVotingClient {
     Checkpoints.Trace208 storage _checkpoint,
     int256 _delta
   ) internal returns (uint208 _prevTotal, uint208 _newTotal) {
-
     // The casting in this function is safe since:
     // - if oldTotal + delta > int256.max it will panic and revert.
-    // - if |delta| <= oldTotal
-    //   * there is no risk of wrapping
+    // - if |delta| <= oldTotal there is no risk of wrapping
     // - if |delta| > oldTotal
     //   * uint256(oldTotal + delta) will wrap but the wrapped value will
     //     necessarily be greater than uint208.max, so SafeCast will revert.
@@ -232,35 +233,35 @@ abstract contract FlexVotingClient {
     _checkpoint.push(_timepoint, _newTotal);
   }
 
-  /// @dev Checkpoints the _user's current raw balance.
-  function _checkpointRawBalanceOf(
+  /// @dev Checkpoints internal voting weight of `user` after applying `_delta`.
+  function _checkpointVoteWeightOf(
     address _user,
     int256 _delta
   ) internal virtual {
-    _applyDeltaToCheckpoint(balanceCheckpoints[_user], _delta);
+    _applyDeltaToCheckpoint(voteWeightCheckpoints[_user], _delta);
   }
 
-  /// @dev Checkpoints the total balance after applying `_delta`.
-  function _checkpointTotalBalance(int256 _delta) internal virtual {
-    _applyDeltaToCheckpoint(totalBalanceCheckpoints, _delta);
+  /// @dev Checkpoints the total vote weight after applying `_delta`.
+  function _checkpointTotalVoteWeight(int256 _delta) internal virtual {
+    _applyDeltaToCheckpoint(totalVoteWeightCheckpoints, _delta);
   }
 
-  /// @notice Returns the `_user`'s raw balance at `_timepoint`.
-  /// @param _user The account that's historical raw balance will be looked up.
-  /// @param _timepoint The timepoint at which to lookup the _user's raw
-  /// balance, either a block number or a timestamp as determined by
+  /// @notice Returns the `_user`'s internal voting weight at `_timepoint`.
+  /// @param _user The account that's historical vote weight will be looked up.
+  /// @param _timepoint The timepoint at which to lookup the _user's internal
+  /// voting weight, either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastRawBalance(address _user, uint256 _timepoint) public view returns (uint256) {
+  function getPastVoteWeight(address _user, uint256 _timepoint) public view returns (uint256) {
     uint48 key = SafeCast.toUint48(_timepoint);
-    return balanceCheckpoints[_user].upperLookup(key);
+    return voteWeightCheckpoints[_user].upperLookup(key);
   }
 
-  /// @notice Returns the sum total of raw balances of all users at `_timepoint`.
-  /// @param _timepoint The timepoint at which to lookup the total balance,
+  /// @notice Returns the total internal voting weight of all users at `_timepoint`.
+  /// @param _timepoint The timepoint at which to lookup the total weight,
   /// either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastTotalBalance(uint256 _timepoint) public view returns (uint256) {
+  function getPastTotalVoteWeight(uint256 _timepoint) public view returns (uint256) {
     uint48 key = SafeCast.toUint48(_timepoint);
-    return totalBalanceCheckpoints.upperLookup(key);
+    return totalVoteWeightCheckpoints.upperLookup(key);
   }
 }
