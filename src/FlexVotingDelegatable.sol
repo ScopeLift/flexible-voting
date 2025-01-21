@@ -5,10 +5,9 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
-import {IVotingToken} from "src/interfaces/IVotingToken.sol";
-import {FlexVotingClient} from "src/FlexVotingClient.sol";
+import {FlexVotingBase} from "src/FlexVotingBase.sol";
 
-abstract contract FlexVotingDelegatable is Context, FlexVotingClient {
+abstract contract FlexVotingDelegatable is Context, FlexVotingBase {
   using Checkpoints for Checkpoints.Trace208;
 
   // @dev Emitted when an account changes its delegate.

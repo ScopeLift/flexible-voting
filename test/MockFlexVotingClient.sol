@@ -6,6 +6,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
+import {FlexVotingBase} from "src/FlexVotingBase.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 
 contract MockFlexVotingClient is FlexVotingClient {
@@ -20,7 +21,7 @@ contract MockFlexVotingClient is FlexVotingClient {
   /// @notice Map borrower to total amount borrowed.
   mapping(address => uint256) public borrowTotal;
 
-  constructor(address _governor) FlexVotingClient(_governor) {
+  constructor(address _governor) FlexVotingBase(_governor) {
     TOKEN = ERC20Votes(GOVERNOR.token());
     _selfDelegate();
   }
