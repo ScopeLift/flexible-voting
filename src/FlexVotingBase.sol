@@ -6,6 +6,7 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
+/// TODO this needs to be updated since the abstraction changed.
 /// @notice This is an abstract contract designed to make it easy to build
 /// clients for governance systems that inherit from GovernorCountingFractional,
 /// a.k.a. Flexible Voting governors.
@@ -59,32 +60,44 @@ abstract contract FlexVotingBase {
   /// must be one that supports fractional voting, e.g. GovernorCountingFractional.
   IFractionalGovernor public immutable GOVERNOR;
 
-  /// @dev Mapping from address to the checkpoint history of internal voting
-  /// weight for that address, i.e. how much weight they can call `expressVote`
-  /// with at a given time.
-  mapping(address => Checkpoints.Trace208) internal voteWeightCheckpoints;
+  /// @notice Mapping from address to whether or not that address is a supported
+  /// governor. A supported governor is one that this contract interfaces with
+  /// for voting. It must have fractional voting capabilities, i.e. be a
+  /// descendent of GovernorCountingFractional..
+  mapping(IFractionalGovernor => bool) public supportedGovernors;
 
-  /// @dev History of the sum total of voting weight in the system. May or may
-  /// not be equivalent to this contract's balance of `GOVERNOR`s token at a
+  /// @dev Mapping from governor address to a mapping from user (i.e. address)
+  /// to the checkpoint history of internal voting weight for that address, i.e.
+  /// how much weight they can call `expressVote` with at a given time.
+  ///
+  /// To get the vote weight on a governor for a user at timepoint t use:
+  ///   voteWeightCheckpoints[governor][user].upperLookup(t)
+  mapping(IFractionalGovernor => mapping(address => Checkpoints.Trace208)) internal voteWeightCheckpoints;
+
+  /// @dev Mapping from governor address to the checkpoint history of the sum
+  /// total of voting weight for governor held by this contract. May or may
+  /// not be equivalent to this contract's balance of governor's token at a
   /// given time.
-  Checkpoints.Trace208 internal totalVoteWeightCheckpoints;
+  mapping(IFractionalGovernor => Checkpoints.Trace208) internal totalVoteWeightCheckpoints;
 
-  /// @param _governor The address of the flex-voting-compatible governance contract.
-  constructor(address _governor) {
-    GOVERNOR = IFractionalGovernor(_governor);
+  error FlexVotingBase__UnsupportedGovernor(address governor);
+
+  /// @param _governor The address of a flex-voting-compatible governance contract.
+  constructor(IFractionalGovernor _governor) {
+    supportedGovernors[_governor] = true;
   }
 
-  /// @dev Returns a representation of the current amount of `GOVERNOR`s
+  /// @dev Returns a representation of the current amount of `_governor`s
   /// token that `_user` has claim to in this system. It may or may not be
-  /// equivalent to the withdrawable balance of `GOVERNOR`s token for `user`,
+  /// equivalent to the withdrawable balance of `_governor`s token for `user`,
   /// e.g. if the internal representation of balance has been scaled down.
-  function _rawBalanceOf(address _user) internal view virtual returns (uint208);
+  function _rawBalanceOf(IFractionalGovernor _governor, address _user) internal view virtual returns (uint208);
 
   // TODO Should we rename this function to avoid collision with FlexVotingDelegable?
   // https://github.com/ScopeLift/flexible-voting/issues/88
-  /// @dev Delegates the present contract's voting rights with `GOVERNOR` to itself.
-  function _selfDelegate() internal {
-    IVotingToken(GOVERNOR.token()).delegate(address(this));
+  /// @dev Delegates the present contract's voting rights with `_governor` to itself.
+  function _selfDelegate(IFractionalGovernor _governor) internal {
+    IVotingToken(_governor.token()).delegate(address(this));
   }
 
   function _applyDeltaToCheckpoint(Checkpoints.Trace208 storage _checkpoint, int256 _delta)
@@ -115,13 +128,13 @@ abstract contract FlexVotingBase {
     _checkpoint.push(_timepoint, _newTotal);
   }
 
-  /// @dev Checkpoints internal voting weight of `user` after applying `_delta`.
-  function _checkpointVoteWeightOf(address _user, int256 _delta) internal virtual {
-    _applyDeltaToCheckpoint(voteWeightCheckpoints[_user], _delta);
+  /// @dev Checkpoints voting weight of `user` with `governor`s token after applying `_delta`.
+  function _checkpointVoteWeightOf(IFractionalGovernor _governor, address _user, int256 _delta) internal virtual {
+    _applyDeltaToCheckpoint(voteWeightCheckpoints[_governor][_user], _delta);
   }
 
-  /// @dev Checkpoints the total vote weight after applying `_delta`.
-  function _checkpointTotalVoteWeight(int256 _delta) internal virtual {
-    _applyDeltaToCheckpoint(totalVoteWeightCheckpoints, _delta);
+  /// @dev Checkpoints this contract's total vote weight with `governor` after applying `_delta`.
+  function _checkpointTotalVoteWeight(IFractionalGovernor _governor, int256 _delta) internal virtual {
+    _applyDeltaToCheckpoint(totalVoteWeightCheckpoints[_governor], _delta);
   }
 }
