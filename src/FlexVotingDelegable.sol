@@ -5,6 +5,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 
 /// @notice This is an abstract contract designed to make it easy to build
@@ -28,57 +29,76 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
 
   // @dev Emitted when an account changes its delegate.
   event DelegateChanged(
-    address indexed delegator, address indexed fromDelegate, address indexed toDelegate
+    address indexed governor,
+    address indexed delegator,
+    address indexed toDelegate,
+    address fromDelegate
   );
 
   // @dev Emitted when a delegate change results in changes to a delegate's
   // number of voting weight.
-  event DelegateWeightChanged(address indexed delegate, uint256 previousVotes, uint256 newVotes);
+  event DelegateWeightChanged(
+    address indexed governor,
+    address indexed delegate,
+    uint256 previousVotes,
+    uint256 newVotes
+  );
 
-  mapping(address account => address) private _delegatee;
+  mapping(IFractionalGovernor => mapping(address account => address)) private _delegatee;
 
-  // @dev Delegates votes from the sender to `delegatee`.
-  function delegate(address delegatee) public virtual {
-    address account = _msgSender();
-    _delegate(account, delegatee);
+  // @dev Delegates `_governor` votes from the sender to `_proxy`.
+  function delegate(IFractionalGovernor _governor, address _proxy) public virtual {
+    _checkGovernor(_governor);
+    address _account = _msgSender();
+    _delegate(_governor, _account, _proxy);
   }
 
-  // @dev Returns the delegate that `account` has chosen. Assumes
-  // self-delegation if no delegate has been chosen.
-  function delegates(address _account) public view virtual returns (address) {
-    address _proxy = _delegatee[_account];
+  // @dev Returns the delegate that `_account` has chosen for `_governor`. Assumes
+  // self-delegation if no delegate has been set.
+  function delegates(IFractionalGovernor _governor, address _account) public view virtual returns (address) {
+    address _proxy = _delegatee[_governor][_account];
     if (_proxy == address(0)) return _account;
     return _proxy;
   }
 
-  // @dev Delegate all of `account`'s voting units to `delegatee`.
+  // @dev Delegate all of `account`'s voting units with `governor` to `delegatee`.
   //
   // Emits events {DelegateChanged} and {DelegateWeightChanged}.
-  function _delegate(address account, address delegatee) internal virtual {
-    address oldDelegate = delegates(account);
-    _delegatee[account] = delegatee;
+  function _delegate(IFractionalGovernor _governor, address _account, address _proxy) internal virtual {
+    address oldDelegate = delegates(_governor, _account);
+    _delegatee[_governor][_account] = _proxy;
 
-    int256 _delta = int256(uint256(_rawBalanceOf(account)));
-    emit DelegateChanged(account, oldDelegate, delegatee);
-    _updateDelegateBalance(oldDelegate, delegatee, _delta);
+    int256 _delta = int256(uint256(_rawBalanceOf(_governor, _account)));
+    emit DelegateChanged(address(_governor), _account, oldDelegate, _proxy);
+    _updateDelegateBalance(_governor, oldDelegate, _proxy, _delta);
   }
 
-  function _checkpointVoteWeightOf(address _user, int256 _delta) internal virtual override {
-    address _proxy = delegates(_user);
-    _applyDeltaToCheckpoint(voteWeightCheckpoints[_proxy], _delta);
+  function _checkpointVoteWeightOf(
+    IFractionalGovernor _governor,
+    address _user,
+    int256 _delta
+  ) internal virtual override {
+    address _proxy = delegates(_governor, _user);
+    _applyDeltaToCheckpoint(voteWeightCheckpoints[_governor][_proxy], _delta);
   }
 
   // @dev Moves delegated votes from one delegate to another.
-  function _updateDelegateBalance(address from, address to, int256 _delta) internal virtual {
-    if (from == to || _delta == 0) return;
+  function _updateDelegateBalance(
+    IFractionalGovernor _governor,
+    address _from,
+    address _to,
+    int256 _delta
+  ) internal virtual {
+    if (_from == _to || _delta == 0) return;
 
     // Decrement old delegate's weight.
     (uint208 _oldFrom, uint208 _newFrom) =
-      _applyDeltaToCheckpoint(voteWeightCheckpoints[from], -_delta);
-    emit DelegateWeightChanged(from, _oldFrom, _newFrom);
+      _applyDeltaToCheckpoint(voteWeightCheckpoints[_governor][_from], -_delta);
+    emit DelegateWeightChanged(address(_governor), _from, _oldFrom, _newFrom);
 
     // Increment new delegate's weight.
-    (uint208 _oldTo, uint208 _newTo) = _applyDeltaToCheckpoint(voteWeightCheckpoints[to], _delta);
-    emit DelegateWeightChanged(to, _oldTo, _newTo);
+    (uint208 _oldTo, uint208 _newTo) =
+      _applyDeltaToCheckpoint(voteWeightCheckpoints[_governor][_to], _delta);
+    emit DelegateWeightChanged(address(_governor), _to, _oldTo, _newTo);
   }
 }

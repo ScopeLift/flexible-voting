@@ -38,7 +38,7 @@ abstract contract FlexVotingClient is FlexVotingBase {
   mapping(IFractionalGovernor => mapping(uint256 => mapping(address => bool))) private proposalVoterHasVoted;
 
   /// @notice Map governor to proposalId to vote totals expressed on the proposal.
-  mapping(IFractionalGovernor => mapping(uint256 => mapping(uint256 => ProposalVote))) public proposalVotes;
+  mapping(IFractionalGovernor => mapping(uint256 => ProposalVote)) public proposalVotes;
 
   /// Constant used by OZ's implementation of {GovernorCountingFractional} to
   /// signal fractional voting.
@@ -62,8 +62,7 @@ abstract contract FlexVotingClient is FlexVotingBase {
   /// @param proposalId The ID of the proposal in the associated governor.
   /// @param support The depositor's vote preference in accordance with the `VoteType` enum.
   function expressVote(IFractionalGovernor governor, uint256 proposalId, uint8 support) external virtual {
-    if (!supportedGovernors[governor])
-      revert FlexVotingBase.FlexVotingBase__UnsupportedGovernor(address(governor));
+    _checkGovernor(governor);
 
     address voter = msg.sender;
     uint256 weight = getPastVoteWeight(governor, voter, governor.proposalSnapshot(proposalId));
@@ -93,8 +92,7 @@ abstract contract FlexVotingClient is FlexVotingBase {
   /// @param governor The governor that votes will be cast to.
   /// @param proposalId The ID of the proposal on which votes will be cast.
   function castVote(IFractionalGovernor governor, uint256 proposalId) external {
-    if (!supportedGovernors[governor])
-      revert FlexVotingBase.FlexVotingBase__UnsupportedGovernor(address(governor));
+    _checkGovernor(governor);
 
     ProposalVote storage _proposalVote = proposalVotes[governor][proposalId];
     if (_proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes == 0) {

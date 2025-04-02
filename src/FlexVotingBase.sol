@@ -137,4 +137,10 @@ abstract contract FlexVotingBase {
   function _checkpointTotalVoteWeight(IFractionalGovernor _governor, int256 _delta) internal virtual {
     _applyDeltaToCheckpoint(totalVoteWeightCheckpoints[_governor], _delta);
   }
+
+  function _checkGovernor(IFractionalGovernor _governor) internal view {
+    if (!supportedGovernors[_governor]) {
+      revert FlexVotingBase__UnsupportedGovernor(address(_governor));
+    }
+  }
 }
