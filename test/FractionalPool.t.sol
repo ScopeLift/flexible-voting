@@ -5,9 +5,9 @@ import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
-import "./GovToken.sol";
-import "./FractionalGovernor.sol";
-import "./ProposalReceiverMock.sol";
+import "test/GovToken.sol";
+import "test/FractionalGovernor.sol";
+import "test/mocks/ProposalReceiverMock.sol";
 
 contract FractionalPoolTest is Test {
   enum ProposalState {

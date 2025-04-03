@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {MockFlexVotingClient as MFVC} from "test/MockFlexVotingClient.sol";
-import {MockFlexVotingDelegableClient} from "test/MockFlexVotingDelegableClient.sol";
+import {FlexVotingDelegatable} from "src/FlexVotingDelegatable.sol";
+import {MockFlexVotingClient as MFVC} from "test/mocks/MockFlexVotingClient.sol";
+import {MockFlexVotingDelegatableClient} from "test/mocks/MockFlexVotingDelegatableClient.sol";
 import {GovernorCountingSimple as GCS} from
   "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 

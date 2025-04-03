@@ -3,7 +3,7 @@ pragma solidity >=0.8.10;
 
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
-import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
+import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 

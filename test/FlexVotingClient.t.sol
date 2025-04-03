@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
+import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {
   Deployment,
   Constructor,
