@@ -56,11 +56,13 @@ abstract contract FlexVotingBase {
   // conform to the EIP-6372 standard, which specifies they be uint48s.
   using Checkpoints for Checkpoints.Trace208;
 
-  /// @notice Mapping from address to whether or not that address is a supported
-  /// governor. A supported governor is one that this contract interfaces with
+  event AllowedGovernorsUpdated(address indexed governor, bool isAllowed);
+
+  /// @notice Mapping from address to whether or not that address is a allowed
+  /// governor. A allowed governor is one that this contract interfaces with
   /// for voting. It must have fractional voting capabilities, i.e. be a
   /// descendent of GovernorCountingFractional..
-  mapping(IFractionalGovernor => bool) public supportedGovernors;
+  mapping(IFractionalGovernor => bool) public allowedGovernors;
 
   /// @dev Mapping from governor address to a mapping from user (i.e. address)
   /// to the checkpoint history of internal voting weight for that address, i.e.
@@ -77,11 +79,11 @@ abstract contract FlexVotingBase {
   /// given time.
   mapping(IFractionalGovernor => Checkpoints.Trace208) internal totalVoteWeightCheckpoints;
 
-  error FlexVotingBase__UnsupportedGovernor(address governor);
+  error FlexVotingBase__DisallowedGovernor(address governor);
 
   /// @param _governor The address of a flex-voting-compatible governance contract.
   constructor(IFractionalGovernor _governor) {
-    supportedGovernors[_governor] = true;
+    _updateAllowedGovernors(_governor, true);
   }
 
   /// @dev Returns a representation of the current amount of `_governor`s
@@ -147,8 +149,13 @@ abstract contract FlexVotingBase {
   }
 
   function _checkGovernor(IFractionalGovernor _governor) internal view {
-    if (!supportedGovernors[_governor]) {
-      revert FlexVotingBase__UnsupportedGovernor(address(_governor));
+    if (!allowedGovernors[_governor]) {
+      revert FlexVotingBase__DisallowedGovernor(address(_governor));
     }
+  }
+
+  function _updateAllowedGovernors(IFractionalGovernor _governor, bool _isAllowed) internal {
+    allowedGovernors[_governor] = _isAllowed;
+    emit AllowedGovernorsUpdated(address(_governor), _isAllowed);
   }
 }
