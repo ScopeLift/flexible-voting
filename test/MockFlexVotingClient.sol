@@ -43,11 +43,11 @@ contract MockFlexVotingClient is FlexVotingClient {
   // Test hooks
   // ---------------------------------------------------------------------------
   function expressVote(uint256 proposalId, uint8 support) external {
-    this.expressVote(GOVERNOR, proposalId, support);
+    _expressVote(GOVERNOR, proposalId, support);
   }
 
   function castVote(uint256 proposalId) external {
-    this.castVote(GOVERNOR, proposalId);
+    _castVote(GOVERNOR, proposalId);
   }
 
   function deposits(IFractionalGovernor _governor, address _user) external view returns (uint208) {
