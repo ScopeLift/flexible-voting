@@ -62,8 +62,9 @@ abstract contract FlexVotingBase {
   ///
   /// To get the vote weight on a governor for a user at timepoint t use:
   ///   voteWeightCheckpoints[governor][user].upperLookup(t)
-  mapping(IFractionalGovernor => mapping(address => Checkpoints.Trace208)) internal
-    voteWeightCheckpoints;
+  mapping(
+    IFractionalGovernor governor => mapping(address user => Checkpoints.Trace208 votingWeight)
+  ) internal voteWeightCheckpoints;
 
   /// @dev Mapping from governor address to the checkpoint history of the sum
   /// total of voting weight for governor held by this contract. May or may
