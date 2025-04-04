@@ -77,8 +77,6 @@ abstract contract FlexVotingClient is FlexVotingBase {
     internal
     virtual
   {
-    _checkGovernor(governor);
-
     address voter = msg.sender;
     uint256 weight = getPastVoteWeight(governor, voter, governor.proposalSnapshot(proposalId));
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
@@ -110,8 +108,6 @@ abstract contract FlexVotingClient is FlexVotingBase {
   }
 
   function _castVote(IFractionalGovernor governor, uint256 proposalId) internal virtual {
-    _checkGovernor(governor);
-
     ProposalVote storage _proposalVote = proposalVotes[governor][proposalId];
     if (_proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes == 0) {
       revert FlexVotingClient__NoVotesExpressed();

@@ -25,7 +25,7 @@ contract MockFlexVotingClient is FlexVotingClient {
   /// @notice Map borrower to total amount borrowed of governor's token.
   mapping(IFractionalGovernor => mapping(address => uint256)) public _borrowTotal;
 
-  constructor(address _governor) FlexVotingBase(IFractionalGovernor(_governor)) {
+  constructor(address _governor) {
     GOVERNOR = IFractionalGovernor(_governor);
     TOKEN = ERC20Votes(GOVERNOR.token());
     _selfDelegate(GOVERNOR);

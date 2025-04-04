@@ -56,14 +56,6 @@ abstract contract FlexVotingBase {
   // conform to the EIP-6372 standard, which specifies they be uint48s.
   using Checkpoints for Checkpoints.Trace208;
 
-  event AllowedGovernorsUpdated(address indexed governor, bool isAllowed);
-
-  /// @notice Mapping from address to whether or not that address is a allowed
-  /// governor. A allowed governor is one that this contract interfaces with
-  /// for voting. It must have fractional voting capabilities, i.e. be a
-  /// descendent of GovernorCountingFractional..
-  mapping(IFractionalGovernor => bool) public allowedGovernors;
-
   /// @dev Mapping from governor address to a mapping from user (i.e. address)
   /// to the checkpoint history of internal voting weight for that address, i.e.
   /// how much weight they can call `expressVote` with at a given time.
@@ -77,14 +69,8 @@ abstract contract FlexVotingBase {
   /// total of voting weight for governor held by this contract. May or may
   /// not be equivalent to this contract's balance of governor's token at a
   /// given time.
-  mapping(IFractionalGovernor => Checkpoints.Trace208) internal totalVoteWeightCheckpoints;
-
-  error FlexVotingBase__DisallowedGovernor(address governor);
-
-  /// @param _governor The address of a flex-voting-compatible governance contract.
-  constructor(IFractionalGovernor _governor) {
-    _updateAllowedGovernors(_governor, true);
-  }
+  mapping(IFractionalGovernor governor => Checkpoints.Trace208 totalWeight) internal
+    totalVoteWeightCheckpoints;
 
   /// @dev Returns a representation of the current amount of `_governor`s
   /// token that `_user` has claim to in this system. It may or may not be
@@ -146,16 +132,5 @@ abstract contract FlexVotingBase {
     virtual
   {
     _applyDeltaToCheckpoint(_governor, totalVoteWeightCheckpoints[_governor], _delta);
-  }
-
-  function _checkGovernor(IFractionalGovernor _governor) internal view {
-    if (!allowedGovernors[_governor]) {
-      revert FlexVotingBase__DisallowedGovernor(address(_governor));
-    }
-  }
-
-  function _updateAllowedGovernors(IFractionalGovernor _governor, bool _isAllowed) internal {
-    allowedGovernors[_governor] = _isAllowed;
-    emit AllowedGovernorsUpdated(address(_governor), _isAllowed);
   }
 }

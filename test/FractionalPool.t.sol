@@ -4,10 +4,12 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
-import {FractionalPool, IVotingToken, IFractionalGovernor} from "../src/FractionalPool.sol";
-import "test/GovToken.sol";
-import "test/FractionalGovernor.sol";
-import "test/mocks/ProposalReceiverMock.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+
+import {FractionalPool, IVotingToken, IFractionalGovernor} from "src/FractionalPool.sol";
+import {GovToken} from "test/GovToken.sol";
+import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {ProposalReceiverMock} from "test/mocks/ProposalReceiverMock.sol";
 
 contract FractionalPoolTest is Test {
   enum ProposalState {

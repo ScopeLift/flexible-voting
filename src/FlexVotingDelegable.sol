@@ -45,7 +45,6 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
 
   // @dev Delegates `_governor` votes from the sender to `_proxy`.
   function delegate(IFractionalGovernor _governor, address _proxy) public virtual {
-    _checkGovernor(_governor);
     address _account = _msgSender();
     _delegate(_governor, _account, _proxy);
   }
