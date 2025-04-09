@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {MockFlexVotingClient as MFVC} from "test/MockFlexVotingClient.sol";
 import {MockFlexVotingDelegableClient} from "test/MockFlexVotingDelegableClient.sol";
 import {GovernorCountingSimple as GCS} from
@@ -62,9 +63,9 @@ abstract contract Delegation is FlexVotingClientTest {
     _mintGovAndDepositIntoFlexClient(_delegator, _weight);
 
     vm.expectEmit();
-    emit FlexVotingDelegable.DelegateChanged(_delegator, _delegator, _delegate);
+    emit FlexVotingDelegable.DelegateChanged(address(governor), _delegator, _delegator, _delegate);
     vm.expectEmit();
-    emit FlexVotingDelegable.DelegateWeightChanged(_delegate, 0, _weight);
+    emit FlexVotingDelegable.DelegateWeightChanged(address(governor), _delegate, 0, _weight);
     vm.prank(_delegator);
     client().delegate(_delegate);
   }
@@ -94,7 +95,7 @@ abstract contract Delegation is FlexVotingClientTest {
     // Delegate.
     vm.expectEmit();
     emit FlexVotingDelegable.DelegateWeightChanged(
-      _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
+      address(governor), _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
     );
     vm.prank(_delegator);
     client().delegate(_delegate);
@@ -112,7 +113,7 @@ abstract contract Delegation is FlexVotingClientTest {
     client().expressVote(_proposalId, uint8(_voteType));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(_proposalId);
+      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _combined : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _combined : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _combined : 0);
@@ -195,7 +196,7 @@ abstract contract Delegation is FlexVotingClientTest {
     }
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(_proposalId);
+      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _combined : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _combined : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _combined : 0);
@@ -233,7 +234,7 @@ abstract contract Delegation is FlexVotingClientTest {
     client().expressVote(_proposalId, uint8(_voteType));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(_proposalId);
+      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _weight : 0);
@@ -338,12 +339,14 @@ abstract contract Delegation is FlexVotingClientTest {
     vm.prank(_delegateB);
     client().expressVote(_proposalB, uint8(_voteType));
 
-    (uint256 _againstA, uint256 _forA, uint256 _abstainA) = client().proposalVotes(_proposalA);
+    (uint256 _againstA, uint256 _forA, uint256 _abstainA) =
+      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalA);
     assertEq(_forA, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstA, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainA, _voteType == GCS.VoteType.Abstain ? _weight : 0);
 
-    (uint256 _againstB, uint256 _forB, uint256 _abstainB) = client().proposalVotes(_proposalB);
+    (uint256 _againstB, uint256 _forB, uint256 _abstainB) =
+      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalB);
     assertEq(_forB, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstB, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainB, _voteType == GCS.VoteType.Abstain ? _weight : 0);
@@ -392,7 +395,7 @@ abstract contract Delegation is FlexVotingClientTest {
     client().expressVote(_proposalId, uint8(_voteType));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(_proposalId);
+      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _weight : 0);

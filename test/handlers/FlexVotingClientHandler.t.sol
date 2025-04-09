@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {GovernorCountingSimple as GCS} from
+  "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+
 import {Test, console2} from "forge-std/Test.sol";
 import {FlexVotingInvariantSetup} from "test/FlexVotingClient.invariants.t.sol";
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
-import {GovernorCountingSimple as GCS} from
-  "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
+import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 
 contract FlexVotingClientHandlerTest is FlexVotingInvariantSetup {
   // Amounts evenly divisible by 9 do not create new users.
@@ -245,7 +247,7 @@ contract ExpressVote is FlexVotingClientHandlerTest {
     assertFalse(handler.hasPendingVotes(_user, _proposalId));
     assertEq(handler.ghost_actorExpressedVotes(_user, _proposalId), 0);
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_againstVotes, 0);
     assertEq(_forVotes, 0);
     assertEq(_abstainVotes, 0);
@@ -257,14 +259,16 @@ contract ExpressVote is FlexVotingClientHandlerTest {
 
     // Finally, we can call expressVote.
     vm.expectCall(
-      address(flexClient), abi.encodeCall(flexClient.expressVote, (_proposalId, _voteType))
+      address(flexClient),
+      abi.encodeWithSignature("expressVote(uint256,uint8)", _proposalId, _voteType)
     );
     handler.expressVote(_proposalId, _voteType, _seedForVoter);
     assertTrue(handler.hasPendingVotes(_user, _proposalId));
     assertEq(handler.ghost_actorExpressedVotes(_user, _proposalId), 1);
 
     // The vote preference should have been recorded by the client.
-    (_againstVotes, _forVotes, _abstainVotes) = flexClient.proposalVotes(_proposalId);
+    (_againstVotes, _forVotes, _abstainVotes) =
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     if (_voteType == uint8(GCS.VoteType.Against)) assertEq(_amount, _againstVotes);
     if (_voteType == uint8(GCS.VoteType.For)) assertEq(_amount, _forVotes);
     if (_voteType == uint8(GCS.VoteType.Abstain)) assertEq(_amount, _abstainVotes);
@@ -304,7 +308,7 @@ contract CastVote is FlexVotingClientHandlerTest {
     address _actor = handler.expressVote(_proposalSeed, _voteType, _userSeed);
     assertTrue(handler.hasPendingVotes(_actor, _proposalId));
 
-    vm.expectCall(address(flexClient), abi.encodeCall(flexClient.castVote, _proposalId));
+    vm.expectCall(address(flexClient), abi.encodeWithSignature("castVote(uint256)", _proposalId));
     handler.castVote(_proposalSeed);
 
     // The actor should no longer have pending votes.

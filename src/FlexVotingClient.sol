@@ -35,7 +35,8 @@ abstract contract FlexVotingClient is FlexVotingBase {
   }
 
   /// @dev Map governor to proposalId to an address to whether they have voted on the proposal.
-  mapping(IFractionalGovernor => mapping(uint256 => mapping(address => bool))) private proposalVoterHasVoted;
+  mapping(IFractionalGovernor => mapping(uint256 => mapping(address => bool))) private
+    proposalVoterHasVoted;
 
   /// @notice Map governor to proposalId to vote totals expressed on the proposal.
   mapping(IFractionalGovernor => mapping(uint256 => ProposalVote)) public proposalVotes;
@@ -51,7 +52,11 @@ abstract contract FlexVotingClient is FlexVotingBase {
   error FlexVotingClient__NoVotesExpressed();
 
   /// @dev Used as the `reason` param when submitting a vote to `_governor`.
-  function _castVoteReasonString(IFractionalGovernor /*_governor*/) internal virtual returns (string memory) {
+  function _castVoteReasonString(IFractionalGovernor /*_governor*/ )
+    internal
+    virtual
+    returns (string memory)
+  {
     return "rolled-up vote from governance token holders";
   }
 
@@ -61,15 +66,17 @@ abstract contract FlexVotingClient is FlexVotingBase {
   /// @param governor The governor that the voting preference is related to.
   /// @param proposalId The ID of the proposal in the associated governor.
   /// @param support The depositor's vote preference in accordance with the `VoteType` enum.
-  function expressVote(IFractionalGovernor governor, uint256 proposalId, uint8 support) external virtual {
+  function expressVote(IFractionalGovernor governor, uint256 proposalId, uint8 support)
+    external
+    virtual
+  {
     _checkGovernor(governor);
 
     address voter = msg.sender;
     uint256 weight = getPastVoteWeight(governor, voter, governor.proposalSnapshot(proposalId));
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
-    if (proposalVoterHasVoted[governor][proposalId][voter])
-      revert FlexVotingClient__AlreadyVoted();
+    if (proposalVoterHasVoted[governor][proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
     proposalVoterHasVoted[governor][proposalId][voter] = true;
 
     if (support == uint8(VoteType.Against)) {
@@ -152,7 +159,11 @@ abstract contract FlexVotingClient is FlexVotingBase {
   /// @param _timepoint The timepoint at which to lookup the _user's internal
   /// voting weight, either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastVoteWeight(IFractionalGovernor _governor, address _user, uint256 _timepoint) public view returns (uint256) {
+  function getPastVoteWeight(IFractionalGovernor _governor, address _user, uint256 _timepoint)
+    public
+    view
+    returns (uint256)
+  {
     uint48 key = SafeCast.toUint48(_timepoint);
     return voteWeightCheckpoints[_governor][_user].upperLookup(key);
   }
@@ -162,7 +173,11 @@ abstract contract FlexVotingClient is FlexVotingBase {
   /// @param _timepoint The timepoint at which to lookup the total weight,
   /// either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastTotalVoteWeight(IFractionalGovernor _governor, uint256 _timepoint) public view returns (uint256) {
+  function getPastTotalVoteWeight(IFractionalGovernor _governor, uint256 _timepoint)
+    public
+    view
+    returns (uint256)
+  {
     uint48 key = SafeCast.toUint48(_timepoint);
     return totalVoteWeightCheckpoints[_governor].upperLookup(key);
   }

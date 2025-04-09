@@ -131,7 +131,8 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
         governor.proposalVotes(_proposalId);
       uint256 _totalVotesGov = _againstVotes + _forVotes + _abstainVotes;
 
-      (_againstVotes, _forVotes, _abstainVotes) = flexClient.proposalVotes(_proposalId);
+      (_againstVotes, _forVotes, _abstainVotes) =
+        flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
       uint256 _totalVotesClient = _againstVotes + _forVotes + _abstainVotes;
 
       // The votes recorded in the governor and those in the client waiting to

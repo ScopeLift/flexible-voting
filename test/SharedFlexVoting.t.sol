@@ -614,7 +614,7 @@ abstract contract ExpressVote is FlexVotingClientTest {
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -702,7 +702,7 @@ abstract contract ExpressVote is FlexVotingClientTest {
       uint256 _againstVotesExpressedInit,
       uint256 _forVotesExpressedInit,
       uint256 _abstainVotesExpressedInit
-    ) = flexClient.proposalVotes(_proposalId);
+    ) = flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressedInit, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressedInit, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressedInit, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -714,7 +714,7 @@ abstract contract ExpressVote is FlexVotingClientTest {
 
     // No votes changed.
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _forVotesExpressedInit);
     assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
     assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
@@ -790,7 +790,7 @@ abstract contract CastVote is FlexVotingClientTest {
     vm.prank(_user);
     flexClient.expressVote(_proposalId, uint8(_voteType));
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -837,7 +837,7 @@ abstract contract CastVote is FlexVotingClientTest {
 
     // The internal proposal vote weight should not reflect the new deposit weight.
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeightA : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeightA : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeightA : 0);
@@ -879,7 +879,7 @@ abstract contract CastVote is FlexVotingClientTest {
     flexClient.expressVote(_proposalId, uint8(GCS.VoteType.Abstain));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, 0);
     assertEq(_againstVotesExpressed, _voteWeightA);
     assertEq(_abstainVotesExpressed, _voteWeightB);
@@ -1172,7 +1172,7 @@ abstract contract CastVote is FlexVotingClientTest {
     flexClient.expressVote(_proposalId, uint8(GCS.VoteType.Against));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(_proposalId);
+      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
     assertEq(_forVotesExpressed, 0);
     assertEq(_againstVotesExpressed, _voteWeightA);
     assertEq(_abstainVotesExpressed, 0);
