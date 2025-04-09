@@ -13,7 +13,7 @@ import {FlexVotingBase} from "src/FlexVotingBase.sol";
 ///
 /// This contract extends FlexVotingBase, adding two features:
 ///   (a) the ability for depositors to express voting preferences on
-///       {Governor}'s proprosals, and
+///       {Governor}'s proposals, and
 ///   (b) the ability to cast fractional, rolled up votes on behalf of depositors.
 abstract contract FlexVotingClient is FlexVotingBase {
   using Checkpoints for Checkpoints.Trace208;
