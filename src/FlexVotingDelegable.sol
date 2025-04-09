@@ -23,7 +23,7 @@ import {FlexVotingBase} from "src/FlexVotingBase.sol";
 ///   - user B's voting weight is combined with user A's voting weight so that
 ///     150 tokens are effectively cast with voting preference P on behalf of
 ///     users A and B.
-abstract contract FlexVotingDelegatable is Context, FlexVotingBase {
+abstract contract FlexVotingDelegable is Context, FlexVotingBase {
   using Checkpoints for Checkpoints.Trace208;
 
   // @dev Emitted when an account changes its delegate.

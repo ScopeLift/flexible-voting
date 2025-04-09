@@ -80,7 +80,7 @@ abstract contract FlexVotingBase {
   /// e.g. if the internal representation of balance has been scaled down.
   function _rawBalanceOf(address _user) internal view virtual returns (uint208);
 
-  // TODO rename to avoid collision with FlexVotingDelegatable.
+  // TODO rename to avoid collision with FlexVotingDelegable.
   /// @dev Delegates the present contract's voting rights with `GOVERNOR` to itself.
   function _selfDelegate() internal {
     IVotingToken(GOVERNOR.token()).delegate(address(this));

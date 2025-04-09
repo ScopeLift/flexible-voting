@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {FlexVotingDelegatable} from "src/FlexVotingDelegatable.sol";
+import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
 import {MockFlexVotingClient as MFVC} from "test/MockFlexVotingClient.sol";
-import {MockFlexVotingDelegatableClient} from "test/MockFlexVotingDelegatableClient.sol";
+import {MockFlexVotingDelegableClient} from "test/MockFlexVotingDelegableClient.sol";
 import {GovernorCountingSimple as GCS} from
   "@openzeppelin/contracts/governance/extensions/GovernorCountingSimple.sol";
 
@@ -35,8 +35,8 @@ abstract contract Delegation is FlexVotingClientTest {
 
   // We cast the flexClient to the delegatable client to access the delegate
   // function.
-  function client() internal view returns (MockFlexVotingDelegatableClient) {
-    return MockFlexVotingDelegatableClient(address(flexClient));
+  function client() internal view returns (MockFlexVotingDelegableClient) {
+    return MockFlexVotingDelegableClient(address(flexClient));
   }
 
   function testFuzz_selfDelegationByDefault(address _delegator) public {
@@ -62,9 +62,9 @@ abstract contract Delegation is FlexVotingClientTest {
     _mintGovAndDepositIntoFlexClient(_delegator, _weight);
 
     vm.expectEmit();
-    emit FlexVotingDelegatable.DelegateChanged(_delegator, _delegator, _delegate);
+    emit FlexVotingDelegable.DelegateChanged(_delegator, _delegator, _delegate);
     vm.expectEmit();
-    emit FlexVotingDelegatable.DelegateWeightChanged(_delegate, 0, _weight);
+    emit FlexVotingDelegable.DelegateWeightChanged(_delegate, 0, _weight);
     vm.prank(_delegator);
     client().delegate(_delegate);
   }
@@ -93,7 +93,7 @@ abstract contract Delegation is FlexVotingClientTest {
 
     // Delegate.
     vm.expectEmit();
-    emit FlexVotingDelegatable.DelegateWeightChanged(
+    emit FlexVotingDelegable.DelegateWeightChanged(
       _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
     );
     vm.prank(_delegator);
@@ -405,7 +405,7 @@ contract BlockNumberClock_Deployment is Deployment {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -415,7 +415,7 @@ contract BlockNumber_Constructor is Constructor {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -425,7 +425,7 @@ contract BlockNumber__RawBalanceOf is _RawBalanceOf {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -435,7 +435,7 @@ contract BlockNumber__CastVoteReasonString is _CastVoteReasonString {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -445,7 +445,7 @@ contract BlockNumber__SelfDelegate is _SelfDelegate {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -455,7 +455,7 @@ contract BlockNumber__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -465,7 +465,7 @@ contract BlockNumber__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -475,7 +475,7 @@ contract BlockNumber_GetPastRawBalance is GetPastRawBalance {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -485,7 +485,7 @@ contract BlockNumber_GetPastTotalBalance is GetPastTotalBalance {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -495,7 +495,7 @@ contract BlockNumber_Withdraw is Withdraw {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -505,7 +505,7 @@ contract BlockNumber_Deposit is Deposit {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -515,7 +515,7 @@ contract BlockNumber_ExpressVote is ExpressVote {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -525,7 +525,7 @@ contract BlockNumber_CastVote is CastVote {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -535,7 +535,7 @@ contract BlockNumber_Borrow is Borrow {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -545,7 +545,7 @@ contract BlockNumberClock_Delegation is Delegation {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -555,7 +555,7 @@ contract TimestampClockClock_Deployment is Deployment {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -565,7 +565,7 @@ contract TimestampClock_Constructor is Constructor {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -575,7 +575,7 @@ contract TimestampClock__RawBalanceOf is _RawBalanceOf {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -585,7 +585,7 @@ contract TimestampClock__CastVoteReasonString is _CastVoteReasonString {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -595,7 +595,7 @@ contract TimestampClock__SelfDelegate is _SelfDelegate {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -605,7 +605,7 @@ contract TimestampClock__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -615,7 +615,7 @@ contract TimestampClock__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -625,7 +625,7 @@ contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -635,7 +635,7 @@ contract TimestampClock_GetPastTotalBalance is GetPastTotalBalance {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -645,7 +645,7 @@ contract TimestampClock_Withdraw is Withdraw {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -655,7 +655,7 @@ contract TimestampClock_Deposit is Deposit {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -665,7 +665,7 @@ contract TimestampClock_ExpressVote is ExpressVote {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -675,7 +675,7 @@ contract TimestampClock_CastVote is CastVote {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -685,7 +685,7 @@ contract TimestampClock_Borrow is Borrow {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
 
@@ -695,6 +695,6 @@ contract TimestampClockClock_Delegation is Delegation {
   }
 
   function _deployFlexClient(address _governor) internal override {
-    flexClient = MFVC(address(new MockFlexVotingDelegatableClient(_governor)));
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
   }
 }
