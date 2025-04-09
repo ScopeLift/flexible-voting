@@ -251,8 +251,9 @@ contract FlexVotingClientHandler is Test {
     calldatas[0] = receiverCallData;
 
     // Submit the proposal.
-    vm.prank(msg.sender);
+    vm.startPrank(msg.sender);
     _proposalId = governor.propose(targets, values, calldatas, _proposalName);
+    vm.stopPrank();
     proposals.add(_proposalId);
 
     // Roll the clock to get voting started.

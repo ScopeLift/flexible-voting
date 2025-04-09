@@ -18,6 +18,14 @@ import {GovToken, TimestampGovToken} from "test/GovToken.sol";
 import {FractionalGovernor} from "test/FractionalGovernor.sol";
 import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
 
+contract SafeCaster {
+  using SafeCast for uint256;
+
+  function toUint208(uint256 _value) public pure returns (uint208) {
+    return _value.toUint208();
+  }
+}
+
 abstract contract FlexVotingClientTest is Test {
   MockFlexVotingClient flexClient;
   GovToken token;
@@ -318,8 +326,13 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     //   uint256(balance + delta) > uint208.max
     // As this will cause the safecast to fail.
     assert(netBalanceUint256 > type(uint208).max);
+
+    // We create a wrapper contract so that we can expect SafeCast reverts.
+    // `expectRevert` only works if the revert happens at a different level in
+    // the callstack.
+    SafeCaster _safeCast = new SafeCaster();
     vm.expectRevert();
-    SafeCast.toUint208(netBalanceUint256);
+    _safeCast.toUint208(netBalanceUint256);
   }
 
   function testFuzz_RevertIf_withdrawalFromZero(int256 _withdraw) public {
