@@ -7,8 +7,8 @@ import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 
 import {FractionalPool, IVotingToken, IFractionalGovernor} from "src/FractionalPool.sol";
-import {GovToken} from "test/GovToken.sol";
-import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {GovToken} from "test/mocks/GovToken.sol";
+import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
 import {ProposalReceiverMock} from "test/mocks/ProposalReceiverMock.sol";
 
 contract FractionalPoolTest is Test {

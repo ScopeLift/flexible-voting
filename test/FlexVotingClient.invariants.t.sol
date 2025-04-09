@@ -12,8 +12,8 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {ProposalReceiverMock} from "test/mocks/ProposalReceiverMock.sol";
-import {GovToken} from "test/GovToken.sol";
-import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
+import {GovToken} from "test/mocks/GovToken.sol";
 import {FlexVotingClientHandler} from "test/handlers/FlexVotingClientHandler.sol";
 
 contract FlexVotingInvariantSetup is Test {

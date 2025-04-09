@@ -15,8 +15,8 @@ import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
 import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {ProposalReceiverMock} from "test/mocks/ProposalReceiverMock.sol";
-import {GovToken, TimestampGovToken} from "test/GovToken.sol";
-import {FractionalGovernor} from "test/FractionalGovernor.sol";
+import {GovToken, TimestampGovToken} from "test/mocks/GovToken.sol";
+import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
 
 contract SafeCaster {
   using SafeCast for uint256;
