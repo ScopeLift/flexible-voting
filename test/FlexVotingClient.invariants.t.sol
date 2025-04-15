@@ -107,7 +107,7 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
     uint256 _checkpoint = block.number;
     vm.roll(_checkpoint + 1);
     assertEq(
-      flexClient.getPastTotalBalance(_checkpoint),
+      flexClient.getPastTotalVoteWeight(_checkpoint),
       handler.ghost_depositSum() - handler.ghost_withdrawSum()
     );
 
@@ -115,9 +115,9 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
     address[] memory _depositors = handler.getActors();
     for (uint256 d; d < _depositors.length; d++) {
       address _depositor = _depositors[d];
-      _sum += flexClient.getPastRawBalance(_depositor, _checkpoint);
+      _sum += flexClient.getPastVoteWeight(_depositor, _checkpoint);
     }
-    assertEq(flexClient.getPastTotalBalance(_checkpoint), _sum);
+    assertEq(flexClient.getPastTotalVoteWeight(_checkpoint), _sum);
   }
 
   function invariant_SumOfDepositsIsGTEProposalVotes() public view {

@@ -6,6 +6,7 @@ import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
+import {FlexVotingBase} from "src/FlexVotingBase.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 
 contract MockFlexVotingClient is FlexVotingClient {
@@ -20,7 +21,7 @@ contract MockFlexVotingClient is FlexVotingClient {
   /// @notice Map borrower to total amount borrowed.
   mapping(address => uint256) public borrowTotal;
 
-  constructor(address _governor) FlexVotingClient(_governor) {
+  constructor(address _governor) FlexVotingBase(_governor) {
     TOKEN = ERC20Votes(GOVERNOR.token());
     _selfDelegate();
   }
@@ -29,16 +30,18 @@ contract MockFlexVotingClient is FlexVotingClient {
     return deposits[_user];
   }
 
+  // Test hooks
+  // ---------------------------------------------------------------------------
   function exposed_rawBalanceOf(address _user) external view returns (uint208) {
     return _rawBalanceOf(_user);
   }
 
-  function exposed_latestTotalBalance() external view returns (uint208) {
-    return totalBalanceCheckpoints.latest();
+  function exposed_latestTotalWeight() external view returns (uint208) {
+    return totalVoteWeightCheckpoints.latest();
   }
 
-  function exposed_checkpointTotalBalance(int256 _delta) external {
-    return _checkpointTotalBalance(_delta);
+  function exposed_checkpointTotalVoteWeight(int256 _delta) external {
+    return _checkpointTotalVoteWeight(_delta);
   }
 
   function exposed_castVoteReasonString() external returns (string memory) {
@@ -53,17 +56,20 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposits[_user] = _amount;
   }
 
-  function exposed_checkpointRawBalanceOf(address _user) external {
-    return _checkpointRawBalanceOf(_user);
+  function exposed_checkpointVoteWeightOf(address _user, int256 _delta) external {
+    _checkpointVoteWeightOf(_user, _delta);
   }
+  // End test hooks
+  // ---------------------------------------------------------------------------
 
   /// @notice Allow a holder of the governance token to deposit it into the pool.
   /// @param _amount The amount to be deposited.
   function deposit(uint208 _amount) public {
     deposits[msg.sender] += _amount;
 
-    FlexVotingClient._checkpointRawBalanceOf(msg.sender);
-    FlexVotingClient._checkpointTotalBalance(int256(uint256(_amount)));
+    int256 _delta = int256(uint256(_amount));
+    _checkpointVoteWeightOf(msg.sender, _delta);
+    _checkpointTotalVoteWeight(_delta);
 
     // Assumes revert on failure.
     TOKEN.transferFrom(msg.sender, address(this), _amount);
@@ -75,8 +81,9 @@ contract MockFlexVotingClient is FlexVotingClient {
     // Overflows & reverts if user does not have sufficient deposits.
     deposits[msg.sender] -= _amount;
 
-    FlexVotingClient._checkpointRawBalanceOf(msg.sender);
-    FlexVotingClient._checkpointTotalBalance(-1 * int256(uint256(_amount)));
+    int256 _delta = -1 * int256(uint256(_amount));
+    _checkpointVoteWeightOf(msg.sender, _delta);
+    _checkpointTotalVoteWeight(_delta);
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
   }

@@ -251,8 +251,9 @@ contract FlexVotingClientHandler is Test {
     calldatas[0] = receiverCallData;
 
     // Submit the proposal.
-    vm.prank(msg.sender);
+    vm.startPrank(msg.sender);
     _proposalId = governor.propose(targets, values, calldatas, _proposalName);
+    vm.stopPrank();
     proposals.add(_proposalId);
 
     // Roll the clock to get voting started.
@@ -326,7 +327,7 @@ contract FlexVotingClientHandler is Test {
       address _voter = _voters.at(i);
       // We need deposits less withdrawals for the user AT proposal time.
       _vars.aggDepositWeight +=
-        flexClient.getPastRawBalance(_voter, governor.proposalSnapshot(_proposalId));
+        flexClient.getPastVoteWeight(_voter, governor.proposalSnapshot(_proposalId));
     }
     ghost_depositsCast[_proposalId] += _vars.aggDepositWeight;
 
