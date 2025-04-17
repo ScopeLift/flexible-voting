@@ -6,24 +6,24 @@ import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
 import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
 contract MockFlexVotingDelegableClient is MockFlexVotingClient, FlexVotingDelegable {
   constructor(address _governor) MockFlexVotingClient(_governor) {}
 
-  function _checkpointVoteWeightOf(IFractionalGovernor _governor, address _user, int256 _delta)
-    internal
+  function _checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta) internal
     override(FlexVotingBase, FlexVotingDelegable)
   {
-    return FlexVotingDelegable._checkpointVoteWeightOf(_governor, _user, _delta);
+    return FlexVotingDelegable._checkpointVoteWeightOf(_token, _user, _delta);
   }
 
   // Test hooks
   // ---------------------------------------------------------------------------
   function delegate(address _proxy) public {
-    delegate(GOVERNOR, _proxy);
+    delegate(TOKEN, _proxy);
   }
 
   function delegates(address _account) public view virtual returns (address) {
-    return delegates(GOVERNOR, _account);
+    return delegates(TOKEN, _account);
   }
 }

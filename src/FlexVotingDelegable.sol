@@ -6,6 +6,7 @@ import {Context} from "@openzeppelin/contracts/utils/Context.sol";
 import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 
 /// @notice This is an abstract contract designed to make it easy to build
@@ -29,7 +30,7 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
 
   // @dev Emitted when an account changes its delegate.
   event DelegateChanged(
-    address indexed governor,
+    address indexed token,
     address indexed delegator,
     address indexed toDelegate,
     address fromDelegate
@@ -38,57 +39,57 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
   // @dev Emitted when a delegate change results in changes to a delegate's
   // number of voting weight.
   event DelegateWeightChanged(
-    address indexed governor, address indexed delegate, uint256 previousVotes, uint256 newVotes
+    address indexed token, address indexed delegate, uint256 previousVotes, uint256 newVotes
   );
 
-  mapping(IFractionalGovernor => mapping(address account => address)) private _delegatee;
+  mapping(IVotingToken => mapping(address account => address)) private _delegatee;
 
-  // @dev Delegates `_governor` votes from the sender to `_proxy`.
-  function delegate(IFractionalGovernor _governor, address _proxy) public virtual {
+  // @dev Delegates `_token` voting weight from the sender to `_proxy`.
+  function delegate(IVotingToken _token, address _proxy) public virtual {
     address _account = _msgSender();
-    _delegate(_governor, _account, _proxy);
+    _delegate(_token, _account, _proxy);
   }
 
-  // @dev Returns the delegate that `_account` has chosen for `_governor`. Assumes
+  // @dev Returns the delegate that `_account` has chosen for `_token`. Assumes
   // self-delegation if no delegate has been set.
-  function delegates(IFractionalGovernor _governor, address _account)
+  function delegates(IVotingToken _token, address _account)
     public
     view
     virtual
     returns (address)
   {
-    address _proxy = _delegatee[_governor][_account];
+    address _proxy = _delegatee[_token][_account];
     if (_proxy == address(0)) return _account;
     return _proxy;
   }
 
-  // @dev Delegate all of `account`'s voting units with `governor` to `delegatee`.
+  // @dev Delegate all of `account`'s voting weight with `token` to `delegatee`.
   //
   // Emits events {DelegateChanged} and {DelegateWeightChanged}.
-  function _delegate(IFractionalGovernor _governor, address _account, address _proxy)
+  function _delegate(IVotingToken _token, address _account, address _proxy)
     internal
     virtual
   {
-    address oldDelegate = delegates(_governor, _account);
-    _delegatee[_governor][_account] = _proxy;
+    address oldDelegate = delegates(_token, _account);
+    _delegatee[_token][_account] = _proxy;
 
-    int256 _delta = int256(uint256(_rawBalanceOf(_governor, _account)));
-    emit DelegateChanged(address(_governor), _account, oldDelegate, _proxy);
-    _updateDelegateBalance(_governor, oldDelegate, _proxy, _delta);
+    int256 _delta = int256(uint256(_rawBalanceOf(_token, _account)));
+    emit DelegateChanged(address(_token), _account, oldDelegate, _proxy);
+    _updateDelegateBalance(_token, oldDelegate, _proxy, _delta);
   }
 
-  function _checkpointVoteWeightOf(IFractionalGovernor _governor, address _user, int256 _delta)
+  function _checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta)
     internal
     virtual
     override
   {
-    address _proxy = delegates(_governor, _user);
-    _applyDeltaToCheckpoint(_governor, voteWeightCheckpoints[_governor][_proxy], _delta);
+    address _proxy = delegates(_token, _user);
+    _applyDeltaToCheckpoint(_token, voteWeightCheckpoints[_token][_proxy], _delta);
   }
 
   // @dev Moves delegated votes from one delegate to another.
   function _updateDelegateBalance(
-    IFractionalGovernor _governor,
+    IVotingToken _token,
     address _from,
     address _to,
     int256 _delta
@@ -97,12 +98,12 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
 
     // Decrement old delegate's weight.
     (uint208 _oldFrom, uint208 _newFrom) =
-      _applyDeltaToCheckpoint(_governor, voteWeightCheckpoints[_governor][_from], -_delta);
-    emit DelegateWeightChanged(address(_governor), _from, _oldFrom, _newFrom);
+      _applyDeltaToCheckpoint(_token, voteWeightCheckpoints[_token][_from], -_delta);
+    emit DelegateWeightChanged(address(_token), _from, _oldFrom, _newFrom);
 
     // Increment new delegate's weight.
     (uint208 _oldTo, uint208 _newTo) =
-      _applyDeltaToCheckpoint(_governor, voteWeightCheckpoints[_governor][_to], _delta);
-    emit DelegateWeightChanged(address(_governor), _to, _oldTo, _newTo);
+      _applyDeltaToCheckpoint(_token, voteWeightCheckpoints[_token][_to], _delta);
+    emit DelegateWeightChanged(address(_token), _to, _oldTo, _newTo);
   }
 }

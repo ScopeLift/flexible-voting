@@ -9,6 +9,7 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
 contract MockFlexVotingClient is FlexVotingClient {
   using Checkpoints for Checkpoints.Trace208;
@@ -17,27 +18,27 @@ contract MockFlexVotingClient is FlexVotingClient {
   IFractionalGovernor public immutable GOVERNOR;
 
   /// @notice The principle governance token held and lent by this pool.
-  ERC20Votes public immutable TOKEN;
+  IVotingToken public immutable TOKEN;
 
-  /// @notice Map governor to address to deposit amount of that governor's token.
-  mapping(IFractionalGovernor => mapping(address => uint208)) public _deposits;
+  /// @notice Map token to address to that address' deposit amount of that token.
+  mapping(IVotingToken => mapping(address => uint208)) public _deposits;
 
-  /// @notice Map borrower to total amount borrowed of governor's token.
-  mapping(IFractionalGovernor => mapping(address => uint256)) public _borrowTotal;
+  /// @notice Map borrower to total amount borrowed of token.
+  mapping(IVotingToken => mapping(address => uint256)) public _borrowTotal;
 
   constructor(address _governor) {
     GOVERNOR = IFractionalGovernor(_governor);
-    TOKEN = ERC20Votes(GOVERNOR.token());
-    _selfDelegate(GOVERNOR);
+    TOKEN = IVotingToken(GOVERNOR.token());
+    _selfDelegate(TOKEN);
   }
 
-  function _rawBalanceOf(IFractionalGovernor _governor, address _user)
+  function _rawBalanceOf(IVotingToken _token, address _user)
     internal
     view
     override
     returns (uint208)
   {
-    return _deposits[_governor][_user];
+    return _deposits[_token][_user];
   }
 
   // Test hooks
@@ -50,32 +51,36 @@ contract MockFlexVotingClient is FlexVotingClient {
     _castVote(GOVERNOR, proposalId);
   }
 
-  function deposits(IFractionalGovernor _governor, address _user) external view returns (uint208) {
-    return _deposits[_governor][_user];
+  function deposit(uint208 _amount) public {
+    deposit(TOKEN, _amount);
+  }
+
+  function deposits(IVotingToken _token, address _user) external view returns (uint208) {
+    return _deposits[_token][_user];
   }
 
   function deposits(address _user) external view returns (uint208) {
-    return _deposits[GOVERNOR][_user];
+    return _deposits[TOKEN][_user];
   }
 
   function getPastVoteWeight(address _user, uint256 _timepoint) public view returns (uint256) {
-    return getPastVoteWeight(GOVERNOR, _user, _timepoint);
+    return getPastVoteWeight(TOKEN, _user, _timepoint);
   }
 
   function getPastTotalVoteWeight(uint256 _timepoint) public view returns (uint256) {
-    return getPastTotalVoteWeight(GOVERNOR, _timepoint);
+    return getPastTotalVoteWeight(TOKEN, _timepoint);
   }
 
   function exposed_rawBalanceOf(address _user) external view returns (uint208) {
-    return _rawBalanceOf(GOVERNOR, _user);
+    return _rawBalanceOf(TOKEN, _user);
   }
 
   function exposed_latestTotalWeight() external view returns (uint208) {
-    return totalVoteWeightCheckpoints[GOVERNOR].latest();
+    return totalVoteWeightCheckpoints[TOKEN].latest();
   }
 
   function exposed_checkpointTotalVoteWeight(int256 _delta) external {
-    return _checkpointTotalVoteWeight(GOVERNOR, _delta);
+    return _checkpointTotalVoteWeight(TOKEN, _delta);
   }
 
   function exposed_castVoteReasonString() external returns (string memory) {
@@ -83,41 +88,42 @@ contract MockFlexVotingClient is FlexVotingClient {
   }
 
   function exposed_selfDelegate() external {
-    return _selfDelegate(GOVERNOR);
+    return _selfDelegate(TOKEN);
   }
 
   function exposed_setDeposits(address _user, uint208 _amount) external {
-    _deposits[GOVERNOR][_user] = _amount;
+    _deposits[TOKEN][_user] = _amount;
   }
 
   function exposed_checkpointVoteWeightOf(address _user, int256 _delta) external {
-    _checkpointVoteWeightOf(GOVERNOR, _user, _delta);
+    _checkpointVoteWeightOf(TOKEN, _user, _delta);
   }
   // End test hooks
   // ---------------------------------------------------------------------------
 
   /// @notice Allow a holder of the governance token to deposit it into the pool.
+  /// @param _token The token that will be deposited.
   /// @param _amount The amount to be deposited.
-  function deposit(uint208 _amount) public {
-    _deposits[GOVERNOR][msg.sender] += _amount;
+  function deposit(IVotingToken _token, uint208 _amount) public {
+    _deposits[_token][msg.sender] += _amount;
 
     int256 _delta = int256(uint256(_amount));
-    _checkpointVoteWeightOf(GOVERNOR, msg.sender, _delta);
-    _checkpointTotalVoteWeight(GOVERNOR, _delta);
+    _checkpointVoteWeightOf(_token, msg.sender, _delta);
+    _checkpointTotalVoteWeight(_token, _delta);
 
     // Assumes revert on failure.
-    TOKEN.transferFrom(msg.sender, address(this), _amount);
+    _token.transferFrom(msg.sender, address(this), _amount);
   }
 
   /// @notice Allow a depositor to withdraw funds previously deposited to the pool.
   /// @param _amount The amount to be withdrawn.
   function withdraw(uint208 _amount) public {
     // Overflows & reverts if user does not have sufficient deposits.
-    _deposits[GOVERNOR][msg.sender] -= _amount;
+    _deposits[TOKEN][msg.sender] -= _amount;
 
     int256 _delta = -1 * int256(uint256(_amount));
-    _checkpointVoteWeightOf(GOVERNOR, msg.sender, _delta);
-    _checkpointTotalVoteWeight(GOVERNOR, _delta);
+    _checkpointVoteWeightOf(TOKEN, msg.sender, _delta);
+    _checkpointTotalVoteWeight(TOKEN, _delta);
 
     TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
   }
@@ -126,15 +132,15 @@ contract MockFlexVotingClient is FlexVotingClient {
   /// method name. Since this is just a proof-of-concept, nothing else is actually done here.
   /// @param _amount The amount to "borrow."
   function borrow(uint256 _amount) public {
-    _borrowTotal[GOVERNOR][msg.sender] += _amount;
+    _borrowTotal[TOKEN][msg.sender] += _amount;
     TOKEN.transfer(msg.sender, _amount);
   }
 
-  function borrowTotal(IFractionalGovernor _governor, address _user) public view returns (uint256) {
-    return _borrowTotal[_governor][_user];
+  function borrowTotal(IVotingToken _token, address _user) public view returns (uint256) {
+    return _borrowTotal[_token][_user];
   }
 
   function borrowTotal(address _user) public view returns (uint256) {
-    return _borrowTotal[GOVERNOR][_user];
+    return _borrowTotal[TOKEN][_user];
   }
 }

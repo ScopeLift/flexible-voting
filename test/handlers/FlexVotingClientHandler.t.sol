@@ -72,7 +72,7 @@ contract Deposit is FlexVotingClientHandlerTest {
     assertEq(flexClient.deposits(_user), 0);
 
     vm.startPrank(_user);
-    vm.expectCall(address(flexClient), abi.encodeCall(flexClient.deposit, _amount));
+    vm.expectCall(address(flexClient), abi.encodeWithSignature("deposit(uint208)", _amount));
     vm.expectCall(address(token), abi.encodeCall(token.approve, (address(flexClient), _amount)));
     handler.deposit(_amount);
     vm.stopPrank();

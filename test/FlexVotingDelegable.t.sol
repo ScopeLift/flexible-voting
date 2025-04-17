@@ -64,9 +64,9 @@ abstract contract Delegation is FlexVotingClientTest {
     _mintGovAndDepositIntoFlexClient(_delegator, _weight);
 
     vm.expectEmit();
-    emit FlexVotingDelegable.DelegateChanged(address(governor), _delegator, _delegator, _delegate);
+    emit FlexVotingDelegable.DelegateChanged(address(token), _delegator, _delegator, _delegate);
     vm.expectEmit();
-    emit FlexVotingDelegable.DelegateWeightChanged(address(governor), _delegate, 0, _weight);
+    emit FlexVotingDelegable.DelegateWeightChanged(address(token), _delegate, 0, _weight);
     vm.prank(_delegator);
     client().delegate(_delegate);
   }
@@ -96,7 +96,7 @@ abstract contract Delegation is FlexVotingClientTest {
     // Delegate.
     vm.expectEmit();
     emit FlexVotingDelegable.DelegateWeightChanged(
-      address(governor), _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
+      address(token), _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
     );
     vm.prank(_delegator);
     client().delegate(_delegate);

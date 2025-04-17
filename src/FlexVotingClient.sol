@@ -78,7 +78,8 @@ abstract contract FlexVotingClient is FlexVotingBase {
     virtual
   {
     address voter = msg.sender;
-    uint256 weight = getPastVoteWeight(governor, voter, governor.proposalSnapshot(proposalId));
+    IVotingToken token = IVotingToken(address(governor.token()));
+    uint256 weight = getPastVoteWeight(token, voter, governor.proposalSnapshot(proposalId));
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
     if (proposalVoterHasVoted[governor][proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
@@ -131,11 +132,11 @@ abstract contract FlexVotingClient is FlexVotingBase {
     // Using the total vote weight to proportion votes in this way means that in
     // many circumstances this function will not cast votes with all of its
     // weight.
-    uint256 _totalVotesInternal = getPastTotalVoteWeight(governor, _proposalSnapshot);
+    IVotingToken token = IVotingToken(address(governor.token()));
+    uint256 _totalVotesInternal = getPastTotalVoteWeight(token, _proposalSnapshot);
 
     // We need 256 bits because of the multiplication we're about to do.
-    uint256 _totalTokenWeight =
-      IVotingToken(address(governor.token())).getPastVotes(address(this), _proposalSnapshot);
+    uint256 _totalTokenWeight = token.getPastVotes(address(this), _proposalSnapshot);
 
     //     userVotesInternal          userVoteWeight
     // ------------------------- = --------------------
@@ -161,31 +162,31 @@ abstract contract FlexVotingClient is FlexVotingBase {
 
   /// @notice Returns the `_user`'s internal voting weight with `_governor` at
   /// `_timepoint`.
-  /// @param _governor The governor that the voting weight is related to.
+  /// @param _token The token that's balance confers voting weight.
   /// @param _user The account that's historical vote weight will be looked up.
   /// @param _timepoint The timepoint at which to lookup the _user's internal
   /// voting weight, either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastVoteWeight(IFractionalGovernor _governor, address _user, uint256 _timepoint)
+  function getPastVoteWeight(IVotingToken _token, address _user, uint256 _timepoint)
     public
     view
     returns (uint256)
   {
-    uint48 key = SafeCast.toUint48(_timepoint);
-    return voteWeightCheckpoints[_governor][_user].upperLookup(key);
+    uint48 _key = SafeCast.toUint48(_timepoint);
+    return voteWeightCheckpoints[_token][_user].upperLookup(_key);
   }
 
   /// @notice Returns the total internal voting weight of all users at `_timepoint`.
-  /// @param _governor The governor that the voting weight is related to.
+  /// @param _token The token that's balance confers voting weight.
   /// @param _timepoint The timepoint at which to lookup the total weight,
   /// either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastTotalVoteWeight(IFractionalGovernor _governor, uint256 _timepoint)
+  function getPastTotalVoteWeight(IVotingToken _token, uint256 _timepoint)
     public
     view
     returns (uint256)
   {
-    uint48 key = SafeCast.toUint48(_timepoint);
-    return totalVoteWeightCheckpoints[_governor].upperLookup(key);
+    uint48 _key = SafeCast.toUint48(_timepoint);
+    return totalVoteWeightCheckpoints[_token].upperLookup(_key);
   }
 }
