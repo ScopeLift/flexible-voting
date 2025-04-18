@@ -167,6 +167,18 @@ abstract contract FlexVotingClientTest is Test {
     _boundedSupport = _randVoteType(_supportType);
     _boundedWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
   }
+
+  function _randToken(uint256 _seed) public view returns (GovToken) {
+    if (_seed % 3 == 0) return token;
+    if (_seed % 3 == 1) return token2;
+    if (_seed % 3 == 2) return token3;
+  }
+
+  function _randGovernor(uint256 _seed) public view returns (FractionalGovernor) {
+    if (_seed % 3 == 0) return governor;
+    if (_seed % 3 == 1) return governor2;
+    if (_seed % 3 == 2) return governor3;
+  }
 }
 
 abstract contract Deployment is FlexVotingClientTest {
@@ -194,12 +206,6 @@ abstract contract Constructor is FlexVotingClientTest {
 
 // Contract name has a leading underscore for scopelint spec support.
 abstract contract _RawBalanceOf is FlexVotingClientTest {
-  function _randToken(uint256 _seed) public view returns (GovToken) {
-    if (_seed % 3 == 0) return token;
-    if (_seed % 3 == 1) return token2;
-    if (_seed % 3 == 2) return token3;
-  }
-
   function testFuzz_ReturnsZeroForNonDepositors(address _user, uint256 _seed) public view {
     _assumeSafeUser(_user);
     GovToken _token = _randToken(_seed);
@@ -282,9 +288,13 @@ abstract contract _RawBalanceOf is FlexVotingClientTest {
 
 // Contract name has a leading underscore for scopelint spec support.
 abstract contract _CastVoteReasonString is FlexVotingClientTest {
-  function test_ReturnsDescriptiveString() public {
+  function testFuzz_ReturnsDescriptiveString(uint256 _seed) public {
+    FractionalGovernor _governor = _randGovernor(_seed);
     assertEq(
-      flexClient.exposed_castVoteReasonString(), "rolled-up vote from governance token holders"
+      flexClient.exposed_castVoteReasonString(
+        IFractionalGovernor(address(_governor))
+      ),
+      "rolled-up vote from governance token holders"
     );
   }
 }

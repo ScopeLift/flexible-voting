@@ -92,8 +92,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _checkpointTotalVoteWeight(TOKEN, _delta);
   }
 
-  function exposed_castVoteReasonString() external returns (string memory) {
-    return _castVoteReasonString(GOVERNOR);
+  function exposed_castVoteReasonString(IFractionalGovernor _gov) external returns (string memory) {
+    return _castVoteReasonString(_gov);
   }
 
   function exposed_selfDelegate() external {
