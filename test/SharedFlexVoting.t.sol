@@ -341,6 +341,7 @@ abstract contract _SelfDelegate is FlexVotingClientTest {
 // Contract name has a leading underscore for scopelint spec support.
 abstract contract _CheckpointVoteWeightOf is FlexVotingClientTest {
   function testFuzz_StoresTheRawBalanceWithTheTimepoint(
+    uint256 _seed,
     address _user,
     uint208 _amount,
     uint48 _future
@@ -348,15 +349,46 @@ abstract contract _CheckpointVoteWeightOf is FlexVotingClientTest {
     vm.assume(_user != address(flexClient));
     _future = uint48(bound(_future, _now() + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
     uint48 _past = _now();
 
     _advanceTimeTo(_future);
-    flexClient.exposed_setDeposits(_user, _amount);
+    flexClient.exposed_setDeposits(_token, _user, _amount);
     int256 _delta = int256(uint256(_amount));
-    flexClient.exposed_checkpointVoteWeightOf(_user, _delta);
+    flexClient.exposed_checkpointVoteWeightOf(_token, _user, _delta);
 
-    assertEq(flexClient.getPastVoteWeight(_user, _past), 0);
-    assertEq(flexClient.getPastVoteWeight(_user, _future), _amount);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _past), 0);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _future), _amount);
+  }
+
+  function testFuzz_DifferentiatesBetweenTokens(
+    uint256 _seed,
+    address _user,
+    uint208 _amountA,
+    uint208 _amountB,
+    uint48 _future
+  ) public {
+    vm.assume(_user != address(flexClient));
+    _future = uint48(bound(_future, _now() + 1, type(uint48).max));
+    _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
+    _amountB = uint208(bound(_amountB, 1, MAX_VOTES));
+    IVotingToken _tokenA = IVotingToken(address(_randToken(_seed)));
+    IVotingToken _tokenB = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    uint48 _past = _now();
+
+    _advanceTimeTo(_future);
+    flexClient.exposed_setDeposits(_tokenA, _user, _amountA);
+    int256 _delta = int256(uint256(_amountA));
+    flexClient.exposed_checkpointVoteWeightOf(_tokenA, _user, _delta);
+
+    flexClient.exposed_setDeposits(_tokenB, _user, _amountB);
+    _delta = int256(uint256(_amountB));
+    flexClient.exposed_checkpointVoteWeightOf(_tokenB, _user, _delta);
+
+    assertEq(flexClient.getPastVoteWeight(_tokenA, _user, _past), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenA, _user, _future), _amountA);
+    assertEq(flexClient.getPastVoteWeight(_tokenB, _user, _past), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenB, _user, _future), _amountB);
   }
 }
 

@@ -100,12 +100,12 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _selfDelegate(_token);
   }
 
-  function exposed_setDeposits(address _user, uint208 _amount) external {
-    _deposits[TOKEN][_user] = _amount;
+  function exposed_setDeposits(IVotingToken _token, address _user, uint208 _amount) external {
+    _deposits[_token][_user] = _amount;
   }
 
-  function exposed_checkpointVoteWeightOf(address _user, int256 _delta) external {
-    _checkpointVoteWeightOf(TOKEN, _user, _delta);
+  function exposed_checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta) external {
+    _checkpointVoteWeightOf(_token, _user, _delta);
   }
   // End test hooks
   // ---------------------------------------------------------------------------
