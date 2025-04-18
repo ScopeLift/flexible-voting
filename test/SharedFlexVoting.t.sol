@@ -18,15 +18,9 @@ import {ProposalReceiverMock} from "test/mocks/ProposalReceiverMock.sol";
 import {GovToken, TimestampGovToken} from "test/mocks/GovToken.sol";
 import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
 
-contract SafeCaster {
-  using SafeCast for uint256;
-
-  function toUint208(uint256 _value) public pure returns (uint208) {
-    return _value.toUint208();
-  }
-}
-
 abstract contract FlexVotingClientTest is Test {
+  int256 MAX_UINT208 = int256(uint256(type(uint208).max));
+
   MockFlexVotingClient flexClient;
   GovToken token;
   FractionalGovernor governor;
@@ -392,8 +386,116 @@ abstract contract _CheckpointVoteWeightOf is FlexVotingClientTest {
   }
 }
 
+abstract contract _ApplyDeltaToCheckpoint is FlexVotingClientTest {
+  function testFuzz_VoteWeightCheckpointIsUpdated(
+    address _user,
+    uint256 _seed,
+    int256 _delta,
+    uint208 _balance
+  ) public {
+    vm.assume(_user != address(flexClient));
+    int256 _balanceInt = int256(uint256(_balance));
+    _delta = bound(
+      _delta,
+      // |_delta| may not be greater than _balance.
+      -_balanceInt,
+      // _delta may not be greater than a uint208 when added to _balance.
+      MAX_UINT208 - _balanceInt
+    );
+
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+
+    flexClient.exposed_checkpointVoteWeightOf(_token, _user, _balanceInt);
+    _advanceTimeBy(1); // Set the checkpoint.
+
+    flexClient.exposed_applyDeltaToAddressCheckpoint(_token, _user, _delta);
+    _advanceTimeBy(1); // Set new checkpoint.
+
+    assertEq(
+      flexClient.getPastVoteWeight(_token, _user, _now()),
+      uint256(_balanceInt + _delta)
+    );
+  }
+
+  function testFuzz_RevertIf_CheckpointWouldExceedUint208(
+    address _user,
+    uint256 _seed,
+    int256 _delta,
+    uint208 _balance
+  ) public {
+    vm.assume(_user != address(flexClient));
+    int256 _balanceInt = int256(uint256(_balance));
+    _delta = bound(
+      _delta,
+      // _delta must be greater than a uint208 when added to _balance.
+      MAX_UINT208 - _balanceInt + 1,
+      type(int256).max
+    );
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+
+    flexClient.exposed_checkpointVoteWeightOf(_token, _user, _balanceInt);
+    _advanceTimeBy(1); // Set the checkpoint.
+
+    vm.expectRevert();
+    flexClient.exposed_applyDeltaToAddressCheckpoint(_token, _user, _delta);
+  }
+
+  function test_RevertIf_CheckpointWouldBeNegative0() public {
+    testFuzz_RevertIf_CheckpointWouldBeNegative(
+      address(0xBEEF),
+      0,
+      -int256(uint256(type(uint208).max) + 1), // delta.
+      uint208(type(uint208).max) // balance.
+    );
+  }
+
+  function test_RevertIf_CheckpointWouldBeNegative1() public {
+    testFuzz_RevertIf_CheckpointWouldBeNegative(
+      address(0xBEEF),
+      0,
+      type(int256).min, // delta.
+      uint208(type(uint208).max) // balance.
+    );
+  }
+
+  function test_RevertIf_CheckpointWouldBeNegative2() public {
+    testFuzz_RevertIf_CheckpointWouldBeNegative(
+      address(0xBEEF),
+      0,
+      type(int256).min, // delta.
+      0 // balance.
+    );
+  }
+
+  function test_RevertIf_CheckpointWouldBeNegative3() public {
+    testFuzz_RevertIf_CheckpointWouldBeNegative(
+      address(0xBEEF),
+      0,
+      int256(-1), // delta.
+      0 // balance.
+    );
+  }
+
+  function testFuzz_RevertIf_CheckpointWouldBeNegative(
+    address _user,
+    uint256 _seed,
+    int256 _delta,
+    uint208 _balance
+  ) public {
+    vm.assume(_user != address(flexClient));
+    // Math.abs(delta) must be > balance for the concerning scenario to arise.
+    _delta = bound(_delta, type(int256).min, -int256(uint256(_balance) + 1));
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+
+    flexClient.exposed_checkpointVoteWeightOf(_token, _user, int256(uint256(_balance)));
+    _advanceTimeBy(1); // Set the checkpoint.
+
+    vm.expectPartialRevert(SafeCast.SafeCastOverflowedUintDowncast.selector);
+    flexClient.exposed_applyDeltaToAddressCheckpoint(_token, _user, _delta);
+  }
+}
+
 abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
-  int256 MAX_UINT208 = int256(uint256(type(uint208).max));
 
   function testFuzz_writesACheckpointAtClockTime(int256 _value, uint48 _timepoint) public {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));

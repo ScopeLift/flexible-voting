@@ -5,6 +5,7 @@ import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {
   Deployment,
   Constructor,
+  _ApplyDeltaToCheckpoint,
   _RawBalanceOf,
   _CastVoteReasonString,
   _SelfDelegate,
@@ -31,6 +32,16 @@ contract BlockNumberClock_Deployment is Deployment {
 }
 
 contract BlockNumberClock_Constructor is Constructor {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = new MockFlexVotingClient(_governor);
+  }
+}
+
+contract BlockNumberClock__ApplyDeltaToCheckpoint is _ApplyDeltaToCheckpoint {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -172,6 +183,16 @@ contract TimestampClock_Deployment is Deployment {
 }
 
 contract TimestampClock_Constructor is Constructor {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = new MockFlexVotingClient(_governor);
+  }
+}
+
+contract TimestampClock__ApplyDeltaToCheckpoint is _ApplyDeltaToCheckpoint {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }

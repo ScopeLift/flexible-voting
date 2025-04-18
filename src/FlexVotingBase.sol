@@ -97,8 +97,9 @@ abstract contract FlexVotingBase {
     Checkpoints.Trace208 storage _checkpoint,
     int256 _delta
   ) internal returns (uint208 _prevTotal, uint208 _newTotal) {
-    // The casting in this function is safe since:
+    // The casting in this function is safe because:
     // - if oldTotal + delta > int256.max it will panic and revert.
+    // - if oldTotal + delta > uint208.max SafeCast will revert.
     // - if |delta| <= oldTotal there is no risk of wrapping
     // - if |delta| > oldTotal
     //   * uint256(oldTotal + delta) will wrap but the wrapped value will

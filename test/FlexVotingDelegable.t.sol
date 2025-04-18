@@ -15,6 +15,7 @@ import {
   FlexVotingClientTest,
   Deployment,
   Constructor,
+  _ApplyDeltaToCheckpoint,
   _RawBalanceOf,
   _CastVoteReasonString,
   _SelfDelegate,
@@ -423,6 +424,16 @@ contract BlockNumber_Constructor is Constructor {
   }
 }
 
+contract BlockNumber__ApplyDeltaToCheckpoint is _ApplyDeltaToCheckpoint {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
+  }
+}
+
 contract BlockNumber__RawBalanceOf is _RawBalanceOf {
   function _timestampClock() internal pure override returns (bool) {
     return false;
@@ -564,6 +575,16 @@ contract TimestampClockClock_Deployment is Deployment {
 }
 
 contract TimestampClock_Constructor is Constructor {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = MFVC(address(new MockFlexVotingDelegableClient(_governor)));
+  }
+}
+
+contract TimestampClock__ApplyDeltaToCheckpoint is _ApplyDeltaToCheckpoint {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
