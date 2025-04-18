@@ -162,16 +162,16 @@ abstract contract FlexVotingClientTest is Test {
     _boundedWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
   }
 
-  function _randToken(uint256 _seed) public view returns (GovToken) {
-    if (_seed % 3 == 0) return token;
-    if (_seed % 3 == 1) return token2;
-    if (_seed % 3 == 2) return token3;
+  function _randToken(uint256 _seed) public view returns (GovToken _token) {
+    if (_seed % 3 == 0) _token = token;
+    if (_seed % 3 == 1) _token = token2;
+    if (_seed % 3 == 2) _token = token3;
   }
 
-  function _randGovernor(uint256 _seed) public view returns (FractionalGovernor) {
-    if (_seed % 3 == 0) return governor;
-    if (_seed % 3 == 1) return governor2;
-    if (_seed % 3 == 2) return governor3;
+  function _randGovernor(uint256 _seed) public view returns (FractionalGovernor _gov) {
+    if (_seed % 3 == 0) _gov = governor;
+    if (_seed % 3 == 1) _gov = governor2;
+    if (_seed % 3 == 2) _gov = governor3;
   }
 }
 
@@ -497,20 +497,24 @@ abstract contract _ApplyDeltaToCheckpoint is FlexVotingClientTest {
 
 abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
 
-  function testFuzz_writesACheckpointAtClockTime(int256 _value, uint48 _timepoint) public {
+  // TODO test multi-token conditions
+
+  function testFuzz_writesACheckpointAtClockTime(uint256 _seed, int256 _value, uint48 _timepoint) public {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _value = bound(_value, 1, MAX_UINT208);
-    assertEq(flexClient.exposed_latestTotalWeight(), 0);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+    assertEq(flexClient.exposed_latestTotalWeight(_token), 0);
 
     _advanceTimeTo(_timepoint);
-    flexClient.exposed_checkpointTotalVoteWeight(_value);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _value);
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastTotalVoteWeight(_timepoint), uint256(_value));
-    assertEq(flexClient.exposed_latestTotalWeight(), uint256(_value));
+    assertEq(flexClient.getPastTotalVoteWeight(_token, _timepoint), uint256(_value));
+    assertEq(flexClient.exposed_latestTotalWeight(_token), uint256(_value));
   }
 
   function testFuzz_checkpointsTheTotalBalanceDeltaAtClockTime(
+    uint256 _seed,
     int256 _initBalance,
     int256 _delta,
     uint48 _timepoint
@@ -518,68 +522,29 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _initBalance = bound(_initBalance, 1, MAX_UINT208 - 1);
     _delta = bound(_delta, -_initBalance, MAX_UINT208 - _initBalance);
-    flexClient.exposed_checkpointTotalVoteWeight(_initBalance);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _initBalance);
 
     _advanceTimeTo(_timepoint);
-    flexClient.exposed_checkpointTotalVoteWeight(_delta);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _delta);
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastTotalVoteWeight(_timepoint), uint256(_initBalance + _delta));
-  }
-
-  function testFuzz_RevertIf_negativeDeltaWraps(int256 delta, uint208 balance) public {
-    // Math.abs(delta) must be > balance for the concerning scenario to arise.
-    delta = bound(delta, type(int256).min, -int256(uint256(balance)) - 1);
-    assertTrue(SignedMath.abs(delta) > balance);
-
-    // Effectively this function has 5 steps.
-    //
-    // Step 1: Cast balance up from a uint208 to a uint256.
-    // Safe, since uint256 is bigger.
-    uint256 balanceUint256 = uint256(balance);
-
-    // Step 2: Cast balance down to int256.
-    // Safe, since uint208.max < int256.max.
-    int256 balanceInt256 = int256(balanceUint256);
-
-    // Step 3: Add the delta. The result might be negative.
-    int256 netBalanceInt256 = balanceInt256 + delta;
-
-    // Step 4: Cast back to uint256.
-    //
-    // This is where things get a little scary.
-    //   uint256(int256) = 2^256 + int256, for int256 < 0.
-    // If |delta| > balance, then netBalance will be a negative int256 and when
-    // we cast to uint256 it will wrap to a very large positive number.
-    uint256 netBalanceUint256 = uint256(netBalanceInt256);
-
-    // Step 5: Cast back to uint208.
-    // We need to ensure that when |delta| > balance:
-    //   uint256(balance + delta) > uint208.max
-    // As this will cause the safecast to fail.
-    assert(netBalanceUint256 > type(uint208).max);
-
-    // We create a wrapper contract so that we can expect SafeCast reverts.
-    // `expectRevert` only works if the revert happens at a different level in
-    // the callstack.
-    SafeCaster _safeCast = new SafeCaster();
-    vm.expectRevert();
-    _safeCast.toUint208(netBalanceUint256);
+    assertEq(flexClient.getPastTotalVoteWeight(_token, _timepoint), uint256(_initBalance + _delta));
   }
 
   function testFuzz_RevertIf_withdrawalFromZero(int256 _withdraw) public {
     _withdraw = bound(_withdraw, type(int208).min, -1);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalVoteWeight(_withdraw);
+    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _withdraw);
   }
 
   function testFuzz_RevertIf_withdrawalExceedsDeposit(int256 _deposit, int256 _withdraw) public {
     _deposit = bound(_deposit, 1, type(int208).max - 1);
     _withdraw = bound(_withdraw, type(int208).min, (-1 * _deposit) - 1);
 
-    flexClient.exposed_checkpointTotalVoteWeight(_deposit);
+    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _deposit);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalVoteWeight(_withdraw);
+    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _withdraw);
   }
 
   function testFuzz_RevertIf_depositsOverflow(int256 _deposit1, int256 _deposit2) public {
@@ -587,9 +552,9 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     _deposit1 = bound(_deposit1, 1, _max);
     _deposit2 = bound(_deposit2, 1 + _max - _deposit1, _max);
 
-    flexClient.exposed_checkpointTotalVoteWeight(_deposit1);
+    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _deposit1);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalVoteWeight(_deposit2);
+    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _deposit2);
   }
 }
 

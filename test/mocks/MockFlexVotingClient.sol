@@ -84,12 +84,21 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _rawBalanceOf(IVotingToken(address(_token)), _user);
   }
 
-  function exposed_latestTotalWeight() external view returns (uint208) {
-    return totalVoteWeightCheckpoints[TOKEN].latest();
+  function exposed_latestTotalWeight(IVotingToken _token) external view returns (uint208) {
+    return totalVoteWeightCheckpoints[_token].latest();
   }
 
-  function exposed_checkpointTotalVoteWeight(int256 _delta) external {
-    return _checkpointTotalVoteWeight(TOKEN, _delta);
+  function exposed_checkpointTotalVoteWeight(IVotingToken _token, int256 _delta) external {
+    return _checkpointTotalVoteWeight(_token, _delta);
+  }
+
+  function exposed_applyDeltaToAddressCheckpoint(
+    IVotingToken _token,
+    address _user,
+    int256 _delta
+  ) external returns (uint208, uint208) {
+    Checkpoints.Trace208 storage _checkpoint = voteWeightCheckpoints[_token][_user];
+    return _applyDeltaToCheckpoint(_token, _checkpoint, _delta);
   }
 
   function exposed_castVoteReasonString(IFractionalGovernor _gov) external returns (string memory) {
