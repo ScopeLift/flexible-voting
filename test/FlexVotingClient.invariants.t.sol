@@ -16,6 +16,8 @@ import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
 import {GovToken} from "test/mocks/GovToken.sol";
 import {FlexVotingClientHandler} from "test/handlers/FlexVotingClientHandler.sol";
 
+// TODO add invariant that checkpoints are never negative, e.g.
+// voteWeightCheckpoints[_token][_user]
 contract FlexVotingInvariantSetup is Test {
   MockFlexVotingClient flexClient;
   GovToken token;
