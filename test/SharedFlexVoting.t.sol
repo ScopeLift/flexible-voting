@@ -32,6 +32,11 @@ abstract contract FlexVotingClientTest is Test {
   FractionalGovernor governor;
   ProposalReceiverMock receiver;
 
+  GovToken token2;
+  FractionalGovernor governor2;
+  GovToken token3;
+  FractionalGovernor governor3;
+
   // This max is a limitation of GovernorCountingFractional's vote storage size.
   // See GovernorCountingFractional.ProposalVote struct.
   uint256 MAX_VOTES = type(uint128).max;
@@ -40,12 +45,24 @@ abstract contract FlexVotingClientTest is Test {
   uint256 MAX_VOTE_TYPE = uint256(type(GCS.VoteType).max);
 
   function setUp() public {
+    // Base token and governor used by default in most tests.
     if (_timestampClock()) token = new TimestampGovToken();
     else token = new GovToken();
     vm.label(address(token), "token");
-
     governor = new FractionalGovernor("Governor", IVotes(token));
     vm.label(address(governor), "governor");
+
+    // Used for multi-gov tests.
+    if (_timestampClock()) token2 = new TimestampGovToken();
+    else token2 = new GovToken();
+    vm.label(address(token2), "token2");
+    governor2 = new FractionalGovernor("Other Governor", IVotes(token));
+    vm.label(address(governor2), "governor2");
+    if (_timestampClock()) token3 = new TimestampGovToken();
+    else token3 = new GovToken();
+    vm.label(address(token3), "token3");
+    governor3 = new FractionalGovernor("Other Governor", IVotes(token));
+    vm.label(address(governor3), "governor3");
 
     _deployFlexClient(address(governor));
     vm.label(address(flexClient), "flexclient");
@@ -73,17 +90,27 @@ abstract contract FlexVotingClientTest is Test {
     else vm.roll(_timepoint);
   }
 
-  function _mintGovAndApproveFlexClient(address _user, uint208 _amount) public {
+  function _mintAndApproveFlexClient(GovToken _token, address _user, uint208 _amount) public {
     vm.assume(_user != address(0));
-    token.exposed_mint(_user, _amount);
+    _token.exposed_mint(_user, _amount);
     vm.prank(_user);
-    token.approve(address(flexClient), type(uint256).max);
+    _token.approve(address(flexClient), type(uint256).max);
+  }
+
+  function _mintGovAndApproveFlexClient(address _user, uint208 _amount) public {
+    _mintAndApproveFlexClient(token, _user, _amount);
   }
 
   function _mintGovAndDepositIntoFlexClient(address _address, uint208 _amount) internal {
     _mintGovAndApproveFlexClient(_address, _amount);
     vm.prank(_address);
     flexClient.deposit(_amount);
+  }
+
+  function _mintAndDepositIntoFlexClient(GovToken _token, address _address, uint208 _amount) internal {
+    _mintAndApproveFlexClient(_token, _address, _amount);
+    vm.prank(_address);
+    flexClient.deposit(IVotingToken(address(_token)), _amount);
   }
 
   function _createAndSubmitProposal() internal returns (uint256 proposalId) {
@@ -167,50 +194,89 @@ abstract contract Constructor is FlexVotingClientTest {
 
 // Contract name has a leading underscore for scopelint spec support.
 abstract contract _RawBalanceOf is FlexVotingClientTest {
-  function testFuzz_ReturnsZeroForNonDepositors(address _user) public view {
-    _assumeSafeUser(_user);
-    assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
+  function _randToken(uint256 _seed) public view returns (GovToken) {
+    if (_seed % 3 == 0) return token;
+    if (_seed % 3 == 1) return token2;
+    if (_seed % 3 == 2) return token3;
   }
 
-  function testFuzz_IncreasesOnDeposit(address _user, uint208 _amount) public {
+  function testFuzz_ReturnsZeroForNonDepositors(address _user, uint256 _seed) public view {
     _assumeSafeUser(_user);
-    _amount = uint208(bound(_amount, 1, MAX_VOTES));
-
-    // Deposit some gov.
-    _mintGovAndDepositIntoFlexClient(_user, _amount);
-
-    assertEq(flexClient.exposed_rawBalanceOf(_user), _amount);
+    GovToken _token = _randToken(_seed);
+    assertEq(flexClient.exposed_rawBalanceOf(_token, _user), 0);
   }
 
-  function testFuzz_DecreasesOnWithdrawal(address _user, uint208 _amount) public {
+  function testFuzz_IncreasesOnDeposit(address _user, uint208 _amount, uint256 _seed) public {
     _assumeSafeUser(_user);
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
+    GovToken _token = _randToken(_seed);
 
-    // Deposit some gov.
-    _mintGovAndDepositIntoFlexClient(_user, _amount);
+    // Deposit some tokens.
+    _mintAndDepositIntoFlexClient(_token, _user, _amount);
 
-    assertEq(flexClient.exposed_rawBalanceOf(_user), _amount);
+    assertEq(flexClient.exposed_rawBalanceOf(_token, _user), _amount);
+  }
+
+  function testFuzz_DecreasesOnWithdrawal(address _user, uint208 _amount, uint256 _seed) public {
+    _assumeSafeUser(_user);
+    _amount = uint208(bound(_amount, 1, MAX_VOTES));
+    GovToken _token = _randToken(_seed);
+
+    // Deposit some tokens.
+    _mintAndDepositIntoFlexClient(_token, _user, _amount);
+
+    assertEq(flexClient.exposed_rawBalanceOf(_token, _user), _amount);
 
     vm.prank(_user);
-    flexClient.withdraw(_amount);
-    assertEq(flexClient.exposed_rawBalanceOf(_user), 0);
+    flexClient.withdraw(IVotingToken(address(_token)), _amount);
+    assertEq(flexClient.exposed_rawBalanceOf(_token, _user), 0);
   }
 
-  function testFuzz_UnaffectedByBorrow(address _user, uint208 _deposit, uint208 _borrow) public {
+  function testFuzz_UnaffectedByBorrow(
+    uint256 _seed,
+    address _user,
+    uint208 _deposit,
+    uint208 _borrow
+  ) public {
     _assumeSafeUser(_user);
     _deposit = uint208(bound(_deposit, 1, MAX_VOTES));
     _borrow = uint208(bound(_borrow, 1, _deposit));
+    GovToken _token = _randToken(_seed);
 
     // Deposit some gov.
-    _mintGovAndDepositIntoFlexClient(_user, _deposit);
+    _mintAndDepositIntoFlexClient(_token, _user, _deposit);
 
-    assertEq(flexClient.exposed_rawBalanceOf(_user), _deposit);
+    assertEq(flexClient.exposed_rawBalanceOf(_token, _user), _deposit);
 
     vm.prank(_user);
-    flexClient.borrow(_borrow);
+    flexClient.borrow(IVotingToken(address(_token)), _borrow);
 
     // Raw balance is unchanged.
-    assertEq(flexClient.exposed_rawBalanceOf(_user), _deposit);
+    assertEq(flexClient.exposed_rawBalanceOf(_token, _user), _deposit);
+  }
+
+  function testFuzz_TracksMultipleDepositorsOnMultipleTokens(
+    address _userA,
+    address _userB,
+    uint208 _amountA,
+    uint208 _amountB,
+    uint256 _seedA,
+    uint256 _seedB
+  ) public {
+    _assumeSafeUser(_userA);
+    _assumeSafeUser(_userB);
+    vm.assume(_userA != _userB);
+    _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
+    _amountB = uint208(bound(_amountB, 1, MAX_VOTES));
+    GovToken _tokenA = _randToken(_seedA);
+    GovToken _tokenB = _randToken(_seedB);
+
+    // Deposit some tokens.
+    _mintAndDepositIntoFlexClient(_tokenA, _userA, _amountA);
+    _mintAndDepositIntoFlexClient(_tokenB, _userB, _amountB);
+
+    assertEq(flexClient.exposed_rawBalanceOf(_tokenA, _userA), _amountA);
+    assertEq(flexClient.exposed_rawBalanceOf(_tokenB, _userB), _amountB);
   }
 }
 

@@ -5,6 +5,7 @@ import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol
 import {SafeCast} from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import {GovToken} from "test/mocks/GovToken.sol";
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {FlexVotingBase} from "src/FlexVotingBase.sol";
 import {FlexVotingClient} from "src/FlexVotingClient.sol";
@@ -55,6 +56,14 @@ contract MockFlexVotingClient is FlexVotingClient {
     deposit(TOKEN, _amount);
   }
 
+  function withdraw(uint208 _amount) public {
+    withdraw(TOKEN, _amount);
+  }
+
+  function borrow(uint256 _amount) public {
+    borrow(TOKEN, _amount);
+  }
+
   function deposits(IVotingToken _token, address _user) external view returns (uint208) {
     return _deposits[_token][_user];
   }
@@ -71,8 +80,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     return getPastTotalVoteWeight(TOKEN, _timepoint);
   }
 
-  function exposed_rawBalanceOf(address _user) external view returns (uint208) {
-    return _rawBalanceOf(TOKEN, _user);
+  function exposed_rawBalanceOf(GovToken _token, address _user) external view returns (uint208) {
+    return _rawBalanceOf(IVotingToken(address(_token)), _user);
   }
 
   function exposed_latestTotalWeight() external view returns (uint208) {
@@ -117,23 +126,26 @@ contract MockFlexVotingClient is FlexVotingClient {
 
   /// @notice Allow a depositor to withdraw funds previously deposited to the pool.
   /// @param _amount The amount to be withdrawn.
-  function withdraw(uint208 _amount) public {
+  function withdraw(IVotingToken _token, uint208 _amount) public {
     // Overflows & reverts if user does not have sufficient deposits.
-    _deposits[TOKEN][msg.sender] -= _amount;
+    _deposits[_token][msg.sender] -= _amount;
 
     int256 _delta = -1 * int256(uint256(_amount));
-    _checkpointVoteWeightOf(TOKEN, msg.sender, _delta);
-    _checkpointTotalVoteWeight(TOKEN, _delta);
+    _checkpointVoteWeightOf(_token, msg.sender, _delta);
+    _checkpointTotalVoteWeight(_token, _delta);
 
-    TOKEN.transfer(msg.sender, _amount); // Assumes revert on failure.
+    _token.transfer(msg.sender, _amount); // Assumes revert on failure.
   }
 
-  /// @notice Arbitrarily remove tokens from the pool. This is to simulate a borrower, hence the
-  /// method name. Since this is just a proof-of-concept, nothing else is actually done here.
+  /// @notice Arbitrarily remove tokens from the pool. This is to simulate a
+  /// borrower, hence the method name. Since this is just a mock, nothing else
+  /// is actually done here (e.g. normally you'd want to limit borrows based
+  /// on deposited collateral).
+  /// @param _token The token that will be borrowed.
   /// @param _amount The amount to "borrow."
-  function borrow(uint256 _amount) public {
-    _borrowTotal[TOKEN][msg.sender] += _amount;
-    TOKEN.transfer(msg.sender, _amount);
+  function borrow(IVotingToken _token, uint256 _amount) public {
+    _borrowTotal[_token][msg.sender] += _amount;
+    _token.transfer(msg.sender, _amount);
   }
 
   function borrowTotal(IVotingToken _token, address _user) public view returns (uint256) {

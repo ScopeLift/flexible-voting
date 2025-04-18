@@ -185,7 +185,10 @@ contract Withdraw is FlexVotingClientHandlerTest {
 
     // Deposits can be withdrawn from the flexClient through the handler.
     vm.startPrank(_user);
-    vm.expectCall(address(flexClient), abi.encodeCall(flexClient.withdraw, _initAmount));
+    vm.expectCall(
+      address(flexClient),
+      abi.encodeWithSignature("withdraw(uint208)", _initAmount)
+    );
     handler.withdraw(_userSeed, _initAmount);
     vm.stopPrank();
 
