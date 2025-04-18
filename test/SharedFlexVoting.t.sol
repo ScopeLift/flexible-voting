@@ -496,9 +496,6 @@ abstract contract _ApplyDeltaToCheckpoint is FlexVotingClientTest {
 }
 
 abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
-
-  // TODO test multi-token conditions
-
   function testFuzz_writesACheckpointAtClockTime(uint256 _seed, int256 _value, uint48 _timepoint) public {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _value = bound(_value, 1, MAX_UINT208);
@@ -532,29 +529,55 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     assertEq(flexClient.getPastTotalVoteWeight(_token, _timepoint), uint256(_initBalance + _delta));
   }
 
-  function testFuzz_RevertIf_withdrawalFromZero(int256 _withdraw) public {
+  function testFuzz_RevertIf_withdrawalFromZero(uint256 _seed, int256 _withdraw) public {
     _withdraw = bound(_withdraw, type(int208).min, -1);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _withdraw);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _withdraw);
   }
 
-  function testFuzz_RevertIf_withdrawalExceedsDeposit(int256 _deposit, int256 _withdraw) public {
+  function testFuzz_RevertIf_withdrawalExceedsDeposit(uint256 _seed, int256 _deposit, int256 _withdraw) public {
     _deposit = bound(_deposit, 1, type(int208).max - 1);
     _withdraw = bound(_withdraw, type(int208).min, (-1 * _deposit) - 1);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
-    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _deposit);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _deposit);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _withdraw);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _withdraw);
   }
 
-  function testFuzz_RevertIf_depositsOverflow(int256 _deposit1, int256 _deposit2) public {
+  function testFuzz_RevertIf_depositsOverflow(uint256 _seed, int256 _deposit1, int256 _deposit2) public {
     int256 _max = int256(uint256(type(uint208).max));
     _deposit1 = bound(_deposit1, 1, _max);
     _deposit2 = bound(_deposit2, 1 + _max - _deposit1, _max);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
-    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _deposit1);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _deposit1);
     vm.expectRevert();
-    flexClient.exposed_checkpointTotalVoteWeight(IVotingToken(address(token)), _deposit2);
+    flexClient.exposed_checkpointTotalVoteWeight(_token, _deposit2);
+  }
+
+  function testFuzz_DifferentiatesBetweenTokens(
+    uint256 _seed,
+    int256 _amountA,
+    int256 _amountB,
+    uint48 _future
+  ) public {
+    _future = uint48(bound(_future, _now() + 1, type(uint48).max));
+    _amountA = bound(_amountA, 0, MAX_UINT208);
+    _amountB = bound(_amountB, 0, MAX_UINT208);
+    IVotingToken _tokenA = IVotingToken(address(_randToken(_seed)));
+    IVotingToken _tokenB = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    uint48 _past = _now();
+
+    _advanceTimeTo(_future);
+    flexClient.exposed_checkpointTotalVoteWeight(_tokenA, _amountA);
+    flexClient.exposed_checkpointTotalVoteWeight(_tokenB, _amountB);
+
+    assertEq(flexClient.getPastTotalVoteWeight(_tokenA, _past), 0);
+    assertEq(flexClient.getPastTotalVoteWeight(_tokenA, _future), uint256(_amountA));
+    assertEq(flexClient.getPastTotalVoteWeight(_tokenB, _past), 0);
+    assertEq(flexClient.getPastTotalVoteWeight(_tokenB, _future), uint256(_amountB));
   }
 }
 
