@@ -301,18 +301,40 @@ abstract contract _CastVoteReasonString is FlexVotingClientTest {
 
 // Contract name has a leading underscore for scopelint spec support.
 abstract contract _SelfDelegate is FlexVotingClientTest {
-  function testFuzz_SetsClientAsTheDelegate(address _delegatee) public {
+  function testFuzz_SetsClientAsTheDelegate(uint256 _seed, address _delegatee) public {
     vm.assume(_delegatee != address(0));
     vm.assume(_delegatee != address(flexClient));
+    GovToken _token = _randToken(_seed);
 
     // We self-delegate in the constructor, so we need to first un-delegate for
     // this test to be meaningful.
     vm.prank(address(flexClient));
-    token.delegate(_delegatee);
-    assertEq(token.delegates(address(flexClient)), _delegatee);
+    _token.delegate(_delegatee);
+    assertEq(_token.delegates(address(flexClient)), _delegatee);
 
-    flexClient.exposed_selfDelegate();
-    assertEq(token.delegates(address(flexClient)), address(flexClient));
+    flexClient.exposed_selfDelegate(IVotingToken(address(_token)));
+    assertEq(_token.delegates(address(flexClient)), address(flexClient));
+  }
+
+  function testFuzz_DifferentiatesBetweenTokens(uint256 _seed, address _delegatee) public {
+    vm.assume(_delegatee != address(0));
+    vm.assume(_delegatee != address(flexClient));
+    GovToken _tokenA = _randToken(_seed);
+    GovToken _tokenB = _randToken(_seed % 3 + 1);
+
+    // We self-delegate in the constructor, so we need to first un-delegate for
+    // this test to be meaningful.
+    vm.startPrank(address(flexClient));
+    _tokenA.delegate(_delegatee);
+    _tokenB.delegate(_delegatee);
+    vm.stopPrank();
+    assertEq(_tokenA.delegates(address(flexClient)), _delegatee);
+    assertEq(_tokenB.delegates(address(flexClient)), _delegatee);
+
+    // Self-delegating for one token != self-delegating for another.
+    flexClient.exposed_selfDelegate(IVotingToken(address(_tokenA)));
+    assertEq(_tokenA.delegates(address(flexClient)), address(flexClient));
+    assertEq(_tokenB.delegates(address(flexClient)), _delegatee);
   }
 }
 

@@ -96,8 +96,8 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _castVoteReasonString(_gov);
   }
 
-  function exposed_selfDelegate() external {
-    return _selfDelegate(TOKEN);
+  function exposed_selfDelegate(IVotingToken _token) external {
+    return _selfDelegate(_token);
   }
 
   function exposed_setDeposits(address _user, uint208 _amount) external {
