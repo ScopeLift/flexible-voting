@@ -21,7 +21,7 @@ import {
   _SelfDelegate,
   _CheckpointVoteWeightOf,
   _CheckpointTotalVoteWeight,
-  GetPastRawBalance,
+  GetPastVoteWeight,
   GetPastTotalBalance,
   Withdraw,
   Deposit,
@@ -484,7 +484,7 @@ contract BlockNumber__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   }
 }
 
-contract BlockNumber_GetPastRawBalance is GetPastRawBalance {
+contract BlockNumber_GetPastVoteWeight is GetPastVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -644,7 +644,7 @@ contract TimestampClock__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight
   }
 }
 
-contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
+contract TimestampClock_GetPastVoteWeight is GetPastVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }

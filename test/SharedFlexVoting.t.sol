@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console2} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {IGovernor} from "@openzeppelin/contracts/governance/Governor.sol";
@@ -99,6 +99,11 @@ abstract contract FlexVotingClientTest is Test {
     _mintGovAndApproveFlexClient(_address, _amount);
     vm.prank(_address);
     flexClient.deposit(_amount);
+  }
+
+  function _mintAndDepositIntoFlexClient(IVotingToken _token, address _address, uint208 _amount) internal {
+
+    _mintAndDepositIntoFlexClient(GovToken(address(_token)), _address, _amount);
   }
 
   function _mintAndDepositIntoFlexClient(GovToken _token, address _address, uint208 _amount) internal {
@@ -581,8 +586,9 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
   }
 }
 
-abstract contract GetPastRawBalance is FlexVotingClientTest {
+abstract contract GetPastVoteWeight is FlexVotingClientTest {
   function testFuzz_ReturnsZeroForUsersWithoutDeposits(
+    uint256 _seed,
     address _depositor,
     address _nonDepositor,
     uint208 _amount
@@ -592,18 +598,21 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     vm.assume(_nonDepositor != _depositor);
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
 
-    _advanceTimeBy(1);
-    assertEq(flexClient.getPastVoteWeight(_depositor, 0), 0);
-    assertEq(flexClient.getPastVoteWeight(_nonDepositor, 0), 0);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
-    _mintGovAndDepositIntoFlexClient(_depositor, _amount);
+    _advanceTimeBy(1);
+    assertEq(flexClient.getPastVoteWeight(_token, _depositor, 0), 0);
+    assertEq(flexClient.getPastVoteWeight(_token, _nonDepositor, 0), 0);
+
+    _mintAndDepositIntoFlexClient(_token, _depositor, _amount);
     _advanceTimeBy(1);
 
-    assertEq(flexClient.getPastVoteWeight(_depositor, _now() - 1), _amount);
-    assertEq(flexClient.getPastVoteWeight(_nonDepositor, _now() - 1), 0);
+    assertEq(flexClient.getPastVoteWeight(_token, _depositor, _now() - 1), _amount);
+    assertEq(flexClient.getPastVoteWeight(_token, _nonDepositor, _now() - 1), 0);
   }
 
   function testFuzz_ReturnsCurrentValueForFutureTimepoints(
+    uint256 _seed,
     address _user,
     uint208 _amount,
     uint48 _timepoint
@@ -611,18 +620,20 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     vm.assume(_user != address(flexClient));
     _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
     _amount = uint208(bound(_amount, 1, MAX_VOTES));
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
-    _mintGovAndDepositIntoFlexClient(_user, _amount);
+    _mintAndDepositIntoFlexClient(_token, _user, _amount);
 
-    assertEq(flexClient.getPastVoteWeight(_user, _now()), _amount);
-    assertEq(flexClient.getPastVoteWeight(_user, _timepoint), _amount);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _now()), _amount);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _timepoint), _amount);
 
     _advanceTimeTo(_timepoint);
 
-    assertEq(flexClient.getPastVoteWeight(_user, _now()), _amount);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _now()), _amount);
   }
 
   function testFuzz_ReturnsUserBalanceAtAGivenTimepoint(
+    uint256 _seed,
     address _user,
     uint208 _amountA,
     uint208 _amountB,
@@ -632,19 +643,123 @@ abstract contract GetPastRawBalance is FlexVotingClientTest {
     _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
     _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
     uint48 _initTimepoint = _now();
-    _mintGovAndDepositIntoFlexClient(_user, _amountA);
+    _mintAndDepositIntoFlexClient(_token, _user, _amountA);
 
     _advanceTimeTo(_timepoint);
 
-    _mintGovAndDepositIntoFlexClient(_user, _amountB);
+    _mintAndDepositIntoFlexClient(_token, _user, _amountB);
     _advanceTimeBy(1);
 
     uint48 _zeroTimepoint = 0;
-    assertEq(flexClient.getPastVoteWeight(_user, _zeroTimepoint), 0);
-    assertEq(flexClient.getPastVoteWeight(_user, _initTimepoint), _amountA);
-    assertEq(flexClient.getPastVoteWeight(_user, _timepoint), _amountA + _amountB);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _initTimepoint), _amountA);
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _timepoint), _amountA + _amountB);
+  }
+
+  function testFuzz_TracksMultipleTokenBalancesForSingleUserAtMultipleTimepoints(
+    uint256 _seed,
+    address _user,
+    uint208 _amountA1,
+    uint208 _amountA2,
+    uint208 _amountB1,
+    uint208 _amountB2,
+    uint48 _timepoint
+  ) public {
+    vm.assume(_user != address(flexClient));
+    _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
+
+    _amountA1 = uint208(bound(_amountA1, 1, MAX_VOTES));
+    _amountA2 = uint208(bound(_amountA2, 0, MAX_VOTES - _amountA1));
+    _amountB1 = uint208(bound(_amountB1, 1, MAX_VOTES));
+    _amountB2 = uint208(bound(_amountB2, 0, MAX_VOTES - _amountB1));
+
+    IVotingToken _tokenA = IVotingToken(address(_randToken(_seed)));
+    IVotingToken _tokenB = IVotingToken(address(_randToken(_seed % 3 + 1)));
+
+    uint48 _initTimepoint = _now();
+    _mintAndDepositIntoFlexClient(_tokenA, _user, _amountA1);
+    _mintAndDepositIntoFlexClient(_tokenB, _user, _amountB1);
+
+    _advanceTimeTo(_timepoint);
+
+    _mintAndDepositIntoFlexClient(_tokenA, _user, _amountA2);
+    _mintAndDepositIntoFlexClient(_tokenB, _user, _amountB2);
+    _advanceTimeBy(1);
+
+    uint48 _zeroTimepoint = 0;
+    assertEq(flexClient.getPastVoteWeight(_tokenA, _user, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenB, _user, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenA, _user, _initTimepoint), _amountA1);
+    assertEq(flexClient.getPastVoteWeight(_tokenB, _user, _initTimepoint), _amountB1);
+    assertEq(flexClient.getPastVoteWeight(_tokenA, _user, _timepoint), _amountA1 + _amountA2);
+    assertEq(flexClient.getPastVoteWeight(_tokenB, _user, _timepoint), _amountB1 + _amountB2);
+  }
+
+  struct TokenAmounts {
+    uint208 x1;
+    uint208 x2;
+    uint208 y1;
+    uint208 y2;
+  }
+
+  function testFuzz_TracksMultipleTokenBalancesForMultipleUsersAtMultipleTimepoints(
+    uint256 _seed,
+    address _userA,
+    address _userB,
+    TokenAmounts memory _amtA,
+    TokenAmounts memory _amtB,
+    uint48 _timepoint
+  ) public {
+    vm.assume(_userA != address(flexClient));
+    vm.assume(_userB != address(flexClient));
+    vm.assume(_userA != _userB);
+    _timepoint = uint48(bound(_timepoint, _now() + 1, type(uint48).max));
+
+    _amtA.x1 = uint208(bound(_amtA.x1, 0, MAX_VOTES));
+    _amtA.x2 = uint208(bound(_amtA.x2, 0, MAX_VOTES - _amtA.x1));
+    _amtB.x1 = uint208(bound(_amtA.x1, 0, MAX_VOTES - _amtA.x1 - _amtA.x2));
+    _amtB.x2 = uint208(bound(_amtA.x2, 0, MAX_VOTES - _amtA.x1 - _amtA.x2 - _amtB.x1));
+
+    _amtA.y1 = uint208(bound(_amtA.y1, 0, MAX_VOTES));
+    _amtA.y2 = uint208(bound(_amtA.y2, 0, MAX_VOTES - _amtA.y1));
+    _amtB.y1 = uint208(bound(_amtA.y1, 0, MAX_VOTES - _amtA.y1 - _amtA.y2));
+    _amtB.y2 = uint208(bound(_amtA.y2, 0, MAX_VOTES - _amtA.y1 - _amtA.y2 - _amtB.y1));
+
+    IVotingToken _tokenX = IVotingToken(address(_randToken(_seed)));
+    IVotingToken _tokenY = IVotingToken(address(_randToken(_seed % 3 + 1)));
+
+    uint48 _initTimepoint = _now();
+    _mintAndDepositIntoFlexClient(_tokenX, _userA, _amtA.x1);
+    _mintAndDepositIntoFlexClient(_tokenY, _userA, _amtA.y1);
+    _mintAndDepositIntoFlexClient(_tokenX, _userB, _amtB.x1);
+    _mintAndDepositIntoFlexClient(_tokenY, _userB, _amtB.y1);
+
+    _advanceTimeTo(_timepoint);
+
+    _mintAndDepositIntoFlexClient(_tokenX, _userA, _amtA.x2);
+    _mintAndDepositIntoFlexClient(_tokenY, _userA, _amtA.y2);
+    _mintAndDepositIntoFlexClient(_tokenX, _userB, _amtB.x2);
+    _mintAndDepositIntoFlexClient(_tokenY, _userB, _amtB.y2);
+    _advanceTimeBy(1);
+
+    uint48 _zeroTimepoint = 0;
+    assertEq(flexClient.getPastVoteWeight(_tokenX, _userA, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenY, _userA, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenX, _userB, _zeroTimepoint), 0);
+    assertEq(flexClient.getPastVoteWeight(_tokenY, _userB, _zeroTimepoint), 0);
+
+    assertEq(flexClient.getPastVoteWeight(_tokenX, _userA, _initTimepoint), _amtA.x1);
+    assertEq(flexClient.getPastVoteWeight(_tokenY, _userA, _initTimepoint), _amtA.y1);
+    assertEq(flexClient.getPastVoteWeight(_tokenX, _userB, _initTimepoint), _amtB.x1);
+    assertEq(flexClient.getPastVoteWeight(_tokenY, _userB, _initTimepoint), _amtB.y1);
+
+    assertEq(flexClient.getPastVoteWeight(_tokenX, _userA, _timepoint), _amtA.x1 + _amtA.x2);
+    assertEq(flexClient.getPastVoteWeight(_tokenY, _userA, _timepoint), _amtA.y1 + _amtA.y2);
+    assertEq(flexClient.getPastVoteWeight(_tokenX, _userB, _timepoint), _amtB.x1 + _amtB.x2);
+    assertEq(flexClient.getPastVoteWeight(_tokenY, _userB, _timepoint), _amtB.y1 + _amtB.y2);
   }
 }
 
