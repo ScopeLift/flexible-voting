@@ -22,14 +22,15 @@ abstract contract FlexVotingClientTest is Test {
   int256 MAX_UINT208 = int256(uint256(type(uint208).max));
 
   MockFlexVotingClient flexClient;
-  GovToken token;
-  FractionalGovernor governor;
   ProposalReceiverMock receiver;
 
+  GovToken token;
+  FractionalGovernor governor;
   GovToken token2;
   FractionalGovernor governor2;
   GovToken token3;
   FractionalGovernor governor3;
+  uint256 TOKEN_COUNT = 3; // Increment if adding another token to this contract.
 
   // This max is a limitation of GovernorCountingFractional's vote storage size.
   // See GovernorCountingFractional.ProposalVote struct.
@@ -171,6 +172,16 @@ abstract contract FlexVotingClientTest is Test {
     if (_seed % 3 == 0) _token = token;
     if (_seed % 3 == 1) _token = token2;
     if (_seed % 3 == 2) _token = token3;
+  }
+
+  // Returns an alternate token to the one returned by _randToken for the same seed.
+  function _randTokenAlt(uint256 _seed) public view returns (GovToken _token) {
+    _token = _randToken((_seed % TOKEN_COUNT) + 1);
+  }
+
+  function _randTokens(uint256 _seed) public view returns (IVotingToken _tokenA, IVotingToken _tokenB) {
+    _tokenA = IVotingToken(address(_randToken(_seed)));
+    _tokenB = IVotingToken(address(_randToken((_seed % TOKEN_COUNT) + 1)));
   }
 
   function _randGovernor(uint256 _seed) public view returns (FractionalGovernor _gov) {
@@ -319,7 +330,7 @@ abstract contract _SelfDelegate is FlexVotingClientTest {
     vm.assume(_delegatee != address(0));
     vm.assume(_delegatee != address(flexClient));
     GovToken _tokenA = _randToken(_seed);
-    GovToken _tokenB = _randToken(_seed % 3 + 1);
+    GovToken _tokenB = _randTokenAlt(_seed);
 
     // We self-delegate in the constructor, so we need to first un-delegate for
     // this test to be meaningful.
@@ -371,8 +382,7 @@ abstract contract _CheckpointVoteWeightOf is FlexVotingClientTest {
     _future = uint48(bound(_future, _now() + 1, type(uint48).max));
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
     _amountB = uint208(bound(_amountB, 1, MAX_VOTES));
-    IVotingToken _tokenA = IVotingToken(address(_randToken(_seed)));
-    IVotingToken _tokenB = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    (IVotingToken _tokenA, IVotingToken _tokenB) = _randTokens(_seed);
     uint48 _past = _now();
 
     _advanceTimeTo(_future);
@@ -571,8 +581,7 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     _future = uint48(bound(_future, _now() + 1, type(uint48).max));
     _amountA = bound(_amountA, 0, MAX_UINT208);
     _amountB = bound(_amountB, 0, MAX_UINT208);
-    IVotingToken _tokenA = IVotingToken(address(_randToken(_seed)));
-    IVotingToken _tokenB = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    (IVotingToken _tokenA, IVotingToken _tokenB) = _randTokens(_seed);
     uint48 _past = _now();
 
     _advanceTimeTo(_future);
@@ -676,8 +685,7 @@ abstract contract GetPastVoteWeight is FlexVotingClientTest {
     _amountB1 = uint208(bound(_amountB1, 1, MAX_VOTES));
     _amountB2 = uint208(bound(_amountB2, 0, MAX_VOTES - _amountB1));
 
-    IVotingToken _tokenA = IVotingToken(address(_randToken(_seed)));
-    IVotingToken _tokenB = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    (IVotingToken _tokenA, IVotingToken _tokenB) = _randTokens(_seed);
 
     uint48 _initTimepoint = _now();
     _mintAndDepositIntoFlexClient(_tokenA, _user, _amountA1);
@@ -728,8 +736,7 @@ abstract contract GetPastVoteWeight is FlexVotingClientTest {
     _amtB.y1 = uint208(bound(_amtA.y1, 0, MAX_VOTES - _amtA.y1 - _amtA.y2));
     _amtB.y2 = uint208(bound(_amtA.y2, 0, MAX_VOTES - _amtA.y1 - _amtA.y2 - _amtB.y1));
 
-    IVotingToken _tokenX = IVotingToken(address(_randToken(_seed)));
-    IVotingToken _tokenY = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    (IVotingToken _tokenX, IVotingToken _tokenY) = _randTokens(_seed);
 
     uint48 _initTimepoint = _now();
     _mintAndDepositIntoFlexClient(_tokenX, _userA, _amtA.x1);
@@ -871,8 +878,7 @@ abstract contract GetPastTotalVoteWeight is FlexVotingClientTest {
     _amt.y1 = uint208(bound(_amt.y1, 0, MAX_VOTES));
     _amt.y2 = uint208(bound(_amt.y2, 0, MAX_VOTES - _amt.y1));
 
-    IVotingToken _tokenX = IVotingToken(address(_randToken(_seed)));
-    IVotingToken _tokenY = IVotingToken(address(_randToken(_seed % 3 + 1)));
+    (IVotingToken _tokenX, IVotingToken _tokenY) = _randTokens(_seed);
 
     _mintAndDepositIntoFlexClient(_tokenX, _userA, _amt.x1);
     _mintAndDepositIntoFlexClient(_tokenY, _userB, _amt.y1);
