@@ -900,32 +900,70 @@ abstract contract GetPastTotalVoteWeight is FlexVotingClientTest {
 }
 
 abstract contract Withdraw is FlexVotingClientTest {
-  function testFuzz_UserCanWithdrawGovTokens(address _lender, address _borrower, uint208 _amount)
-    public
-  {
+  function testFuzz_UserCanWithdrawGovTokens(
+    uint256 _seed,
+    address _lender,
+    address _borrower,
+    uint208 _amount
+  ) public {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
     vm.assume(_lender != address(flexClient));
     vm.assume(_borrower != address(flexClient));
     vm.assume(_borrower != address(0));
     vm.assume(_lender != _borrower);
 
-    uint256 _initBalance = token.balanceOf(_borrower);
-    assertEq(flexClient.deposits(_borrower), 0);
-    assertEq(flexClient.borrowTotal(_borrower), 0);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
-    _mintGovAndDepositIntoFlexClient(_lender, _amount);
-    assertEq(flexClient.deposits(_lender), _amount);
+    uint256 _initBalance = GovToken(address(_token)).balanceOf(_borrower);
+    assertEq(flexClient.deposits(_token, _borrower), 0);
+    assertEq(flexClient.borrowTotal(_token, _borrower), 0);
+
+    _mintAndDepositIntoFlexClient(_token, _lender, _amount);
+    assertEq(flexClient.deposits(_token, _lender), _amount);
 
     // Borrow the funds.
     vm.prank(_borrower);
-    flexClient.borrow(_amount);
+    flexClient.borrow(_token, _amount);
 
-    assertEq(token.balanceOf(_borrower), _initBalance + _amount);
-    assertEq(flexClient.borrowTotal(_borrower), _amount);
+    assertEq(GovToken(address(_token)).balanceOf(_borrower), _initBalance + _amount);
+    assertEq(flexClient.borrowTotal(_token, _borrower), _amount);
 
     // Deposit totals are unaffected.
-    assertEq(flexClient.deposits(_lender), _amount);
-    assertEq(flexClient.deposits(_borrower), 0);
+    assertEq(flexClient.deposits(_token, _lender), _amount);
+    assertEq(flexClient.deposits(_token, _borrower), 0);
+  }
+
+  function testFuzz_UserCannotWithdrawFundsIfNoneHaveBeenLentInThatToken(
+    uint256 _seed,
+    address _lender,
+    address _borrower,
+    uint208 _amount
+  ) public {
+    _amount = uint208(bound(_amount, 1, type(uint208).max));
+    vm.assume(_lender != address(flexClient));
+    vm.assume(_borrower != address(flexClient));
+    vm.assume(_borrower != address(0));
+    vm.assume(_lender != _borrower);
+
+    (IVotingToken _tokenA, IVotingToken _tokenB) = _randTokens(_seed);
+
+    assertEq(flexClient.deposits(_tokenA, _borrower), 0);
+    assertEq(flexClient.deposits(_tokenB, _borrower), 0);
+    assertEq(flexClient.borrowTotal(_tokenA, _borrower), 0);
+    assertEq(flexClient.borrowTotal(_tokenB, _borrower), 0);
+
+    // Lend tokenA.
+    _mintAndDepositIntoFlexClient(_tokenA, _lender, _amount);
+    assertEq(flexClient.deposits(_tokenA, _lender), _amount);
+
+    // Attempt to borrow tokenB
+    vm.expectRevert();
+    vm.prank(_borrower);
+    flexClient.borrow(_tokenB, _amount);
+
+    // Borrower should not have recieved any funds (because there weren't funds
+    // to send).
+    assertEq(GovToken(address(_tokenB)).balanceOf(_borrower), 0);
   }
 
   // `borrow`s affects on vote weights are tested in Vote contract below.
