@@ -804,7 +804,6 @@ abstract contract GetPastTotalVoteWeight is FlexVotingClientTest {
 
   function testFuzz_SumsAllUserDeposits(
     uint256 _seed,
-    address _user,
     address _userA,
     uint208 _amountA,
     address _userB,
@@ -970,23 +969,62 @@ abstract contract Withdraw is FlexVotingClientTest {
 }
 
 abstract contract Deposit is FlexVotingClientTest {
-  function testFuzz_UserCanDepositGovTokens(address _user, uint208 _amount) public {
+  function testFuzz_UserCanDepositTokens(
+    uint256 _seed,
+    address _user,
+    uint208 _amount
+  ) public {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
     vm.assume(_user != address(flexClient));
-    uint256 initialBalance = token.balanceOf(_user);
-    assertEq(flexClient.deposits(_user), 0);
 
-    _mintGovAndDepositIntoFlexClient(_user, _amount);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+    GovToken _govToken = GovToken(address(_token));
 
-    assertEq(token.balanceOf(address(flexClient)), _amount);
-    assertEq(token.balanceOf(_user), initialBalance);
-    assertEq(token.getVotes(address(flexClient)), _amount);
+    // Self-delegate.
+    flexClient.exposed_selfDelegate(_token);
+
+    uint256 _initBalance = _govToken.balanceOf(_user);
+    assertEq(flexClient.deposits(_token, _user), 0);
+
+    _mintAndDepositIntoFlexClient(_token, _user, _amount);
+
+    assertEq(_govToken.balanceOf(address(flexClient)), _amount);
+    assertEq(_govToken.balanceOf(_user), _initBalance);
+    assertEq(_govToken.getVotes(address(flexClient)), _amount);
 
     // Confirm internal accounting has updated.
-    assertEq(flexClient.deposits(_user), _amount);
+    assertEq(flexClient.deposits(_token, _user), _amount);
+  }
+
+  function testFuzz_MultipleTokensCanBeDeposited(
+    uint256 _seed,
+    address _user,
+    uint208 _amountA,
+    uint208 _amountB
+  ) public {
+    _amountA = uint208(bound(_amountA, 0, type(uint208).max));
+    _amountB = uint208(bound(_amountB, 0, type(uint208).max));
+    vm.assume(_user != address(flexClient));
+
+    (IVotingToken _tokenA, IVotingToken _tokenB) = _randTokens(_seed);
+
+    // Self-delegate.
+    flexClient.exposed_selfDelegate(_tokenA);
+    flexClient.exposed_selfDelegate(_tokenB);
+
+    assertEq(flexClient.deposits(_tokenA, _user), 0);
+    assertEq(flexClient.deposits(_tokenB, _user), 0);
+
+    _mintAndDepositIntoFlexClient(_tokenA, _user, _amountA);
+    _mintAndDepositIntoFlexClient(_tokenB, _user, _amountB);
+
+    // Confirm internal accounting has differentiated the tokens.
+    assertEq(flexClient.deposits(_tokenA, _user), _amountA);
+    assertEq(flexClient.deposits(_tokenB, _user), _amountB);
   }
 
   function testFuzz_DepositsAreCheckpointed(
+    uint256 _seed,
     address _user,
     uint208 _amountA,
     uint208 _amountB,
@@ -995,16 +1033,18 @@ abstract contract Deposit is FlexVotingClientTest {
     _amountA = uint208(bound(_amountA, 1, MAX_VOTES));
     _amountB = uint208(bound(_amountB, 0, MAX_VOTES - _amountA));
 
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
+
     // Deposit some gov.
-    _mintGovAndDepositIntoFlexClient(_user, _amountA);
-    assertEq(flexClient.deposits(_user), _amountA);
+    _mintAndDepositIntoFlexClient(_token, _user, _amountA);
+    assertEq(flexClient.deposits(_token, _user), _amountA);
 
     _advanceTimeBy(1); // Advance so that we can look at checkpoints.
 
     // We can still retrieve the user's balance at the given time.
     uint256 _checkpoint1 = _now() - 1;
     assertEq(
-      flexClient.getPastVoteWeight(_user, _checkpoint1),
+      flexClient.getPastVoteWeight(_token, _user, _checkpoint1),
       _amountA,
       "user's first deposit was not properly checkpointed"
     );
@@ -1013,18 +1053,18 @@ abstract contract Deposit is FlexVotingClientTest {
     _advanceTimeTo(_checkpoint2);
 
     // Deposit some more.
-    _mintGovAndDepositIntoFlexClient(_user, _amountB);
-    assertEq(flexClient.deposits(_user), _amountA + _amountB);
+    _mintAndDepositIntoFlexClient(_token, _user, _amountB);
+    assertEq(flexClient.deposits(_token, _user), _amountA + _amountB);
 
     _advanceTimeBy(1); // Advance so that we can look at checkpoints.
 
     assertEq(
-      flexClient.getPastVoteWeight(_user, _checkpoint1),
+      flexClient.getPastVoteWeight(_token, _user, _checkpoint1),
       _amountA,
       "user's first deposit was not properly checkpointed"
     );
     assertEq(
-      flexClient.getPastVoteWeight(_user, _checkpoint2),
+      flexClient.getPastVoteWeight(_token, _user, _checkpoint2),
       _amountA + _amountB,
       "user's second deposit was not properly checkpointed"
     );
