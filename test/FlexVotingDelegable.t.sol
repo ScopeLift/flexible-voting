@@ -22,7 +22,7 @@ import {
   _CheckpointVoteWeightOf,
   _CheckpointTotalVoteWeight,
   GetPastVoteWeight,
-  GetPastTotalBalance,
+  GetPastTotalVoteWeight,
   Withdraw,
   Deposit,
   ExpressVote,
@@ -494,7 +494,7 @@ contract BlockNumber_GetPastVoteWeight is GetPastVoteWeight {
   }
 }
 
-contract BlockNumber_GetPastTotalBalance is GetPastTotalBalance {
+contract BlockNumber_GetPastTotalVoteWeight is GetPastTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -654,7 +654,7 @@ contract TimestampClock_GetPastVoteWeight is GetPastVoteWeight {
   }
 }
 
-contract TimestampClock_GetPastTotalBalance is GetPastTotalBalance {
+contract TimestampClock_GetPastTotalVoteWeight is GetPastTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
