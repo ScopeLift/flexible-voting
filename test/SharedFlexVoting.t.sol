@@ -96,9 +96,9 @@ abstract contract FlexVotingClientTest is Test {
     _mintAndApproveFlexClient(token, _user, _amount);
   }
 
-  function _mintGovAndDepositIntoFlexClient(address _address, uint208 _amount) internal {
-    _mintGovAndApproveFlexClient(_address, _amount);
-    vm.prank(_address);
+  function _mintGovAndDepositIntoFlexClient(address _user, uint208 _amount) internal {
+    _mintGovAndApproveFlexClient(_user, _amount);
+    vm.prank(_user);
     flexClient.deposit(_amount);
   }
 
