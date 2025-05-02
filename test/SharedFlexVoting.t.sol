@@ -114,10 +114,23 @@ abstract contract FlexVotingClientTest is Test {
   }
 
   function _createAndSubmitProposal() internal returns (uint256 proposalId) {
-    return _createAndSubmitProposal("mockReceiverFunction()");
+    return _createAndSubmitProposal(governor);
   }
 
-  function _createAndSubmitProposal(string memory _sig) internal returns (uint256 proposalId) {
+  function _createAndSubmitProposal(FractionalGovernor _governor) internal returns (uint256 proposalId) {
+    return _createAndSubmitProposal(_governor, "mockReceiverFunction()");
+  }
+
+  function _createAndSubmitProposal(
+    string memory _sig
+  ) internal returns (uint256 proposalId) {
+    return _createAndSubmitProposal(governor, _sig);
+  }
+
+  function _createAndSubmitProposal(
+    FractionalGovernor _governor,
+    string memory _sig
+  ) internal returns (uint256 proposalId) {
     // Proposal will underflow if we're on the zero block
     if (_now() == 0) _advanceTimeBy(1);
 
@@ -131,12 +144,12 @@ abstract contract FlexVotingClientTest is Test {
     calldatas[0] = receiverCallData;
 
     // Submit the proposal.
-    proposalId = governor.propose(targets, values, calldatas, "A great proposal");
-    assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Pending));
+    proposalId = _governor.propose(targets, values, calldatas, "A great proposal");
+    assertEq(uint8(_governor.state(proposalId)), uint8(IGovernor.ProposalState.Pending));
 
     // Advance proposal to active state.
-    _advanceTimeTo(governor.proposalSnapshot(proposalId) + 1);
-    assertEq(uint8(governor.state(proposalId)), uint8(IGovernor.ProposalState.Active));
+    _advanceTimeTo(_governor.proposalSnapshot(proposalId) + 1);
+    assertEq(uint8(_governor.state(proposalId)), uint8(IGovernor.ProposalState.Active));
   }
 
   function _assumeSafeUser(address _user) internal view {
@@ -168,10 +181,23 @@ abstract contract FlexVotingClientTest is Test {
     _boundedWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
   }
 
+  function _randGov(uint256 _seed) public view returns (FractionalGovernor _gov) {
+    if (_seed % TOKEN_COUNT == 0) return _gov = governor;
+    if (_seed % TOKEN_COUNT == 1) return _gov = governor2;
+    if (_seed % TOKEN_COUNT == 2) return _gov = governor3;
+    revert("Governor was added without updating _randGov");
+  }
+
+  // Returns an alternate governor to the one returned by _randGov for the same seed.
+  function _randGovAlt(uint256 _seed) public view returns (FractionalGovernor _gov) {
+    _gov = _randGov((_seed % TOKEN_COUNT) + 1);
+  }
+
   function _randToken(uint256 _seed) public view returns (GovToken _token) {
-    if (_seed % 3 == 0) _token = token;
-    if (_seed % 3 == 1) _token = token2;
-    if (_seed % 3 == 2) _token = token3;
+    if (_seed % TOKEN_COUNT == 0) return _token = token;
+    if (_seed % TOKEN_COUNT == 1) return _token = token2;
+    if (_seed % TOKEN_COUNT == 2) return _token = token3;
+    revert("Token was added without updating _randToken");
   }
 
   // Returns an alternate token to the one returned by _randToken for the same seed.
@@ -1073,37 +1099,44 @@ abstract contract Deposit is FlexVotingClientTest {
 
 abstract contract ExpressVote is FlexVotingClientTest {
   function testFuzz_IncrementsInternalAccouting(
+    uint256 _seed,
     address _user,
     uint208 _voteWeight,
     uint8 _supportType
   ) public {
     GCS.VoteType _voteType;
     (_voteWeight, _voteType) = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
+    // Cast to avoid having to repeatedly do so below.
+    FractionalGovernor _governor = _randGov(_seed);
+    IFractionalGovernor _iGovernor = IFractionalGovernor(address(_governor));
+
+    IVotingToken _token = IVotingToken(address(_governor.token()));
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+    _mintAndDepositIntoFlexClient(_token, _user, _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_governor);
 
     // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_iGovernor, _proposalId, uint8(_voteType));
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+      flexClient.proposalVotes(_iGovernor, _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
 
     // No votes have been cast yet.
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
-      governor.proposalVotes(_proposalId);
+      _governor.proposalVotes(_proposalId);
     assertEq(_forVotes, 0);
     assertEq(_againstVotes, 0);
     assertEq(_abstainVotes, 0);
   }
 
   function testFuzz_RevertWhen_DepositingAfterProposal(
+    uint256 _seed,
     address _user,
     uint208 _voteWeight,
     uint8 _supportType
@@ -1111,20 +1144,26 @@ abstract contract ExpressVote is FlexVotingClientTest {
     GCS.VoteType _voteType;
     (_voteWeight, _voteType) = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
+    FractionalGovernor _governor = _randGov(_seed);
+    IVotingToken _token = IVotingToken(address(_governor.token()));
+    // Cast to avoid having to repeatedly do so below.
+    IFractionalGovernor _iGovernor = IFractionalGovernor(address(_governor));
+
     // Create the proposal *before* the user deposits anything.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_governor);
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+    _mintAndDepositIntoFlexClient(_token, _user, _voteWeight);
 
     // Now try to express a voting preference on the proposal.
-    assertEq(flexClient.deposits(_user), _voteWeight);
+    assertEq(flexClient.deposits(_token, _user), _voteWeight);
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_iGovernor, _proposalId, uint8(_voteType));
   }
 
   function testFuzz_RevertWhen_NoClientWeightButTokenWeight(
+    uint256 _seed,
     address _user,
     uint208 _voteWeight,
     uint8 _supportType
@@ -1132,53 +1171,66 @@ abstract contract ExpressVote is FlexVotingClientTest {
     GCS.VoteType _voteType;
     (_voteWeight, _voteType) = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
+    FractionalGovernor _governor = _randGov(_seed);
+    IVotingToken _token = IVotingToken(address(_governor.token()));
+    // Cast to avoid having to repeatedly do so below.
+    IFractionalGovernor _iGovernor = IFractionalGovernor(address(_governor));
+
     // Mint gov but do not deposit.
-    _mintGovAndApproveFlexClient(_user, _voteWeight);
-    assertEq(token.balanceOf(_user), _voteWeight);
-    assertEq(flexClient.deposits(_user), 0);
+    _mintAndApproveFlexClient(GovToken(address(_token)), _user, _voteWeight);
+    assertEq(GovToken(address(_token)).balanceOf(_user), _voteWeight);
+    assertEq(flexClient.deposits(_token, _user), 0);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_governor);
 
     // _user should NOT be able to express his/her vote on the proposal.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_iGovernor, _proposalId, uint8(_voteType));
 
     // Deposit into the client.
     vm.prank(_user);
-    flexClient.deposit(_voteWeight);
-    assertEq(flexClient.deposits(_user), _voteWeight);
+    flexClient.deposit(_token, _voteWeight);
+    assertEq(flexClient.deposits(_token, _user), _voteWeight);
 
     // _user should still NOT be able to express his/her vote on the proposal.
     // Despite having a deposit balance, he/she didn't have a balance at the
     // proposal snapshot.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_iGovernor, _proposalId, uint8(_voteType));
   }
 
-  function testFuzz_RevertOn_DoubleVotes(address _user, uint208 _voteWeight, uint8 _supportType)
-    public
-  {
+  function testFuzz_RevertOn_DoubleVotes(
+    uint256 _seed,
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
     GCS.VoteType _voteType;
     (_voteWeight, _voteType) = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
+    FractionalGovernor _governor = _randGov(_seed);
+    IVotingToken _token = IVotingToken(address(_governor.token()));
+    // Cast to avoid having to repeatedly do so below.
+    IFractionalGovernor _iGovernor = IFractionalGovernor(address(_governor));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+    _mintAndDepositIntoFlexClient(_token, _user, _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_governor);
 
     // _user should now be able to express his/her vote on the proposal.
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_iGovernor, _proposalId, uint8(_voteType));
 
     (
       uint256 _againstVotesExpressedInit,
       uint256 _forVotesExpressedInit,
       uint256 _abstainVotesExpressedInit
-    ) = flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+    ) = flexClient.proposalVotes(_iGovernor, _proposalId);
     assertEq(_forVotesExpressedInit, _voteType == GCS.VoteType.For ? _voteWeight : 0);
     assertEq(_againstVotesExpressedInit, _voteType == GCS.VoteType.Against ? _voteWeight : 0);
     assertEq(_abstainVotesExpressedInit, _voteType == GCS.VoteType.Abstain ? _voteWeight : 0);
@@ -1186,38 +1238,47 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // Vote early and often!
     vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, uint8(_voteType));
+    flexClient.expressVote(_iGovernor, _proposalId, uint8(_voteType));
 
     // No votes changed.
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+      flexClient.proposalVotes(_iGovernor, _proposalId);
     assertEq(_forVotesExpressed, _forVotesExpressedInit);
     assertEq(_againstVotesExpressed, _againstVotesExpressedInit);
     assertEq(_abstainVotesExpressed, _abstainVotesExpressedInit);
   }
 
-  function testFuzz_RevertOn_UnknownVoteType(address _user, uint208 _voteWeight, uint8 _supportType)
-    public
-  {
+  function testFuzz_RevertOn_UnknownVoteType(
+    uint256 _seed,
+    address _user,
+    uint208 _voteWeight,
+    uint8 _supportType
+  ) public {
     // Force vote type to be unrecognized.
     _supportType = uint8(bound(_supportType, MAX_VOTE_TYPE + 1, type(uint8).max));
 
     _assumeSafeUser(_user);
     _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
 
+    FractionalGovernor _governor = _randGov(_seed);
+    IVotingToken _token = IVotingToken(address(_governor.token()));
+    // Cast to avoid having to repeatedly do so below.
+    IFractionalGovernor _iGovernor = IFractionalGovernor(address(_governor));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+    _mintAndDepositIntoFlexClient(_token, _user, _voteWeight);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_governor);
 
     // Now try to express a voting preference with a bogus support type.
     vm.expectRevert(FVC.FlexVotingClient__InvalidSupportValue.selector);
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
+    flexClient.expressVote(_iGovernor, _proposalId, _supportType);
   }
 
   function testFuzz_RevertOn_UnknownProposal(
+    uint256 _seed,
     address _user,
     uint208 _voteWeight,
     uint8 _supportType,
@@ -1226,26 +1287,94 @@ abstract contract ExpressVote is FlexVotingClientTest {
     _assumeSafeUser(_user);
     _voteWeight = uint208(bound(_voteWeight, 1, MAX_VOTES));
 
+    FractionalGovernor _governor = _randGov(_seed);
+    IVotingToken _token = IVotingToken(address(_governor.token()));
+
     // Confirm that we've pulled a bogus proposal number.
     // This is the condition Governor.state checks for when raising
     // GovernorNonexistentProposal.
-    vm.assume(governor.proposalSnapshot(_proposalId) == 0);
+    vm.assume(_governor.proposalSnapshot(_proposalId) == 0);
 
     // Force vote type to be unrecognized.
     _supportType = uint8(bound(_supportType, MAX_VOTE_TYPE + 1, type(uint8).max));
 
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_user, _voteWeight);
+    _mintAndDepositIntoFlexClient(_token, _user, _voteWeight);
 
     // Create a real proposal to verify the two won't be mixed up when
     // expressing.
-    uint256 _id = _createAndSubmitProposal();
+    uint256 _id = _createAndSubmitProposal(_governor);
     assert(_proposalId != _id);
 
     // Now try to express a voting preference on the bogus proposal.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_user);
-    flexClient.expressVote(_proposalId, _supportType);
+    flexClient.expressVote(IFractionalGovernor(address(_governor)), _proposalId, _supportType);
+  }
+
+  struct ExpressedVote {
+    uint208 weight;
+    FractionalGovernor gov;
+    IVotingToken token;
+    uint8 supportType;
+    GCS.VoteType voteType;
+    uint256 proposalId;
+    uint256 againstVotes;
+    uint256 forVotes;
+    uint256 abstainVotes;
+    uint256 expressedAgainst;
+    uint256 expressedFor;
+    uint256 expressedAbstain;
+  }
+
+  // TODO test internal accounting: govA votes aren't confused w/ govB votes.
+  function testFuzz_MultiGovExpressVoteInternalAccouting(
+    uint256 _seed,
+    address _user,
+    ExpressedVote memory _voteA,
+    ExpressedVote memory _voteB
+  ) public {
+    (_voteA.weight, _voteA.voteType) = _assumeSafeVoteParams(_user, _voteA.weight, _voteA.supportType);
+    (_voteB.weight, _voteB.voteType) = _assumeSafeVoteParams(_user, _voteB.weight, _voteB.supportType);
+
+    _voteA.gov = _randGov(_seed);
+    _voteB.gov = _randGovAlt(_seed);
+    _voteA.token = IVotingToken(address(_voteA.gov.token()));
+    _voteB.token = IVotingToken(address(_voteB.gov.token()));
+
+    // Deposit some funds.
+    _mintAndDepositIntoFlexClient(_voteA.token, _user, _voteA.weight);
+    _mintAndDepositIntoFlexClient(_voteB.token, _user, _voteB.weight);
+
+    // Create the proposals.
+    _voteA.proposalId = _createAndSubmitProposal(_voteA.gov);
+    _voteB.proposalId = _createAndSubmitProposal(_voteB.gov);
+    assertEq(_voteA.proposalId, _voteB.proposalId); // Ids are deterministic.
+
+    // _user should now be able to express his/her vote on the proposals.
+    vm.prank(_user);
+    flexClient.expressVote(
+      IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId, uint8(_voteA.voteType));
+    flexClient.expressVote(
+      IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId, uint8(_voteB.voteType));
+
+    (
+      _voteA.expressedAgainst,
+      _voteA.expressedFor,
+      _voteA.expressedAbstain
+    ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
+    assertEq(_voteA.expressedFor, _voteA.voteType == GCS.VoteType.For ? _voteA.weight : 0);
+    assertEq(_voteA.expressedAgainst, _voteA.voteType == GCS.VoteType.Against ? _voteA.weight : 0);
+    assertEq(_voteA.expressedAbstain, _voteA.voteType == GCS.VoteType.Abstain ? _voteA.weight : 0);
+
+    (
+      _voteB.expressedAgainst,
+      _voteB.expressedFor,
+      _voteB.expressedAbstain
+    ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId);
+    assertEq(_voteB.expressedFor, _voteB.voteType == GCS.VoteType.For ? _voteB.weight : 0);
+    assertEq(_voteB.expressedAgainst, _voteB.voteType == GCS.VoteType.Against ? _voteB.weight : 0);
+    assertEq(_voteB.expressedAbstain, _voteB.voteType == GCS.VoteType.Abstain ? _voteB.weight : 0);
   }
 }
 
