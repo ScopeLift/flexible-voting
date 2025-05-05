@@ -51,12 +51,12 @@ abstract contract FlexVotingClientTest is Test {
     if (_timestampClock()) token2 = new TimestampGovToken();
     else token2 = new GovToken();
     vm.label(address(token2), "token2");
-    governor2 = new FractionalGovernor("Other Governor", IVotes(token));
+    governor2 = new FractionalGovernor("Other Governor", IVotes(token2));
     vm.label(address(governor2), "governor2");
     if (_timestampClock()) token3 = new TimestampGovToken();
     else token3 = new GovToken();
     vm.label(address(token3), "token3");
-    governor3 = new FractionalGovernor("Other Governor", IVotes(token));
+    governor3 = new FractionalGovernor("Other Governor", IVotes(token3));
     vm.label(address(governor3), "governor3");
 
     _deployFlexClient(address(governor));
