@@ -47,23 +47,26 @@ abstract contract FlexVotingClientTest is Test {
     governor = new FractionalGovernor("Governor", IVotes(token));
     vm.label(address(governor), "governor");
 
+    _deployFlexClient(address(governor));
+    vm.label(address(flexClient), "flexclient");
+
+    receiver = new ProposalReceiverMock();
+    vm.label(address(receiver), "receiver");
+
     // Used for multi-gov tests.
     if (_timestampClock()) token2 = new TimestampGovToken();
     else token2 = new GovToken();
     vm.label(address(token2), "token2");
     governor2 = new FractionalGovernor("Other Governor", IVotes(token2));
     vm.label(address(governor2), "governor2");
+    flexClient.exposed_selfDelegate(IVotingToken(address(token2)));
+
     if (_timestampClock()) token3 = new TimestampGovToken();
     else token3 = new GovToken();
     vm.label(address(token3), "token3");
     governor3 = new FractionalGovernor("Other Governor", IVotes(token3));
     vm.label(address(governor3), "governor3");
-
-    _deployFlexClient(address(governor));
-    vm.label(address(flexClient), "flexclient");
-
-    receiver = new ProposalReceiverMock();
-    vm.label(address(receiver), "receiver");
+    flexClient.exposed_selfDelegate(IVotingToken(address(token3)));
   }
 
   function _timestampClock() internal pure virtual returns (bool);
