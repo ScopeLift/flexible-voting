@@ -1313,6 +1313,8 @@ abstract contract ExpressVote is FlexVotingClientTest {
   }
 
   struct ExpressedVote {
+    uint256 seed;
+    address user;
     uint208 weight;
     FractionalGovernor gov;
     IVotingToken token;
@@ -1327,8 +1329,6 @@ abstract contract ExpressVote is FlexVotingClientTest {
   }
 
   function testFuzz_MultiGovExpressVoteInternalAccouting(
-    uint256 _seed,
-    address _user,
     ExpressedVote memory _voteA,
     ExpressedVote memory _voteB
   ) public {
@@ -1336,50 +1336,76 @@ abstract contract ExpressVote is FlexVotingClientTest {
     GCS.VoteType _voteTypeA;
     GCS.VoteType _voteTypeB;
 
-    (_voteA.weight, _voteTypeA) = _assumeSafeVoteParams(_user, _voteA.weight, _voteA.supportType);
-    (_voteB.weight, _voteTypeB) = _assumeSafeVoteParams(_user, _voteB.weight, _voteB.supportType);
+    _assumeSafeUser(_voteA.user);
+    _assumeSafeUser(_voteB.user);
+    vm.assume(_voteA.user != _voteB.user);
 
-    _voteA.gov = _randGov(_seed);
-    _voteB.gov = _randGovAlt(_seed);
+    _voteA.weight = uint208(bound(_voteA.weight, 1, MAX_VOTES - 1));
+    _voteTypeA = _randVoteType(_voteA.supportType);
+    _voteB.weight = uint208(bound(_voteB.weight, 1, MAX_VOTES - _voteA.weight));
+    _voteTypeB = _randVoteType(_voteB.supportType);
+
+    // Note: govs and tokens could be the same. This is intentional.
+    _voteA.gov = _randGov(_voteA.seed);
+    _voteB.gov = _randGovAlt(_voteB.seed);
     _voteA.token = IVotingToken(address(_voteA.gov.token()));
     _voteB.token = IVotingToken(address(_voteB.gov.token()));
-    assertTrue(address(_voteA.gov) != address(_voteB.gov));
-    assertTrue(address(_voteA.token) != address(_voteB.token));
 
     // Deposit some funds.
-    _mintAndDepositIntoFlexClient(_voteA.token, _user, _voteA.weight);
-    _mintAndDepositIntoFlexClient(_voteB.token, _user, _voteB.weight);
+    _mintAndDepositIntoFlexClient(_voteA.token, _voteA.user, _voteA.weight);
+    _mintAndDepositIntoFlexClient(_voteB.token, _voteB.user, _voteB.weight);
 
     // Create the proposals.
     _voteA.proposalId = _createAndSubmitProposal(_voteA.gov);
-    _voteB.proposalId = _createAndSubmitProposal(_voteB.gov);
-    assertEq(_voteA.proposalId, _voteB.proposalId); // Ids are deterministic.
+    if (address(_voteA.gov) != address(_voteB.gov)) {
+      _voteB.proposalId = _createAndSubmitProposal(_voteB.gov);
+      assertEq(_voteA.proposalId, _voteB.proposalId); // Ids are deterministic.
+    } else {
+      _voteB.proposalId = _voteA.proposalId;
+    }
 
-    // _user should now be able to express his/her vote on the proposals.
-    vm.startPrank(_user);
+    // Users should now be able to express their votes on the proposals.
+    vm.prank(_voteA.user);
     flexClient.expressVote(
       IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId, uint8(_voteTypeA));
+    vm.prank(_voteB.user);
     flexClient.expressVote(
       IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId, uint8(_voteTypeB));
-    vm.stopPrank();
 
-    (
-      _voteA.expressedAgainst,
-      _voteA.expressedFor,
-      _voteA.expressedAbstain
-    ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
-    assertEq(_voteA.expressedFor, _voteTypeA == GCS.VoteType.For ? _voteA.weight : 0);
-    assertEq(_voteA.expressedAgainst, _voteTypeA == GCS.VoteType.Against ? _voteA.weight : 0);
-    assertEq(_voteA.expressedAbstain, _voteTypeA == GCS.VoteType.Abstain ? _voteA.weight : 0);
+    if (address(_voteA.gov) != address(_voteB.gov)) {
+      (
+        _voteA.expressedAgainst,
+        _voteA.expressedFor,
+        _voteA.expressedAbstain
+      ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
+      assertEq(_voteA.expressedFor, _voteTypeA == GCS.VoteType.For ? _voteA.weight : 0);
+      assertEq(_voteA.expressedAgainst, _voteTypeA == GCS.VoteType.Against ? _voteA.weight : 0);
+      assertEq(_voteA.expressedAbstain, _voteTypeA == GCS.VoteType.Abstain ? _voteA.weight : 0);
 
-    (
-      _voteB.expressedAgainst,
-      _voteB.expressedFor,
-      _voteB.expressedAbstain
-    ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId);
-    assertEq(_voteB.expressedFor, _voteTypeB == GCS.VoteType.For ? _voteB.weight : 0);
-    assertEq(_voteB.expressedAgainst, _voteTypeB == GCS.VoteType.Against ? _voteB.weight : 0);
-    assertEq(_voteB.expressedAbstain, _voteTypeB == GCS.VoteType.Abstain ? _voteB.weight : 0);
+      (
+        _voteB.expressedAgainst,
+        _voteB.expressedFor,
+        _voteB.expressedAbstain
+      ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId);
+      assertEq(_voteB.expressedFor, _voteTypeB == GCS.VoteType.For ? _voteB.weight : 0);
+      assertEq(_voteB.expressedAgainst, _voteTypeB == GCS.VoteType.Against ? _voteB.weight : 0);
+      assertEq(_voteB.expressedAbstain, _voteTypeB == GCS.VoteType.Abstain ? _voteB.weight : 0);
+    } else {
+        uint256 expectedAgainst = _voteTypeA == GCS.VoteType.Against ? _voteA.weight : 0;
+        expectedAgainst += (_voteTypeB == GCS.VoteType.Against ? _voteB.weight : 0);
+        uint256 expectedFor = _voteTypeA == GCS.VoteType.For ? _voteA.weight : 0;
+        expectedFor += (_voteTypeB == GCS.VoteType.For ? _voteB.weight : 0);
+        uint256 expectedAbstain = _voteTypeA == GCS.VoteType.Abstain ? _voteA.weight : 0;
+        expectedAbstain += (_voteTypeB == GCS.VoteType.Abstain ? _voteB.weight : 0);
+      (
+        uint256 expressedAgainst,
+        uint256 expressedFor,
+        uint256 expressedAbstain
+      ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
+      assertEq(expressedFor, expectedFor);
+      assertEq(expressedAgainst, expectedAgainst);
+      assertEq(expressedAbstain, expectedAbstain);
+    }
   }
 }
 
