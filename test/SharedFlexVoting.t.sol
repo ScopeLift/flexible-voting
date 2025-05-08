@@ -371,6 +371,8 @@ abstract contract _SelfDelegate is FlexVotingClientTest {
     assertEq(_tokenA.delegates(address(flexClient)), _delegatee);
     assertEq(_tokenB.delegates(address(flexClient)), _delegatee);
 
+    flexClient.exposed_selfDelegate(IVotingToken(address(_tokenA)));
+
     assertEq(_tokenA.delegates(address(flexClient)), address(flexClient));
     assertEq(_tokenB.delegates(address(flexClient)), _delegatee);
   }
