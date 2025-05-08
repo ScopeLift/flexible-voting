@@ -1934,7 +1934,6 @@ abstract contract CastVote is FlexVotingClientTest {
     uint256 seed;
     address userA;
     address userB;
-    address userC;
     uint208 weightA;
     uint208 weightB;
     uint8 supportTypeA;
@@ -1947,15 +1946,9 @@ abstract contract CastVote is FlexVotingClientTest {
   function testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(
     VotingWeightIsUnaffectedByDepositsAfterProposal memory _vars
   ) public {
+    vm.assume( _vars.userA != _vars.userB);
     _assumeSafeUser(_vars.userA);
     _assumeSafeUser(_vars.userB);
-    _assumeSafeUser(_vars.userC);
-
-    vm.assume(
-      _vars.userA != _vars.userB &&
-      _vars.userA != _vars.userC &&
-      _vars.userB != _vars.userC
-    );
 
     // Cast to avoid having to repeatedly do so below.
     _vars.gov = _randGov(_vars.seed);
@@ -1964,8 +1957,8 @@ abstract contract CastVote is FlexVotingClientTest {
     _vars.tokenGov = GovToken(address(_vars.token));
 
     // We need _vars.weightA + _vars.weightB < MAX_VOTES.
-    _vars.weightA = uint208(bound(_vars.weightA, 1, MAX_VOTES - 2));
-    _vars.weightB = uint208(bound(_vars.weightB, 1, MAX_VOTES - _vars.weightA - 1));
+    _vars.weightA = uint208(bound(_vars.weightA, 1, MAX_VOTES - 1));
+    _vars.weightB = uint208(bound(_vars.weightB, 1, MAX_VOTES - _vars.weightA));
     GCS.VoteType _voteTypeA = _randVoteType(_vars.supportTypeA);
 
     // Mint and deposit for just userA.
@@ -1979,11 +1972,11 @@ abstract contract CastVote is FlexVotingClientTest {
     _advanceTimeTo(_vars.gov.proposalSnapshot(_proposalId) + 1);
 
     // Now mint and deposit for userB.
-    _mintGovAndDepositIntoFlexClient(_vars.userB, _vars.weightB);
+    _mintAndDepositIntoFlexClient(_vars.token, _vars.userB, _vars.weightB);
 
-    uint256 _fullVotingWeight = _vars.tokenGov.balanceOf(address(flexClient));
-    assert(_fullVotingWeight > _initDepositWeight);
-    assertEq(_fullVotingWeight, _vars.weightA + _vars.weightB);
+    uint256 _fullBalance = _vars.tokenGov.balanceOf(address(flexClient));
+    assert(_fullBalance > _initDepositWeight);
+    assertEq(_fullBalance, _vars.weightA + _vars.weightB);
 
     // Only user A expresses a vote.
     vm.prank(_vars.userA);
@@ -1995,7 +1988,6 @@ abstract contract CastVote is FlexVotingClientTest {
     (uint256 _againstVotes, uint256 _forVotes, uint256 _abstainVotes) =
       _vars.gov.proposalVotes(_proposalId);
 
-    // We assert the weight is within a range of 1 because scaled weights are sometimes floored.
     if (_voteTypeA == GCS.VoteType.For) assertEq(_forVotes, _vars.weightA);
     if (_voteTypeA == GCS.VoteType.Against) assertEq(_againstVotes, _vars.weightA);
     if (_voteTypeA == GCS.VoteType.Abstain) assertEq(_abstainVotes, _vars.weightA);
