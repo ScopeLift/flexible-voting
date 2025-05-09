@@ -2147,6 +2147,7 @@ abstract contract CastVote is FlexVotingClientTest {
 
 abstract contract Borrow is FlexVotingClientTest {
   function testFuzz_UsersCanBorrowTokens(
+    uint256 _seed,
     address _depositer,
     uint208 _depositAmount,
     address _borrower,
@@ -2156,27 +2157,156 @@ abstract contract Borrow is FlexVotingClientTest {
     _borrowAmount = _assumeSafeVoteParams(_borrower, _borrowAmount);
     vm.assume(_depositAmount > _borrowAmount);
 
+    GovToken _token= _randToken(_seed);
+    IVotingToken _iToken = IVotingToken(address(_token));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_depositer, _depositAmount);
+    _mintAndDepositIntoFlexClient(_token, _depositer, _depositAmount);
 
     // Borrow some funds.
-    uint256 _initBalance = token.balanceOf(_borrower);
+    uint256 _initBalance = _token.balanceOf(_borrower);
     vm.prank(_borrower);
-    flexClient.borrow(_borrowAmount);
+    flexClient.borrow(_iToken, _borrowAmount);
 
     // Tokens should have been transferred.
-    assertEq(token.balanceOf(_borrower), _initBalance + _borrowAmount);
-    assertEq(token.balanceOf(address(flexClient)), _depositAmount - _borrowAmount);
+    assertEq(_token.balanceOf(_borrower), _initBalance + _borrowAmount);
+    assertEq(_token.balanceOf(address(flexClient)), _depositAmount - _borrowAmount);
 
     // Borrow total has been tracked.
-    assertEq(flexClient.borrowTotal(_borrower), _borrowAmount);
+    assertEq(flexClient.borrowTotal(_iToken, _borrower), _borrowAmount);
 
     // The deposit balance of the depositer should not have changed.
-    assertEq(flexClient.deposits(_depositer), _depositAmount);
+    assertEq(flexClient.deposits(_iToken, _depositer), _depositAmount);
 
     _advanceTimeBy(1); // Advance so we can check the snapshot.
 
     // The total deposit snapshot should not have changed.
-    assertEq(flexClient.getPastTotalVoteWeight(_now() - 1), _depositAmount);
+    assertEq(flexClient.getPastTotalVoteWeight(_iToken, _now() - 1), _depositAmount);
+  }
+
+  struct MultipleTokenBorrowTestVars {
+    uint256 seed;
+    GovToken token;
+    IVotingToken iToken;
+    address depositer;
+    uint208 depositAmt;
+    address borrower;
+    uint208 borrowAmt;
+    uint256 initBalance;
+  }
+
+  function _setupMultiTokenBorrowVars(
+    MultipleTokenBorrowTestVars memory _vars
+  ) internal view {
+    vm.assume(_vars.depositer != _vars.borrower);
+
+    _assumeSafeUser(_vars.depositer);
+    _vars.depositAmt = uint208(bound(_vars.depositAmt, 1, MAX_VOTES / 2));
+    _assumeSafeUser(_vars.borrower);
+    _vars.borrowAmt = uint208(bound(_vars.borrowAmt, 1, _vars.depositAmt));
+
+    _vars.token = _randToken(_vars.seed);
+    _vars.iToken = IVotingToken(address(_vars.token));
+  }
+
+  function testFuzz_UsersCanBorrowMultipleTokens(
+    MultipleTokenBorrowTestVars memory _varsA,
+    MultipleTokenBorrowTestVars memory _varsB
+  ) public {
+    _setupMultiTokenBorrowVars(_varsA);
+    _setupMultiTokenBorrowVars(_varsB);
+
+    // We deliberately do NOT assume that the tokens are different.
+
+    // Deposit some funds.
+    _mintAndDepositIntoFlexClient(_varsA.token, _varsA.depositer, _varsA.depositAmt);
+    _mintAndDepositIntoFlexClient(_varsB.token, _varsB.depositer, _varsB.depositAmt);
+
+    // Borrow some funds.
+    _varsA.initBalance = _varsA.token.balanceOf(_varsA.borrower);
+    vm.prank(_varsA.borrower);
+    flexClient.borrow(_varsA.iToken, _varsA.borrowAmt);
+    _varsB.initBalance = _varsB.token.balanceOf(_varsB.borrower);
+    vm.prank(_varsB.borrower);
+    flexClient.borrow(_varsB.iToken, _varsB.borrowAmt);
+
+    // Tokens should have been transferred.
+    if (_varsA.borrower != _varsB.borrower ||
+        address(_varsA.iToken) != address(_varsB.iToken)) {
+      assertEq(
+        _varsA.token.balanceOf(_varsA.borrower),
+        _varsA.initBalance + _varsA.borrowAmt
+      );
+      assertEq(
+        _varsB.token.balanceOf(_varsB.borrower),
+        _varsB.initBalance + _varsB.borrowAmt
+      );
+    } else {
+      assertEq(
+        _varsA.token.balanceOf(_varsA.borrower),
+        _varsA.initBalance + _varsA.borrowAmt + _varsB.borrowAmt
+      );
+    }
+
+    if (address(_varsA.token) != address(_varsB.token)) {
+      assertEq(
+        _varsA.token.balanceOf(address(flexClient)),
+        _varsA.depositAmt - _varsA.borrowAmt
+      );
+      assertEq(
+        _varsB.token.balanceOf(address(flexClient)),
+        _varsB.depositAmt - _varsB.borrowAmt
+      );
+    } else {
+      assertEq(
+        _varsA.token.balanceOf(address(flexClient)),
+        (_varsA.depositAmt + _varsB.depositAmt) - _varsA.borrowAmt - _varsB.borrowAmt
+      );
+    }
+
+    // Borrow totals have been tracked.
+    if (_varsA.borrower != _varsB.borrower ||
+        address(_varsA.iToken) != address(_varsB.iToken)) {
+      assertEq(
+        flexClient.borrowTotal(_varsA.iToken, _varsA.borrower),
+        _varsA.borrowAmt
+      );
+      assertEq(
+        flexClient.borrowTotal(_varsB.iToken, _varsB.borrower),
+        _varsB.borrowAmt
+      );
+    } else {
+      // Borrowers and tokens are the same.
+      assertEq(
+        flexClient.borrowTotal(_varsA.iToken, _varsA.borrower),
+        _varsA.borrowAmt + _varsB.borrowAmt
+      );
+    }
+
+    if (_varsA.depositer != _varsB.depositer ||
+        address(_varsA.iToken) != address(_varsB.iToken)) {
+      // The deposit balance of the depositer should not have changed.
+      assertEq(flexClient.deposits(_varsA.iToken, _varsA.depositer), _varsA.depositAmt);
+      assertEq(flexClient.deposits(_varsB.iToken, _varsB.depositer), _varsB.depositAmt);
+    } else {
+      // Depositer and tokens are the same.
+      assertEq(
+        flexClient.deposits(_varsA.iToken, _varsA.depositer),
+        _varsA.depositAmt + _varsB.depositAmt
+      );
+    }
+
+    _advanceTimeBy(1); // Advance so we can check the snapshot.
+
+    if (address(_varsA.iToken) != address(_varsB.iToken)) {
+      // The total deposit snapshot should not have changed.
+      assertEq(flexClient.getPastTotalVoteWeight(_varsA.iToken, _now() - 1), _varsA.depositAmt);
+      assertEq(flexClient.getPastTotalVoteWeight(_varsB.iToken, _now() - 1), _varsB.depositAmt);
+    } else {
+      assertEq(
+        flexClient.getPastTotalVoteWeight(_varsA.iToken, _now() - 1),
+        _varsA.depositAmt + _varsB.depositAmt
+      );
+    }
   }
 }
