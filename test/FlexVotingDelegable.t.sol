@@ -8,8 +8,10 @@ import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
 import {MockFlexVotingClient as MFVC} from "test/mocks/MockFlexVotingClient.sol";
 import {MockFlexVotingDelegableClient} from "test/mocks/MockFlexVotingDelegableClient.sol";
+import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
 
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
+import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 
 import {
   FlexVotingClientTest,
@@ -42,37 +44,43 @@ abstract contract Delegation is FlexVotingClientTest {
     return MockFlexVotingDelegableClient(address(flexClient));
   }
 
-  function testFuzz_selfDelegationByDefault(address _delegator) public {
+  function testFuzz_selfDelegationByDefault(uint256 _seed, address _delegator) public {
     _assumeSafeUser(_delegator);
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
     // By default, the delegator should delegate to themselves.
-    assertEq(client().delegates(_delegator), _delegator);
+    assertEq(client().delegates(_token, _delegator), _delegator);
 
     // The delegator can still explicitly delegate to himself.
     vm.prank(_delegator);
-    client().delegate(_delegator);
-    assertEq(client().delegates(_delegator), _delegator);
+    client().delegate(_token, _delegator);
+    assertEq(client().delegates(_token, _delegator), _delegator);
   }
 
-  function testFuzz_delegateEmitsEvents(address _delegator, address _delegate, uint208 _weight)
-    public
-  {
+  function testFuzz_delegateEmitsEvents(
+    uint256 _seed,
+    address _delegator,
+    address _delegate,
+    uint208 _weight
+  ) public {
     _assumeSafeUser(_delegator);
     _assumeSafeUser(_delegate);
     vm.assume(_delegator != _delegate);
     _weight = uint208(bound(_weight, 1, MAX_VOTES));
+    IVotingToken _token = IVotingToken(address(_randToken(_seed)));
 
-    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+    _mintAndDepositIntoFlexClient(_token, _delegator, _weight);
 
     vm.expectEmit();
-    emit FlexVotingDelegable.DelegateChanged(address(token), _delegator, _delegator, _delegate);
+    emit FlexVotingDelegable.DelegateChanged(address(_token), _delegator, _delegator, _delegate);
     vm.expectEmit();
-    emit FlexVotingDelegable.DelegateWeightChanged(address(token), _delegate, 0, _weight);
+    emit FlexVotingDelegable.DelegateWeightChanged(address(_token), _delegate, 0, _weight);
     vm.prank(_delegator);
-    client().delegate(_delegate);
+    client().delegate(_token, _delegate);
   }
 
   function testFuzz_delegationAddsToDelegateWeight(
+    uint256 _seed,
     address _delegator,
     uint208 _delegatorWeight,
     address _delegate,
@@ -86,42 +94,47 @@ abstract contract Delegation is FlexVotingClientTest {
     _delegatorWeight = uint208(bound(_delegatorWeight, 1, MAX_VOTES - _delegateWeight));
     GCS.VoteType _voteType = _randVoteType(_supportType);
 
+    FractionalGovernor _gov = _randGov(_seed);
+    IFractionalGovernor _iGov = IFractionalGovernor(address(_gov));
+    IVotingToken _token = IVotingToken(address(_gov.token()));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_delegator, _delegatorWeight);
-    _mintGovAndDepositIntoFlexClient(_delegate, _delegateWeight);
+    _mintAndDepositIntoFlexClient(_token, _delegator, _delegatorWeight);
+    _mintAndDepositIntoFlexClient(_token, _delegate, _delegateWeight);
 
     _advanceTimeBy(1); // Make past balances retrievable.
-    assertEq(client().getPastVoteWeight(_delegate, _now() - 1), _delegateWeight);
-    assertEq(client().getPastVoteWeight(_delegator, _now() - 1), _delegatorWeight);
+    assertEq(client().getPastVoteWeight(_token, _delegate, _now() - 1), _delegateWeight);
+    assertEq(client().getPastVoteWeight(_token, _delegator, _now() - 1), _delegatorWeight);
 
     // Delegate.
     vm.expectEmit();
     emit FlexVotingDelegable.DelegateWeightChanged(
-      address(token), _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
+      address(_token), _delegate, _delegateWeight, _delegateWeight + _delegatorWeight
     );
     vm.prank(_delegator);
-    client().delegate(_delegate);
+    client().delegate(_token, _delegate);
 
     uint256 _combined = _delegatorWeight + _delegateWeight;
     _advanceTimeBy(1); // Make past balances retrievable.
-    assertEq(client().getPastVoteWeight(_delegator, _now() - 1), 0);
-    assertEq(client().getPastVoteWeight(_delegate, _now() - 1), _combined);
+    assertEq(client().getPastVoteWeight(_token, _delegator, _now() - 1), 0);
+    assertEq(client().getPastVoteWeight(_token, _delegate, _now() - 1), _combined);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_gov);
 
     // The delegate expresses a vote.
     vm.prank(_delegate);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+      client().proposalVotes(_iGov, _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _combined : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _combined : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _combined : 0);
   }
 
   function testFuzz_multipleAddressesDelegate(
+    uint256 _seed,
     Delegator memory _delegatorA,
     Delegator memory _delegatorB,
     Delegator memory _delegatorC,
@@ -170,9 +183,13 @@ abstract contract Delegation is FlexVotingClientTest {
 
     GCS.VoteType _voteType = _randVoteType(_supportType);
 
+    FractionalGovernor _gov = _randGov(_seed);
+    IFractionalGovernor _iGov = IFractionalGovernor(address(_gov));
+    IVotingToken _token = IVotingToken(address(_gov.token()));
+
     // Deposit some funds.
     for (uint256 i = 0; i < _users.length; i++) {
-      _mintGovAndDepositIntoFlexClient(_users[i].addr, _users[i].weight);
+      _mintAndDepositIntoFlexClient(_token, _users[i].addr, _users[i].weight);
     }
 
     _advanceTimeBy(1);
@@ -180,17 +197,17 @@ abstract contract Delegation is FlexVotingClientTest {
     // Delegate.
     for (uint256 i = 0; i < _users.length - 1; i++) {
       vm.prank(_users[i].addr);
-      client().delegate(_delegate.addr);
+      client().delegate(_token, _delegate.addr);
     }
 
     _advanceTimeBy(1);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_gov);
 
     // The delegate expresses a vote.
     vm.prank(_delegate.addr);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
 
     uint256 _combined;
     for (uint256 i = 0; i < _users.length; i++) {
@@ -198,13 +215,14 @@ abstract contract Delegation is FlexVotingClientTest {
     }
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+      client().proposalVotes(_iGov, _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _combined : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _combined : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _combined : 0);
   }
 
   function testFuzz_delegateCanExpressVoteAfterWithdrawal(
+    uint256 _seed,
     address _delegator,
     address _delegate,
     uint208 _weight,
@@ -215,34 +233,39 @@ abstract contract Delegation is FlexVotingClientTest {
     _assumeSafeUser(_delegate);
     vm.assume(_delegator != _delegate);
 
+    FractionalGovernor _gov = _randGov(_seed);
+    IFractionalGovernor _iGov = IFractionalGovernor(address(_gov));
+    IVotingToken _token = IVotingToken(address(_gov.token()));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+    _mintAndDepositIntoFlexClient(_token, _delegator, _weight);
 
     // Delegate.
     vm.prank(_delegator);
-    client().delegate(_delegate);
-    assertEq(client().delegates(_delegator), _delegate);
+    client().delegate(_token, _delegate);
+    assertEq(client().delegates(_token, _delegator), _delegate);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_gov);
 
     // The delegator withdraws their funds without voting.
     vm.prank(_delegator);
-    client().withdraw(_weight);
-    assertEq(client().deposits(_delegator), 0);
+    client().withdraw(_token, _weight);
+    assertEq(client().deposits(_token, _delegator), 0);
 
     // The delegate can still vote on the proposal.
     vm.prank(_delegate);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+      client().proposalVotes(_iGov, _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _weight : 0);
   }
 
   function testFuzz_RevertIf_delegateDoubleVotes(
+    uint256 _seed,
     address _delegator,
     address _delegate,
     uint208 _weight,
@@ -253,28 +276,33 @@ abstract contract Delegation is FlexVotingClientTest {
     _assumeSafeUser(_delegate);
     vm.assume(_delegator != _delegate);
 
+    FractionalGovernor _gov = _randGov(_seed);
+    IFractionalGovernor _iGov = IFractionalGovernor(address(_gov));
+    IVotingToken _token = IVotingToken(address(_gov.token()));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+    _mintAndDepositIntoFlexClient(_token, _delegator, _weight);
 
     // Delegate.
     vm.prank(_delegator);
-    client().delegate(_delegate);
-    assertEq(client().delegates(_delegator), _delegate);
+    client().delegate(_token, _delegate);
+    assertEq(client().delegates(_token, _delegator), _delegate);
 
     // Create the proposal.
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_gov);
 
     // The delegate expresses a voting preference.
     vm.prank(_delegate);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
 
     // Even if you're voting for multiple people, you can't double vote.
     vm.expectRevert(FVC.FlexVotingClient__AlreadyVoted.selector);
     vm.prank(_delegate);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
   }
 
   function testFuzz_delegatorCanChangeDelegates(
+    uint256 _seed,
     address _delegator,
     address _delegateA,
     address _delegateB,
@@ -293,62 +321,66 @@ abstract contract Delegation is FlexVotingClientTest {
     vm.label(_delegateA, "delegateA");
     vm.label(_delegateB, "delegateB");
 
+    FractionalGovernor _gov = _randGov(_seed);
+    IFractionalGovernor _iGov = IFractionalGovernor(address(_gov));
+    IVotingToken _token = IVotingToken(address(_gov.token()));
+
     GCS.VoteType _voteType = _randVoteType(_supportType);
     _weight = uint208(bound(_weight, 1, MAX_VOTES));
-    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+    _mintAndDepositIntoFlexClient(_token, _delegator, _weight);
 
     _advanceTimeBy(1);
 
     // Delegate to first account.
     vm.prank(_delegator);
-    client().delegate(_delegateA);
+    client().delegate(_token, _delegateA);
 
     _advanceTimeBy(1);
 
     // Create the first proposal.
-    uint256 _proposalA = _createAndSubmitProposal();
+    uint256 _proposalA = _createAndSubmitProposal(_gov);
 
     _advanceTimeBy(1);
 
     // Change delegate to second account.
     vm.prank(_delegator);
-    client().delegate(_delegateB);
+    client().delegate(_token, _delegateB);
 
     // Create the second proposal.
-    uint256 _proposalB = _createAndSubmitProposal("anotherReceiverFunction()");
+    uint256 _proposalB = _createAndSubmitProposal(_gov, "anotherReceiverFunction()");
 
     // The delegator and delegateB should not be able to vote on proposalA.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_delegator);
-    client().expressVote(_proposalA, uint8(_voteType));
+    client().expressVote(_iGov, _proposalA, uint8(_voteType));
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_delegateB);
-    client().expressVote(_proposalA, uint8(_voteType));
+    client().expressVote(_iGov, _proposalA, uint8(_voteType));
 
     // The delegator and delegateA should not be able to vote on proposalB.
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_delegator);
-    client().expressVote(_proposalB, uint8(_voteType));
+    client().expressVote(_iGov, _proposalB, uint8(_voteType));
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_delegateA);
-    client().expressVote(_proposalB, uint8(_voteType));
+    client().expressVote(_iGov, _proposalB, uint8(_voteType));
 
     // Delegate A should be able to express a vote on the first proposal.
     vm.prank(_delegateA);
-    client().expressVote(_proposalA, uint8(_voteType));
+    client().expressVote(_iGov, _proposalA, uint8(_voteType));
 
     // Delegate B should be able to express a vote on the second proposal.
     vm.prank(_delegateB);
-    client().expressVote(_proposalB, uint8(_voteType));
+    client().expressVote(_iGov, _proposalB, uint8(_voteType));
 
     (uint256 _againstA, uint256 _forA, uint256 _abstainA) =
-      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalA);
+      client().proposalVotes(_iGov, _proposalA);
     assertEq(_forA, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstA, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainA, _voteType == GCS.VoteType.Abstain ? _weight : 0);
 
     (uint256 _againstB, uint256 _forB, uint256 _abstainB) =
-      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalB);
+      client().proposalVotes(_iGov, _proposalB);
     assertEq(_forB, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstB, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainB, _voteType == GCS.VoteType.Abstain ? _weight : 0);
