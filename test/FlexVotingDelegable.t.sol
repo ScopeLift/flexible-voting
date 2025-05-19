@@ -8,6 +8,7 @@ import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
 import {FlexVotingDelegable} from "src/FlexVotingDelegable.sol";
 import {MockFlexVotingClient as MFVC} from "test/mocks/MockFlexVotingClient.sol";
 import {MockFlexVotingDelegableClient} from "test/mocks/MockFlexVotingDelegableClient.sol";
+import {GovToken} from "test/mocks/GovToken.sol";
 import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
 
 import {FlexVotingClient as FVC} from "src/FlexVotingClient.sol";
@@ -387,6 +388,7 @@ abstract contract Delegation is FlexVotingClientTest {
   }
 
   function testFuzz_delegateCanExpressVoteWithoutDepositing(
+    uint256 _seed,
     address _delegator,
     address _delegate,
     uint208 _weight,
@@ -397,42 +399,118 @@ abstract contract Delegation is FlexVotingClientTest {
     _assumeSafeUser(_delegate);
     vm.assume(_delegator != _delegate);
 
+    FractionalGovernor _gov = _randGov(_seed);
+    IFractionalGovernor _iGov = IFractionalGovernor(address(_gov));
+    IVotingToken _token = IVotingToken(address(_gov.token()));
+    GovToken _tokenGov = GovToken(address(_token));
+
     // Deposit some funds.
-    _mintGovAndDepositIntoFlexClient(_delegator, _weight);
+    _mintAndDepositIntoFlexClient(_token, _delegator, _weight);
 
     // Delegate.
     vm.prank(_delegator);
-    client().delegate(_delegate);
-    assertEq(client().delegates(_delegator), _delegate);
-    assertEq(client().delegates(_delegate), _delegate);
+    client().delegate(_token, _delegate);
+    assertEq(client().delegates(_token, _delegator), _delegate);
+    assertEq(client().delegates(_token, _delegate), _delegate);
 
     // The delegator has not delegated *token* weight to the delegate.
-    assertEq(token.delegates(_delegator), address(0));
-    assertEq(token.balanceOf(_delegator), 0);
-    assertEq(token.balanceOf(_delegate), 0);
+    assertEq(_tokenGov.delegates(_delegator), address(0));
+    assertEq(_tokenGov.balanceOf(_delegator), 0);
+    assertEq(_tokenGov.balanceOf(_delegate), 0);
 
     // Create the proposal.
     uint48 _proposalTimepoint = _now();
-    uint256 _proposalId = _createAndSubmitProposal();
+    uint256 _proposalId = _createAndSubmitProposal(_gov);
 
     // The delegator has no weight to vote with, despite having a deposit balance.
-    assertEq(client().deposits(_delegator), _weight);
-    assertEq(client().getPastVoteWeight(_delegator, _proposalTimepoint), 0);
+    assertEq(client().deposits(_token, _delegator), _weight);
+    assertEq(client().getPastVoteWeight(_token, _delegator, _proposalTimepoint), 0);
     vm.expectRevert(FVC.FlexVotingClient__NoVotingWeight.selector);
     vm.prank(_delegator);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
 
     // The delegate *has* weight to vote with, despite having no deposit balance.
-    assertEq(client().deposits(_delegate), 0);
-    assertEq(client().getPastVoteWeight(_delegate, _proposalTimepoint), _weight);
+    assertEq(client().deposits(_token, _delegate), 0);
+    assertEq(client().getPastVoteWeight(_token, _delegate, _proposalTimepoint), _weight);
     vm.prank(_delegate);
-    client().expressVote(_proposalId, uint8(_voteType));
+    client().expressVote(_iGov, _proposalId, uint8(_voteType));
 
     (uint256 _againstVotesExpressed, uint256 _forVotesExpressed, uint256 _abstainVotesExpressed) =
-      client().proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
+      client().proposalVotes(_iGov, _proposalId);
     assertEq(_forVotesExpressed, _voteType == GCS.VoteType.For ? _weight : 0);
     assertEq(_againstVotesExpressed, _voteType == GCS.VoteType.Against ? _weight : 0);
     assertEq(_abstainVotesExpressed, _voteType == GCS.VoteType.Abstain ? _weight : 0);
+  }
+
+  struct DelegationInfo {
+    address delegate;
+    uint208 weight;
+    uint8 supportType;
+    uint256 proposalId;
+    IVotingToken token;
+    FractionalGovernor gov;
+    IFractionalGovernor iGov;
+  }
+
+  function testFuzz_CanDelegateToDifferentAddressesPerToken(
+    uint256 _seed,
+    address _delegator,
+    DelegationInfo memory _infoA,
+    DelegationInfo memory _infoB
+  ) public {
+    _assumeSafeUser(_delegator);
+    _assumeSafeUser(_infoA.delegate);
+    _assumeSafeUser(_infoB.delegate);
+    vm.assume(_delegator != _infoA.delegate);
+    vm.assume(_delegator != _infoB.delegate);
+
+    _infoA.weight = uint208(bound(_infoA.weight, 1, MAX_VOTES));
+    _infoB.weight = uint208(bound(_infoB.weight, 1, MAX_VOTES));
+
+    _infoA.token = IVotingToken(address(_randToken(_seed)));
+    _infoB.token = IVotingToken(address(_randTokenAlt(_seed)));
+
+    _infoA.gov = _randGov(_seed);
+    _infoB.gov = _randGovAlt(_seed);
+    _infoA.iGov = IFractionalGovernor(address(_infoA.gov));
+    _infoB.iGov = IFractionalGovernor(address(_infoB.gov));
+    _infoA.token = IVotingToken(address(_infoA.gov.token()));
+    _infoB.token = IVotingToken(address(_infoB.gov.token()));
+
+    // Deposit some funds.
+    _mintAndDepositIntoFlexClient(_infoA.token, _delegator, _infoA.weight);
+    _mintAndDepositIntoFlexClient(_infoB.token, _delegator, _infoB.weight);
+
+    assertEq(client().delegates(_infoA.token, _delegator), _delegator);
+    assertEq(client().delegates(_infoA.token, _delegator), _delegator);
+
+    // Delegate.
+    vm.prank(_delegator);
+    client().delegate(_infoA.token, _infoA.delegate);
+
+    assertEq(client().delegates(_infoA.token, _delegator), _infoA.delegate);
+    assertEq(client().delegates(_infoB.token, _delegator), _delegator);
+
+    vm.prank(_delegator);
+    client().delegate(_infoB.token, _infoB.delegate);
+
+    assertEq(client().delegates(_infoA.token, _delegator), _infoA.delegate);
+    assertEq(client().delegates(_infoB.token, _delegator), _infoB.delegate);
+
+    _infoA.proposalId = _createAndSubmitProposal(_infoA.gov);
+    _infoB.proposalId = _createAndSubmitProposal(_infoB.gov);
+
+    // Delegates vote.
+    vm.prank(_infoA.delegate);
+    client().expressVote(_infoA.iGov, _infoA.proposalId, uint8(GCS.VoteType.For));
+    vm.prank(_infoB.delegate);
+    client().expressVote(_infoB.iGov, _infoB.proposalId, uint8(GCS.VoteType.Against));
+
+    // Internal accounting is correct.
+    (,uint256 _forVotes,) = client().proposalVotes(_infoA.iGov, _infoA.proposalId);
+    assertEq(_forVotes, _infoA.weight);
+    (uint256 _againstVotes,,) = client().proposalVotes(_infoB.iGov, _infoB.proposalId);
+    assertEq(_againstVotes, _infoB.weight);
   }
 }
 
