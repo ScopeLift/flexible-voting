@@ -11,7 +11,8 @@ import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 contract MockFlexVotingDelegableClient is MockFlexVotingClient, FlexVotingDelegable {
   constructor(address _governor) MockFlexVotingClient(_governor) {}
 
-  function _checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta) internal
+  function _checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta)
+    internal
     override(FlexVotingBase, FlexVotingDelegable)
   {
     return FlexVotingDelegable._checkpointVoteWeightOf(_token, _user, _delta);

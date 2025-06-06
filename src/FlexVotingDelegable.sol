@@ -52,12 +52,7 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
 
   // @dev Returns the delegate that `_account` has chosen for `_token`. Assumes
   // self-delegation if no delegate has been set.
-  function delegates(IVotingToken _token, address _account)
-    public
-    view
-    virtual
-    returns (address)
-  {
+  function delegates(IVotingToken _token, address _account) public view virtual returns (address) {
     address _proxy = _delegatee[_token][_account];
     if (_proxy == address(0)) return _account;
     return _proxy;
@@ -66,10 +61,7 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
   // @dev Delegate all of `account`'s voting weight with `token` to `delegatee`.
   //
   // Emits events {DelegateChanged} and {DelegateWeightChanged}.
-  function _delegate(IVotingToken _token, address _account, address _proxy)
-    internal
-    virtual
-  {
+  function _delegate(IVotingToken _token, address _account, address _proxy) internal virtual {
     address oldDelegate = delegates(_token, _account);
     _delegatee[_token][_account] = _proxy;
 
@@ -88,12 +80,10 @@ abstract contract FlexVotingDelegable is Context, FlexVotingBase {
   }
 
   // @dev Moves delegated votes from one delegate to another.
-  function _updateDelegateBalance(
-    IVotingToken _token,
-    address _from,
-    address _to,
-    int256 _delta
-  ) internal virtual {
+  function _updateDelegateBalance(IVotingToken _token, address _from, address _to, int256 _delta)
+    internal
+    virtual
+  {
     if (_from == _to || _delta == 0) return;
 
     // Decrement old delegate's weight.

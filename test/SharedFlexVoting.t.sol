@@ -105,12 +105,15 @@ abstract contract FlexVotingClientTest is Test {
     flexClient.deposit(_amount);
   }
 
-  function _mintAndDepositIntoFlexClient(IVotingToken _token, address _address, uint208 _amount) internal {
-
+  function _mintAndDepositIntoFlexClient(IVotingToken _token, address _address, uint208 _amount)
+    internal
+  {
     _mintAndDepositIntoFlexClient(GovToken(address(_token)), _address, _amount);
   }
 
-  function _mintAndDepositIntoFlexClient(GovToken _token, address _address, uint208 _amount) internal {
+  function _mintAndDepositIntoFlexClient(GovToken _token, address _address, uint208 _amount)
+    internal
+  {
     _mintAndApproveFlexClient(_token, _address, _amount);
     vm.prank(_address);
     flexClient.deposit(IVotingToken(address(_token)), _amount);
@@ -120,20 +123,21 @@ abstract contract FlexVotingClientTest is Test {
     return _createAndSubmitProposal(governor);
   }
 
-  function _createAndSubmitProposal(FractionalGovernor _governor) internal returns (uint256 proposalId) {
+  function _createAndSubmitProposal(FractionalGovernor _governor)
+    internal
+    returns (uint256 proposalId)
+  {
     return _createAndSubmitProposal(_governor, "mockReceiverFunction()");
   }
 
-  function _createAndSubmitProposal(
-    string memory _sig
-  ) internal returns (uint256 proposalId) {
+  function _createAndSubmitProposal(string memory _sig) internal returns (uint256 proposalId) {
     return _createAndSubmitProposal(governor, _sig);
   }
 
-  function _createAndSubmitProposal(
-    FractionalGovernor _governor,
-    string memory _sig
-  ) internal returns (uint256 proposalId) {
+  function _createAndSubmitProposal(FractionalGovernor _governor, string memory _sig)
+    internal
+    returns (uint256 proposalId)
+  {
     // Proposal will underflow if we're on the zero block
     if (_now() == 0) _advanceTimeBy(1);
 
@@ -209,7 +213,11 @@ abstract contract FlexVotingClientTest is Test {
     _token = _randToken((_seed % TOKEN_COUNT) + 1);
   }
 
-  function _randTokens(uint256 _seed) public view returns (IVotingToken _tokenA, IVotingToken _tokenB) {
+  function _randTokens(uint256 _seed)
+    public
+    view
+    returns (IVotingToken _tokenA, IVotingToken _tokenB)
+  {
     _tokenA = IVotingToken(address(_randToken(_seed)));
     _tokenB = IVotingToken(address(_randToken((_seed % TOKEN_COUNT) + 1)));
   }
@@ -331,9 +339,7 @@ abstract contract _CastVoteReasonString is FlexVotingClientTest {
   function testFuzz_ReturnsDescriptiveString(uint256 _seed) public {
     FractionalGovernor _governor = _randGovernor(_seed);
     assertEq(
-      flexClient.exposed_castVoteReasonString(
-        IFractionalGovernor(address(_governor))
-      ),
+      flexClient.exposed_castVoteReasonString(IFractionalGovernor(address(_governor))),
       "rolled-up vote from governance token holders"
     );
   }
@@ -456,10 +462,7 @@ abstract contract _ApplyDeltaToCheckpoint is FlexVotingClientTest {
     flexClient.exposed_applyDeltaToAddressCheckpoint(_token, _user, _delta);
     _advanceTimeBy(1); // Set new checkpoint.
 
-    assertEq(
-      flexClient.getPastVoteWeight(_token, _user, _now()),
-      uint256(_balanceInt + _delta)
-    );
+    assertEq(flexClient.getPastVoteWeight(_token, _user, _now()), uint256(_balanceInt + _delta));
   }
 
   function testFuzz_RevertIf_CheckpointWouldExceedUint208(
@@ -541,7 +544,9 @@ abstract contract _ApplyDeltaToCheckpoint is FlexVotingClientTest {
 }
 
 abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
-  function testFuzz_writesACheckpointAtClockTime(uint256 _seed, int256 _value, uint48 _timepoint) public {
+  function testFuzz_writesACheckpointAtClockTime(uint256 _seed, int256 _value, uint48 _timepoint)
+    public
+  {
     _timepoint = uint48(bound(_timepoint, 1, type(uint48).max - 1));
     _value = bound(_value, 1, MAX_UINT208);
     IVotingToken _token = IVotingToken(address(_randToken(_seed)));
@@ -581,7 +586,11 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     flexClient.exposed_checkpointTotalVoteWeight(_token, _withdraw);
   }
 
-  function testFuzz_RevertIf_withdrawalExceedsDeposit(uint256 _seed, int256 _deposit, int256 _withdraw) public {
+  function testFuzz_RevertIf_withdrawalExceedsDeposit(
+    uint256 _seed,
+    int256 _deposit,
+    int256 _withdraw
+  ) public {
     _deposit = bound(_deposit, 1, type(int208).max - 1);
     _withdraw = bound(_withdraw, type(int208).min, (-1 * _deposit) - 1);
     IVotingToken _token = IVotingToken(address(_randToken(_seed)));
@@ -591,7 +600,9 @@ abstract contract _CheckpointTotalVoteWeight is FlexVotingClientTest {
     flexClient.exposed_checkpointTotalVoteWeight(_token, _withdraw);
   }
 
-  function testFuzz_RevertIf_depositsOverflow(uint256 _seed, int256 _deposit1, int256 _deposit2) public {
+  function testFuzz_RevertIf_depositsOverflow(uint256 _seed, int256 _deposit1, int256 _deposit2)
+    public
+  {
     int256 _max = int256(uint256(type(uint208).max));
     _deposit1 = bound(_deposit1, 1, _max);
     _deposit2 = bound(_deposit2, 1 + _max - _deposit1, _max);
@@ -801,10 +812,7 @@ abstract contract GetPastVoteWeight is FlexVotingClientTest {
 }
 
 abstract contract GetPastTotalVoteWeight is FlexVotingClientTest {
-  function testFuzz_ReturnsZeroWithoutDeposits(
-    uint256 _seed,
-    uint48 _future
-  ) public view {
+  function testFuzz_ReturnsZeroWithoutDeposits(uint256 _seed, uint48 _future) public view {
     IVotingToken _token = IVotingToken(address(_randToken(_seed)));
     uint48 _zeroTimepoint = 0;
     assertEq(flexClient.getPastTotalVoteWeight(_token, _zeroTimepoint), 0);
@@ -999,11 +1007,7 @@ abstract contract Withdraw is FlexVotingClientTest {
 }
 
 abstract contract Deposit is FlexVotingClientTest {
-  function testFuzz_UserCanDepositTokens(
-    uint256 _seed,
-    address _user,
-    uint208 _amount
-  ) public {
+  function testFuzz_UserCanDepositTokens(uint256 _seed, address _user, uint208 _amount) public {
     _amount = uint208(bound(_amount, 0, type(uint208).max));
     vm.assume(_user != address(flexClient));
 
@@ -1364,41 +1368,34 @@ abstract contract ExpressVote is FlexVotingClientTest {
     // Users should now be able to express their votes on the proposals.
     vm.prank(_voteA.user);
     flexClient.expressVote(
-      IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId, uint8(_voteTypeA));
+      IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId, uint8(_voteTypeA)
+    );
     vm.prank(_voteB.user);
     flexClient.expressVote(
-      IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId, uint8(_voteTypeB));
+      IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId, uint8(_voteTypeB)
+    );
 
     if (address(_voteA.gov) != address(_voteB.gov)) {
-      (
-        _voteA.expressedAgainst,
-        _voteA.expressedFor,
-        _voteA.expressedAbstain
-      ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
+      (_voteA.expressedAgainst, _voteA.expressedFor, _voteA.expressedAbstain) =
+        flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
       assertEq(_voteA.expressedFor, _voteTypeA == GCS.VoteType.For ? _voteA.weight : 0);
       assertEq(_voteA.expressedAgainst, _voteTypeA == GCS.VoteType.Against ? _voteA.weight : 0);
       assertEq(_voteA.expressedAbstain, _voteTypeA == GCS.VoteType.Abstain ? _voteA.weight : 0);
 
-      (
-        _voteB.expressedAgainst,
-        _voteB.expressedFor,
-        _voteB.expressedAbstain
-      ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId);
+      (_voteB.expressedAgainst, _voteB.expressedFor, _voteB.expressedAbstain) =
+        flexClient.proposalVotes(IFractionalGovernor(address(_voteB.gov)), _voteB.proposalId);
       assertEq(_voteB.expressedFor, _voteTypeB == GCS.VoteType.For ? _voteB.weight : 0);
       assertEq(_voteB.expressedAgainst, _voteTypeB == GCS.VoteType.Against ? _voteB.weight : 0);
       assertEq(_voteB.expressedAbstain, _voteTypeB == GCS.VoteType.Abstain ? _voteB.weight : 0);
     } else {
-        uint256 expectedAgainst = _voteTypeA == GCS.VoteType.Against ? _voteA.weight : 0;
-        expectedAgainst += (_voteTypeB == GCS.VoteType.Against ? _voteB.weight : 0);
-        uint256 expectedFor = _voteTypeA == GCS.VoteType.For ? _voteA.weight : 0;
-        expectedFor += (_voteTypeB == GCS.VoteType.For ? _voteB.weight : 0);
-        uint256 expectedAbstain = _voteTypeA == GCS.VoteType.Abstain ? _voteA.weight : 0;
-        expectedAbstain += (_voteTypeB == GCS.VoteType.Abstain ? _voteB.weight : 0);
-      (
-        uint256 expressedAgainst,
-        uint256 expressedFor,
-        uint256 expressedAbstain
-      ) = flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
+      uint256 expectedAgainst = _voteTypeA == GCS.VoteType.Against ? _voteA.weight : 0;
+      expectedAgainst += (_voteTypeB == GCS.VoteType.Against ? _voteB.weight : 0);
+      uint256 expectedFor = _voteTypeA == GCS.VoteType.For ? _voteA.weight : 0;
+      expectedFor += (_voteTypeB == GCS.VoteType.For ? _voteB.weight : 0);
+      uint256 expectedAbstain = _voteTypeA == GCS.VoteType.Abstain ? _voteA.weight : 0;
+      expectedAbstain += (_voteTypeB == GCS.VoteType.Abstain ? _voteB.weight : 0);
+      (uint256 expressedAgainst, uint256 expressedFor, uint256 expressedAbstain) =
+        flexClient.proposalVotes(IFractionalGovernor(address(_voteA.gov)), _voteA.proposalId);
       assertEq(expressedFor, expectedFor);
       assertEq(expressedAgainst, expectedAgainst);
       assertEq(expressedAbstain, expectedAbstain);
@@ -1623,19 +1620,25 @@ abstract contract CastVote is FlexVotingClientTest {
       flexClient.proposalVotes(_varsB.iGov, _varsB.proposalId);
 
     if (address(_varsA.gov) != address(_varsB.gov)) {
-      if (uint8(_voteTypeA) == uint8(GCS.VoteType.For))
+      if (uint8(_voteTypeA) == uint8(GCS.VoteType.For)) {
         assertEq(_varsA.forExpressed, _varsA.weight);
-      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Against))
+      }
+      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Against)) {
         assertEq(_varsA.againstExpressed, _varsA.weight);
-      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Abstain))
+      }
+      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Abstain)) {
         assertEq(_varsA.abstainExpressed, _varsA.weight);
+      }
 
-      if (uint8(_voteTypeB) == uint8(GCS.VoteType.For))
+      if (uint8(_voteTypeB) == uint8(GCS.VoteType.For)) {
         assertEq(_varsB.forExpressed, _varsB.weight);
-      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Against))
+      }
+      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Against)) {
         assertEq(_varsB.againstExpressed, _varsB.weight);
-      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Abstain))
+      }
+      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Abstain)) {
         assertEq(_varsB.abstainExpressed, _varsB.weight);
+      }
     } else {
       uint256 _expectedAgainst;
       uint256 _expectedFor;
@@ -1663,21 +1666,23 @@ abstract contract CastVote is FlexVotingClientTest {
     if (address(_varsA.gov) != address(_varsB.gov)) {
       (_varsA.againstVotes, _varsA.forVotes, _varsA.abstainVotes) =
         _varsA.gov.proposalVotes(_varsA.proposalId);
-      if (uint8(_voteTypeA) == uint8(GCS.VoteType.For))
-        assertEq(_varsA.forVotes, _varsA.weight);
-      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Against))
+      if (uint8(_voteTypeA) == uint8(GCS.VoteType.For)) assertEq(_varsA.forVotes, _varsA.weight);
+      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Against)) {
         assertEq(_varsA.againstVotes, _varsA.weight);
-      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Abstain))
+      }
+      if (uint8(_voteTypeA) == uint8(GCS.VoteType.Abstain)) {
         assertEq(_varsA.abstainVotes, _varsA.weight);
+      }
 
       (_varsB.againstVotes, _varsB.forVotes, _varsB.abstainVotes) =
         _varsB.gov.proposalVotes(_varsB.proposalId);
-      if (uint8(_voteTypeB) == uint8(GCS.VoteType.For))
-        assertEq(_varsB.forVotes, _varsB.weight);
-      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Against))
+      if (uint8(_voteTypeB) == uint8(GCS.VoteType.For)) assertEq(_varsB.forVotes, _varsB.weight);
+      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Against)) {
         assertEq(_varsB.againstVotes, _varsB.weight);
-      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Abstain))
+      }
+      if (uint8(_voteTypeB) == uint8(GCS.VoteType.Abstain)) {
         assertEq(_varsB.abstainVotes, _varsB.weight);
+      }
     } else {
       (_varsA.againstVotes, _varsA.forVotes, _varsA.abstainVotes) =
         _varsA.gov.proposalVotes(_varsA.proposalId);
@@ -1722,12 +1727,8 @@ abstract contract CastVote is FlexVotingClientTest {
     _assumeSafeUser(_vars.userD);
 
     vm.assume(
-      _vars.userA != _vars.userB &&
-      _vars.userA != _vars.userC &&
-      _vars.userA != _vars.userD &&
-      _vars.userB != _vars.userC &&
-      _vars.userB != _vars.userD &&
-      _vars.userC != _vars.userD
+      _vars.userA != _vars.userB && _vars.userA != _vars.userC && _vars.userA != _vars.userD
+        && _vars.userB != _vars.userC && _vars.userB != _vars.userD && _vars.userC != _vars.userD
     );
 
     // Cast to avoid having to repeatedly do so below.
@@ -1842,18 +1843,13 @@ abstract contract CastVote is FlexVotingClientTest {
 
   // This is important because it ensures you can't *gain* voting weight by
   // getting other people to not vote.
-  function testFuzz_AbandonsUnexpressedVotingWeight(
-    AbandonVoteWeightTestVars memory _vars
-  ) public {
-
+  function testFuzz_AbandonsUnexpressedVotingWeight(AbandonVoteWeightTestVars memory _vars) public {
     _assumeSafeUser(_vars.userA);
     _assumeSafeUser(_vars.userB);
     _assumeSafeUser(_vars.userC);
 
     vm.assume(
-      _vars.userA != _vars.userB &&
-      _vars.userA != _vars.userC &&
-      _vars.userB != _vars.userC
+      _vars.userA != _vars.userB && _vars.userA != _vars.userC && _vars.userB != _vars.userC
     );
 
     // Cast to avoid having to repeatedly do so below.
@@ -1946,7 +1942,7 @@ abstract contract CastVote is FlexVotingClientTest {
   function testFuzz_VotingWeightIsUnaffectedByDepositsAfterProposal(
     VotingWeightIsUnaffectedByDepositsAfterProposal memory _vars
   ) public {
-    vm.assume( _vars.userA != _vars.userB);
+    vm.assume(_vars.userA != _vars.userB);
     _assumeSafeUser(_vars.userA);
     _assumeSafeUser(_vars.userB);
 
@@ -2071,9 +2067,7 @@ abstract contract CastVote is FlexVotingClientTest {
     address _user,
     uint208 _voteWeight,
     uint8 _supportType
-  )
-    public
-  {
+  ) public {
     GCS.VoteType _voteType;
     (_voteWeight, _voteType) = _assumeSafeVoteParams(_user, _voteWeight, _supportType);
 
@@ -2157,7 +2151,7 @@ abstract contract Borrow is FlexVotingClientTest {
     _borrowAmount = _assumeSafeVoteParams(_borrower, _borrowAmount);
     vm.assume(_depositAmount > _borrowAmount);
 
-    GovToken _token= _randToken(_seed);
+    GovToken _token = _randToken(_seed);
     IVotingToken _iToken = IVotingToken(address(_token));
 
     // Deposit some funds.
@@ -2195,9 +2189,7 @@ abstract contract Borrow is FlexVotingClientTest {
     uint256 initBalance;
   }
 
-  function _setupMultiTokenBorrowVars(
-    MultipleTokenBorrowTestVars memory _vars
-  ) internal view {
+  function _setupMultiTokenBorrowVars(MultipleTokenBorrowTestVars memory _vars) internal view {
     vm.assume(_vars.depositer != _vars.borrower);
 
     _assumeSafeUser(_vars.depositer);
@@ -2231,16 +2223,9 @@ abstract contract Borrow is FlexVotingClientTest {
     flexClient.borrow(_varsB.iToken, _varsB.borrowAmt);
 
     // Tokens should have been transferred.
-    if (_varsA.borrower != _varsB.borrower ||
-        address(_varsA.iToken) != address(_varsB.iToken)) {
-      assertEq(
-        _varsA.token.balanceOf(_varsA.borrower),
-        _varsA.initBalance + _varsA.borrowAmt
-      );
-      assertEq(
-        _varsB.token.balanceOf(_varsB.borrower),
-        _varsB.initBalance + _varsB.borrowAmt
-      );
+    if (_varsA.borrower != _varsB.borrower || address(_varsA.iToken) != address(_varsB.iToken)) {
+      assertEq(_varsA.token.balanceOf(_varsA.borrower), _varsA.initBalance + _varsA.borrowAmt);
+      assertEq(_varsB.token.balanceOf(_varsB.borrower), _varsB.initBalance + _varsB.borrowAmt);
     } else {
       assertEq(
         _varsA.token.balanceOf(_varsA.borrower),
@@ -2249,14 +2234,8 @@ abstract contract Borrow is FlexVotingClientTest {
     }
 
     if (address(_varsA.token) != address(_varsB.token)) {
-      assertEq(
-        _varsA.token.balanceOf(address(flexClient)),
-        _varsA.depositAmt - _varsA.borrowAmt
-      );
-      assertEq(
-        _varsB.token.balanceOf(address(flexClient)),
-        _varsB.depositAmt - _varsB.borrowAmt
-      );
+      assertEq(_varsA.token.balanceOf(address(flexClient)), _varsA.depositAmt - _varsA.borrowAmt);
+      assertEq(_varsB.token.balanceOf(address(flexClient)), _varsB.depositAmt - _varsB.borrowAmt);
     } else {
       assertEq(
         _varsA.token.balanceOf(address(flexClient)),
@@ -2265,34 +2244,24 @@ abstract contract Borrow is FlexVotingClientTest {
     }
 
     // Borrow totals have been tracked.
-    if (_varsA.borrower != _varsB.borrower ||
-        address(_varsA.iToken) != address(_varsB.iToken)) {
-      assertEq(
-        flexClient.borrowTotal(_varsA.iToken, _varsA.borrower),
-        _varsA.borrowAmt
-      );
-      assertEq(
-        flexClient.borrowTotal(_varsB.iToken, _varsB.borrower),
-        _varsB.borrowAmt
-      );
+    if (_varsA.borrower != _varsB.borrower || address(_varsA.iToken) != address(_varsB.iToken)) {
+      assertEq(flexClient.borrowTotal(_varsA.iToken, _varsA.borrower), _varsA.borrowAmt);
+      assertEq(flexClient.borrowTotal(_varsB.iToken, _varsB.borrower), _varsB.borrowAmt);
     } else {
       // Borrowers and tokens are the same.
       assertEq(
-        flexClient.borrowTotal(_varsA.iToken, _varsA.borrower),
-        _varsA.borrowAmt + _varsB.borrowAmt
+        flexClient.borrowTotal(_varsA.iToken, _varsA.borrower), _varsA.borrowAmt + _varsB.borrowAmt
       );
     }
 
-    if (_varsA.depositer != _varsB.depositer ||
-        address(_varsA.iToken) != address(_varsB.iToken)) {
+    if (_varsA.depositer != _varsB.depositer || address(_varsA.iToken) != address(_varsB.iToken)) {
       // The deposit balance of the depositer should not have changed.
       assertEq(flexClient.deposits(_varsA.iToken, _varsA.depositer), _varsA.depositAmt);
       assertEq(flexClient.deposits(_varsB.iToken, _varsB.depositer), _varsB.depositAmt);
     } else {
       // Depositer and tokens are the same.
       assertEq(
-        flexClient.deposits(_varsA.iToken, _varsA.depositer),
-        _varsA.depositAmt + _varsB.depositAmt
+        flexClient.deposits(_varsA.iToken, _varsA.depositer), _varsA.depositAmt + _varsB.depositAmt
       );
     }
 

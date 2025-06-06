@@ -62,16 +62,14 @@ abstract contract FlexVotingBase {
   ///
   /// To get the vote weight for a user at timepoint t use:
   ///   voteWeightCheckpoints[token][user].upperLookup(t)
-  mapping(
-    IVotingToken token => mapping(
-      address user => Checkpoints.Trace208 votingWeight
-    )
-  ) internal voteWeightCheckpoints;
+  mapping(IVotingToken token => mapping(address user => Checkpoints.Trace208 votingWeight)) internal
+    voteWeightCheckpoints;
 
   /// @dev Mapping from token address to the checkpoint history of the sum total
   /// of voting weight in token held by this contract. May or may not be
   /// equivalent to this contract's balance of token at a given time.
-  mapping(IVotingToken token => Checkpoints.Trace208 totalWeight) internal totalVoteWeightCheckpoints;
+  mapping(IVotingToken token => Checkpoints.Trace208 totalWeight) internal
+    totalVoteWeightCheckpoints;
 
   /// @dev Returns a representation of the current amount of `_token` that
   /// `_user` has claim to in this system. It may or may not be equivalent to
@@ -131,10 +129,7 @@ abstract contract FlexVotingBase {
   }
 
   /// @dev Checkpoints this contract's total vote weight with `governor` after applying `_delta`.
-  function _checkpointTotalVoteWeight(IVotingToken _token, int256 _delta)
-    internal
-    virtual
-  {
+  function _checkpointTotalVoteWeight(IVotingToken _token, int256 _delta) internal virtual {
     _applyDeltaToCheckpoint(_token, totalVoteWeightCheckpoints[_token], _delta);
   }
 }

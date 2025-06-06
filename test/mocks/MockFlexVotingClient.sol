@@ -92,11 +92,10 @@ contract MockFlexVotingClient is FlexVotingClient {
     return _checkpointTotalVoteWeight(_token, _delta);
   }
 
-  function exposed_applyDeltaToAddressCheckpoint(
-    IVotingToken _token,
-    address _user,
-    int256 _delta
-  ) external returns (uint208, uint208) {
+  function exposed_applyDeltaToAddressCheckpoint(IVotingToken _token, address _user, int256 _delta)
+    external
+    returns (uint208, uint208)
+  {
     Checkpoints.Trace208 storage _checkpoint = voteWeightCheckpoints[_token][_user];
     return _applyDeltaToCheckpoint(_token, _checkpoint, _delta);
   }
@@ -113,7 +112,9 @@ contract MockFlexVotingClient is FlexVotingClient {
     _deposits[_token][_user] = _amount;
   }
 
-  function exposed_checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta) external {
+  function exposed_checkpointVoteWeightOf(IVotingToken _token, address _user, int256 _delta)
+    external
+  {
     _checkpointVoteWeightOf(_token, _user, _delta);
   }
   // End test hooks

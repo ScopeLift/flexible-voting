@@ -507,7 +507,7 @@ abstract contract Delegation is FlexVotingClientTest {
     client().expressVote(_infoB.iGov, _infoB.proposalId, uint8(GCS.VoteType.Against));
 
     // Internal accounting is correct.
-    (,uint256 _forVotes,) = client().proposalVotes(_infoA.iGov, _infoA.proposalId);
+    (, uint256 _forVotes,) = client().proposalVotes(_infoA.iGov, _infoA.proposalId);
     assertEq(_forVotes, _infoA.weight);
     (uint256 _againstVotes,,) = client().proposalVotes(_infoB.iGov, _infoB.proposalId);
     assertEq(_againstVotes, _infoB.weight);
