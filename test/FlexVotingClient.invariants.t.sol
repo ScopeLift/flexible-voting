@@ -10,12 +10,14 @@ import {GovernorCountingFractional as GCF} from
 
 import {IVotingToken} from "src/interfaces/IVotingToken.sol";
 import {IFractionalGovernor} from "src/interfaces/IFractionalGovernor.sol";
-import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
-import {GovToken} from "test/GovToken.sol";
-import {FractionalGovernor} from "test/FractionalGovernor.sol";
-import {ProposalReceiverMock} from "test/ProposalReceiverMock.sol";
+import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
+import {ProposalReceiverMock} from "test/mocks/ProposalReceiverMock.sol";
+import {FractionalGovernor} from "test/mocks/FractionalGovernor.sol";
+import {GovToken} from "test/mocks/GovToken.sol";
 import {FlexVotingClientHandler} from "test/handlers/FlexVotingClientHandler.sol";
 
+// TODO add invariant that checkpoints are never negative, e.g.
+// voteWeightCheckpoints[_token][_user]
 contract FlexVotingInvariantSetup is Test {
   MockFlexVotingClient flexClient;
   GovToken token;
@@ -131,7 +133,8 @@ contract FlexVotingInvariantTest is FlexVotingInvariantSetup {
         governor.proposalVotes(_proposalId);
       uint256 _totalVotesGov = _againstVotes + _forVotes + _abstainVotes;
 
-      (_againstVotes, _forVotes, _abstainVotes) = flexClient.proposalVotes(_proposalId);
+      (_againstVotes, _forVotes, _abstainVotes) =
+        flexClient.proposalVotes(IFractionalGovernor(address(governor)), _proposalId);
       uint256 _totalVotesClient = _againstVotes + _forVotes + _abstainVotes;
 
       // The votes recorded in the governor and those in the client waiting to

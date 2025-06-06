@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {MockFlexVotingClient} from "test/MockFlexVotingClient.sol";
+import {MockFlexVotingClient} from "test/mocks/MockFlexVotingClient.sol";
 import {
   Deployment,
   Constructor,
+  _ApplyDeltaToCheckpoint,
   _RawBalanceOf,
   _CastVoteReasonString,
   _SelfDelegate,
   _CheckpointVoteWeightOf,
   _CheckpointTotalVoteWeight,
-  GetPastRawBalance,
-  GetPastTotalBalance,
+  GetPastVoteWeight,
+  GetPastTotalVoteWeight,
   Withdraw,
   Deposit,
   ExpressVote,
@@ -31,6 +32,16 @@ contract BlockNumberClock_Deployment is Deployment {
 }
 
 contract BlockNumberClock_Constructor is Constructor {
+  function _timestampClock() internal pure override returns (bool) {
+    return false;
+  }
+
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = new MockFlexVotingClient(_governor);
+  }
+}
+
+contract BlockNumberClock__ApplyDeltaToCheckpoint is _ApplyDeltaToCheckpoint {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -80,7 +91,7 @@ contract BlockNumberClock__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   }
 }
 
-contract BlockNumberClock_GetPastRawBalance is GetPastRawBalance {
+contract BlockNumberClock_GetPastVoteWeight is GetPastVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -100,7 +111,7 @@ contract BlockNumber__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight {
   }
 }
 
-contract BlockNumberClock_GetPastTotalBalance is GetPastTotalBalance {
+contract BlockNumberClock_GetPastTotalVoteWeight is GetPastTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return false;
   }
@@ -181,6 +192,16 @@ contract TimestampClock_Constructor is Constructor {
   }
 }
 
+contract TimestampClock__ApplyDeltaToCheckpoint is _ApplyDeltaToCheckpoint {
+  function _timestampClock() internal pure override returns (bool) {
+    return true;
+  }
+
+  function _deployFlexClient(address _governor) internal override {
+    flexClient = new MockFlexVotingClient(_governor);
+  }
+}
+
 contract TimestampClock__RawBalanceOf is _RawBalanceOf {
   function _timestampClock() internal pure override returns (bool) {
     return true;
@@ -221,7 +242,7 @@ contract TimestampClock__CheckpointVoteWeightOf is _CheckpointVoteWeightOf {
   }
 }
 
-contract TimestampClock_GetPastRawBalance is GetPastRawBalance {
+contract TimestampClock_GetPastVoteWeight is GetPastVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }
@@ -241,7 +262,7 @@ contract TimestampClock__CheckpointTotalVoteWeight is _CheckpointTotalVoteWeight
   }
 }
 
-contract TimestampClock_GetPastTotalBalance is GetPastTotalBalance {
+contract TimestampClock_GetPastTotalVoteWeight is GetPastTotalVoteWeight {
   function _timestampClock() internal pure override returns (bool) {
     return true;
   }

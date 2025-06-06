@@ -34,11 +34,12 @@ abstract contract FlexVotingClient is FlexVotingBase {
     uint128 abstainVotes;
   }
 
-  /// @dev Map proposalId to an address to whether they have voted on this proposal.
-  mapping(uint256 => mapping(address => bool)) private proposalVoterHasVoted;
+  /// @dev Map governor to proposalId to an address to whether they have voted on the proposal.
+  mapping(IFractionalGovernor => mapping(uint256 => mapping(address => bool))) private
+    proposalVoterHasVoted;
 
-  /// @notice Map proposalId to vote totals expressed on this proposal.
-  mapping(uint256 => ProposalVote) public proposalVotes;
+  /// @notice Map governor to proposalId to vote totals expressed on the proposal.
+  mapping(IFractionalGovernor => mapping(uint256 => ProposalVote)) public proposalVotes;
 
   /// Constant used by OZ's implementation of {GovernorCountingFractional} to
   /// signal fractional voting.
@@ -50,50 +51,70 @@ abstract contract FlexVotingClient is FlexVotingBase {
   error FlexVotingClient__InvalidSupportValue();
   error FlexVotingClient__NoVotesExpressed();
 
-  /// @dev Used as the `reason` param when submitting a vote to `GOVERNOR`.
-  function _castVoteReasonString() internal virtual returns (string memory) {
+  /// @dev Used as the `reason` param when submitting a vote to `_governor`.
+  function _castVoteReasonString(IFractionalGovernor /*_governor*/ )
+    internal
+    virtual
+    returns (string memory)
+  {
     return "rolled-up vote from governance token holders";
   }
 
   /// @notice Allow the caller to express their voting preference for a given
   /// proposal. Their preference is recorded internally but not moved to the
   /// Governor until `castVote` is called.
-  /// @param proposalId The proposalId in the associated Governor
-  /// @param support The depositor's vote preferences in accordance with the `VoteType` enum.
-  function expressVote(uint256 proposalId, uint8 support) external virtual {
+  /// @param governor The governor that the voting preference is related to.
+  /// @param proposalId The ID of the proposal in the associated governor.
+  /// @param support The depositor's vote preference in accordance with the `VoteType` enum.
+  function expressVote(IFractionalGovernor governor, uint256 proposalId, uint8 support)
+    external
+    virtual
+  {
+    _expressVote(governor, proposalId, support);
+  }
+
+  function _expressVote(IFractionalGovernor governor, uint256 proposalId, uint8 support)
+    internal
+    virtual
+  {
     address voter = msg.sender;
-    uint256 weight = getPastVoteWeight(voter, GOVERNOR.proposalSnapshot(proposalId));
+    IVotingToken token = IVotingToken(address(governor.token()));
+    uint256 weight = getPastVoteWeight(token, voter, governor.proposalSnapshot(proposalId));
     if (weight == 0) revert FlexVotingClient__NoVotingWeight();
 
-    if (proposalVoterHasVoted[proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
-    proposalVoterHasVoted[proposalId][voter] = true;
+    if (proposalVoterHasVoted[governor][proposalId][voter]) revert FlexVotingClient__AlreadyVoted();
+    proposalVoterHasVoted[governor][proposalId][voter] = true;
 
     if (support == uint8(VoteType.Against)) {
-      proposalVotes[proposalId].againstVotes += SafeCast.toUint128(weight);
+      proposalVotes[governor][proposalId].againstVotes += SafeCast.toUint128(weight);
     } else if (support == uint8(VoteType.For)) {
-      proposalVotes[proposalId].forVotes += SafeCast.toUint128(weight);
+      proposalVotes[governor][proposalId].forVotes += SafeCast.toUint128(weight);
     } else if (support == uint8(VoteType.Abstain)) {
-      proposalVotes[proposalId].abstainVotes += SafeCast.toUint128(weight);
+      proposalVotes[governor][proposalId].abstainVotes += SafeCast.toUint128(weight);
     } else {
       // Support value must be included in VoteType enum.
       revert FlexVotingClient__InvalidSupportValue();
     }
   }
 
-  /// @notice Causes this contract to cast a vote to the Governor for all of the
+  /// @notice Causes this contract to cast a vote to the `governor` for all of the
   /// accumulated votes expressed by users. Uses the total internal vote weight
   /// to proportionally split weight among expressed votes. Can be called by
   /// anyone. It is idempotent and can be called multiple times during the
   /// lifecycle of a given proposal.
-  /// @param proposalId The ID of the proposal which the FlexVotingClient will
-  /// now vote on.
-  function castVote(uint256 proposalId) external {
-    ProposalVote storage _proposalVote = proposalVotes[proposalId];
+  /// @param governor The governor that votes will be cast to.
+  /// @param proposalId The ID of the proposal on which votes will be cast.
+  function castVote(IFractionalGovernor governor, uint256 proposalId) external virtual {
+    _castVote(governor, proposalId);
+  }
+
+  function _castVote(IFractionalGovernor governor, uint256 proposalId) internal virtual {
+    ProposalVote storage _proposalVote = proposalVotes[governor][proposalId];
     if (_proposalVote.forVotes + _proposalVote.againstVotes + _proposalVote.abstainVotes == 0) {
       revert FlexVotingClient__NoVotesExpressed();
     }
 
-    uint256 _proposalSnapshot = GOVERNOR.proposalSnapshot(proposalId);
+    uint256 _proposalSnapshot = governor.proposalSnapshot(proposalId);
 
     // We use the snapshot of total vote weight to determine the weight with
     // which to vote. We do this for two reasons:
@@ -111,11 +132,11 @@ abstract contract FlexVotingClient is FlexVotingBase {
     // Using the total vote weight to proportion votes in this way means that in
     // many circumstances this function will not cast votes with all of its
     // weight.
-    uint256 _totalVotesInternal = getPastTotalVoteWeight(_proposalSnapshot);
+    IVotingToken token = IVotingToken(address(governor.token()));
+    uint256 _totalVotesInternal = getPastTotalVoteWeight(token, _proposalSnapshot);
 
     // We need 256 bits because of the multiplication we're about to do.
-    uint256 _totalTokenWeight =
-      IVotingToken(address(GOVERNOR.token())).getPastVotes(address(this), _proposalSnapshot);
+    uint256 _totalTokenWeight = token.getPastVotes(address(this), _proposalSnapshot);
 
     //     userVotesInternal          userVoteWeight
     // ------------------------- = --------------------
@@ -130,31 +151,42 @@ abstract contract FlexVotingClient is FlexVotingBase {
       SafeCast.toUint128((_totalTokenWeight * _proposalVote.abstainVotes) / _totalVotesInternal);
 
     // Clear the stored votes so that we don't double-cast them.
-    delete proposalVotes[proposalId];
+    delete proposalVotes[governor][proposalId];
 
     bytes memory fractionalizedVotes =
       abi.encodePacked(_againstVotesToCast, _forVotesToCast, _abstainVotesToCast);
-    GOVERNOR.castVoteWithReasonAndParams(
-      proposalId, VOTE_TYPE_FRACTIONAL, _castVoteReasonString(), fractionalizedVotes
+    governor.castVoteWithReasonAndParams(
+      proposalId, VOTE_TYPE_FRACTIONAL, _castVoteReasonString(governor), fractionalizedVotes
     );
   }
 
-  /// @notice Returns the `_user`'s internal voting weight at `_timepoint`.
+  /// @notice Returns the `_user`'s internal voting weight with `_governor` at
+  /// `_timepoint`.
+  /// @param _token The token that's balance confers voting weight.
   /// @param _user The account that's historical vote weight will be looked up.
   /// @param _timepoint The timepoint at which to lookup the _user's internal
   /// voting weight, either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastVoteWeight(address _user, uint256 _timepoint) public view returns (uint256) {
-    uint48 key = SafeCast.toUint48(_timepoint);
-    return voteWeightCheckpoints[_user].upperLookup(key);
+  function getPastVoteWeight(IVotingToken _token, address _user, uint256 _timepoint)
+    public
+    view
+    returns (uint256)
+  {
+    uint48 _key = SafeCast.toUint48(_timepoint);
+    return voteWeightCheckpoints[_token][_user].upperLookup(_key);
   }
 
   /// @notice Returns the total internal voting weight of all users at `_timepoint`.
+  /// @param _token The token that's balance confers voting weight.
   /// @param _timepoint The timepoint at which to lookup the total weight,
   /// either a block number or a timestamp as determined by
   /// {GOVERNOR.token().clock()}.
-  function getPastTotalVoteWeight(uint256 _timepoint) public view returns (uint256) {
-    uint48 key = SafeCast.toUint48(_timepoint);
-    return totalVoteWeightCheckpoints.upperLookup(key);
+  function getPastTotalVoteWeight(IVotingToken _token, uint256 _timepoint)
+    public
+    view
+    returns (uint256)
+  {
+    uint48 _key = SafeCast.toUint48(_timepoint);
+    return totalVoteWeightCheckpoints[_token].upperLookup(_key);
   }
 }
